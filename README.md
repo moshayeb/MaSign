@@ -62,7 +62,7 @@ The compose file starts three services:
 | Service    | Container         | Host port | Notes                                        |
 |------------|-------------------|-----------|----------------------------------------------|
 | `api`      | `masign-api`      | 8000      | FastAPI app, waits for Postgres to be healthy |
-| `postgres` | `masign-postgres` | 5432      | Dev-only credentials (`rag_user`/`rag_password`) |
+| `postgres` | `masign-postgres` | 5433      | Dev-only credentials (`rag_user`/`rag_password`); 5433 on the host to avoid clashing with a native PostgreSQL on 5432 |
 | `qdrant`   | `masign-qdrant`   | 6333/6334 | Vector store                                  |
 
 Inside the compose network the API reaches the other services by name

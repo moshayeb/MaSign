@@ -5,9 +5,14 @@ ingestion pipeline actually parses them, so tests that exercise the full path
 need genuine documents rather than byte stubs.
 """
 
+import os
 from io import BytesIO
 
 import pytest
+
+# Keep app startup from running migrations under test; the database tests
+# manage the schema themselves against DATABASE_URL.
+os.environ.setdefault("APP_ENV", "test")
 from docx import Document
 from pypdf import PdfWriter
 
