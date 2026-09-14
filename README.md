@@ -41,15 +41,22 @@ A company uploads a 30-page supplier agreement. The assistant finds a clause all
 
 ## Local Setup
 
+The API needs Postgres and Qdrant; the easiest way to get them is the compose
+file, running only those two services:
+
 ```bash
+docker compose up -d postgres qdrant
+
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate        # Windows Git Bash: source .venv/Scripts/activate
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env             # loaded automatically at startup; edit if your ports differ
 uvicorn app.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`.
+On startup the API applies any pending database migrations, then serves at
+`http://localhost:8000` (the root redirects to the interactive docs at `/docs`).
+If Postgres isn't reachable the API refuses to start and says so.
 
 ## Docker Services
 
