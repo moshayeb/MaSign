@@ -75,12 +75,14 @@ async def upload_contract(
 ) -> UploadContractResponse:
     upload = await validate_contract_upload(file)
 
-    # Parsing and chunking are synchronous CPU work. Running them inline would
-    # block the event loop for the whole upload — a large PDF stalls every other
-    # request on this worker — so they go to the thread pool together.
+    # Parsing, chunking and the database write are all synchronous. Running
+    # them inline would block the event loop for the whole upload — a large
+    # PDF or a slow insert stalls every other request on this worker — so
+    # each goes to the thread pool.
     text, chunks = await run_in_threadpool(_parse_and_chunk, upload)
 
-    contract = repository.create_contract(
+    contract = await run_in_threadpool(
+        repository.create_contract,
         db,
         filename=upload.filename,
         file_type=upload.file_type,
