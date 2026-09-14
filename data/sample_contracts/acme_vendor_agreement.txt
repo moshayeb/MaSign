@@ -1,0 +1,13 @@
+ACME Vendor Agreement
+
+1. Services
+Vendor will provide document processing and workflow automation services to ACME.
+
+2. Fees
+ACME will pay Vendor according to the applicable order form.
+
+3. Limitation of Liability
+Vendor liability is capped at fees paid by ACME in the previous 12 months.
+
+4. Termination
+Either party may terminate for material breach if the breach is not cured within 30 days.

@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.env
+.venv/
+venv/
+
+data/uploads/
+data/indexes/
+
+Contract_Analysis_Project_Plan.docx
