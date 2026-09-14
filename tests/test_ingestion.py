@@ -29,6 +29,11 @@ def test_extract_text_from_txt() -> None:
     assert extract_text(content, "txt") == "1. Services\nVendor will provide services."
 
 
+def test_extract_text_drops_nul_characters() -> None:
+    # MAS-42: extracted text must never carry NUL into the database.
+    assert extract_text(b"1. Ser\x00vices\n\x00", "txt") == "1. Services"
+
+
 def test_extract_text_strips_utf8_bom_and_crlf() -> None:
     content = "﻿ACME Vendor Agreement\r\n\r\n1. Services\r\n".encode("utf-8")
 

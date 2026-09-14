@@ -75,6 +75,9 @@ def extract_text(content: bytes, file_type: str) -> str:
 
 def normalize_text(text: str) -> str:
     """Normalise line endings and whitespace without losing paragraph breaks."""
+    # PDF and DOCX extraction can surface NUL characters from odd encodings;
+    # they carry no text and PostgreSQL text columns reject them.
+    text = text.replace("\x00", "")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = "\n".join(line.rstrip() for line in text.split("\n"))
     # Collapse runs of blank lines so paragraph splitting stays predictable.

@@ -6,6 +6,7 @@ need genuine documents rather than byte stubs.
 """
 
 import os
+import uuid
 from collections.abc import Iterator
 from io import BytesIO
 
@@ -27,32 +28,39 @@ from app.database.session import get_connection, get_database_url
 
 
 def _test_database_url(base_url: str) -> str:
+    # Unique per session so concurrent runs (two agents, or a CI matrix) never
+    # share — and truncate — the same tables.
     params = conninfo_to_dict(base_url)
-    params["dbname"] = f"{params.get('dbname', 'postgres')}_test"
+    params["dbname"] = f"{params.get('dbname', 'postgres')}_test_{uuid.uuid4().hex[:8]}"
     return make_conninfo(**params)
 
 
-def _ensure_database(base_url: str, name: str) -> None:
+def _create_database(base_url: str, name: str) -> None:
     # CREATE DATABASE cannot run inside a transaction, hence autocommit.
     with psycopg.connect(base_url, autocommit=True, connect_timeout=3) as connection:
-        exists = connection.execute(
-            "SELECT 1 FROM pg_database WHERE datname = %s", (name,)
-        ).fetchone()
-        if not exists:
-            connection.execute(f'CREATE DATABASE "{name}"')
+        connection.execute(f'CREATE DATABASE "{name}"')
+
+
+def _drop_database(base_url: str, name: str) -> None:
+    with psycopg.connect(base_url, autocommit=True, connect_timeout=3) as connection:
+        # FORCE closes any straggling connection so teardown can't leave the
+        # database behind.
+        connection.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
 @pytest.fixture(scope="session")
 def database() -> Iterator[str]:
-    """A migrated `<dbname>_test` database, and DATABASE_URL pointed at it.
+    """A migrated, session-unique `<dbname>_test_<id>` database.
 
+    DATABASE_URL is pointed at it for the session and it is dropped afterwards.
     Skips when Postgres isn't reachable, unless MASIGN_REQUIRE_DB=1 (CI) makes
     that a failure instead. Tests never touch the dev database.
     """
     base_url = get_database_url()
     test_url = _test_database_url(base_url)
+    name = conninfo_to_dict(test_url)["dbname"]
     try:
-        _ensure_database(base_url, conninfo_to_dict(test_url)["dbname"])
+        _create_database(base_url, name)
     except psycopg.OperationalError as error:
         if os.getenv("MASIGN_REQUIRE_DB") == "1":
             raise
@@ -61,11 +69,14 @@ def database() -> Iterator[str]:
     run_migrations(test_url)
     previous = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = test_url
-    yield test_url
-    if previous is None:
-        del os.environ["DATABASE_URL"]
-    else:
-        os.environ["DATABASE_URL"] = previous
+    try:
+        yield test_url
+    finally:
+        if previous is None:
+            del os.environ["DATABASE_URL"]
+        else:
+            os.environ["DATABASE_URL"] = previous
+        _drop_database(base_url, name)
 
 
 @pytest.fixture

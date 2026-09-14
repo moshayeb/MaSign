@@ -150,6 +150,11 @@ def is_text(content: bytes) -> bool:
     if not text.strip():
         return False
 
+    # A NUL byte never appears in genuine text; it marks a binary file, and
+    # PostgreSQL text columns reject it outright.
+    if "\x00" in text:
+        return False
+
     control_chars = sum(
         1
         for character in text

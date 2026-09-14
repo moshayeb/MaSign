@@ -74,6 +74,18 @@ def test_upload_accepts_docx_contract_by_package_contents(make_docx) -> None:
     assert response.json()["file_type"] == "docx"
 
 
+def test_upload_rejects_text_with_nul_bytes() -> None:
+    # MAS-42: a NUL byte marks binary content and PostgreSQL text columns
+    # refuse it, so it must be turned away before persistence.
+    response = client.post(
+        "/api/contracts/upload",
+        files={"file": ("contract.txt", b"Services\x00\n\nTermination on notice.", "text/plain")},
+    )
+
+    assert response.status_code == 415
+    assert client.get("/api/contracts").json() == []
+
+
 def test_upload_rejects_missing_file() -> None:
     response = client.post("/api/contracts/upload")
 
