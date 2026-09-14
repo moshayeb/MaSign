@@ -32,7 +32,9 @@ services:
       POSTGRES_PASSWORD: rag_password
       POSTGRES_DB: contract_rag
     ports:
-      - "5432:5432"
+      # Host port 5433: a native PostgreSQL service commonly occupies 5432 on
+      # dev machines. Inside the compose network it is still postgres:5432.
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
