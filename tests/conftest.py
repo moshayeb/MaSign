@@ -1,4 +1,4 @@
-"""Shared builders for real PDF and DOCX documents used across the test suite.
+"""Shared fixtures: a throwaway test database, and real PDF/DOCX builders.
 
 Upload validation only checks that bytes look like a supported type, but the
 ingestion pipeline actually parses them, so tests that exercise the full path
@@ -6,15 +6,77 @@ need genuine documents rather than byte stubs.
 """
 
 import os
+from collections.abc import Iterator
 from io import BytesIO
 
+import psycopg
 import pytest
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
-# Keep app startup from running migrations under test; the database tests
-# manage the schema themselves against DATABASE_URL.
+# Keep app startup from running migrations under test; the `database` fixture
+# below manages the schema itself.
 os.environ.setdefault("APP_ENV", "test")
 from docx import Document
 from pypdf import PdfWriter
+
+from app.database.migrations import run_migrations
+from app.database.session import get_connection, get_database_url
+
+
+# --- database ---------------------------------------------------------------
+
+
+def _test_database_url(base_url: str) -> str:
+    params = conninfo_to_dict(base_url)
+    params["dbname"] = f"{params.get('dbname', 'postgres')}_test"
+    return make_conninfo(**params)
+
+
+def _ensure_database(base_url: str, name: str) -> None:
+    # CREATE DATABASE cannot run inside a transaction, hence autocommit.
+    with psycopg.connect(base_url, autocommit=True, connect_timeout=3) as connection:
+        exists = connection.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", (name,)
+        ).fetchone()
+        if not exists:
+            connection.execute(f'CREATE DATABASE "{name}"')
+
+
+@pytest.fixture(scope="session")
+def database() -> Iterator[str]:
+    """A migrated `<dbname>_test` database, and DATABASE_URL pointed at it.
+
+    Skips when Postgres isn't reachable, unless MASIGN_REQUIRE_DB=1 (CI) makes
+    that a failure instead. Tests never touch the dev database.
+    """
+    base_url = get_database_url()
+    test_url = _test_database_url(base_url)
+    try:
+        _ensure_database(base_url, conninfo_to_dict(test_url)["dbname"])
+    except psycopg.OperationalError as error:
+        if os.getenv("MASIGN_REQUIRE_DB") == "1":
+            raise
+        pytest.skip(f"Postgres not reachable at {base_url}: {error}")
+
+    run_migrations(test_url)
+    previous = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = test_url
+    yield test_url
+    if previous is None:
+        del os.environ["DATABASE_URL"]
+    else:
+        os.environ["DATABASE_URL"] = previous
+
+
+@pytest.fixture
+def db(database: str) -> Iterator[psycopg.Connection]:
+    """A connection to the test database, emptied after each test."""
+    with get_connection(database) as connection:
+        yield connection
+        connection.execute("TRUNCATE contracts CASCADE")
+
+
+# --- documents --------------------------------------------------------------
 
 
 def build_pdf(lines: list[str]) -> bytes:

@@ -1,8 +1,15 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from datetime import datetime
+from uuid import UUID
+
+import psycopg
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from app.actions.workflow import build_follow_up_actions
+from app.api.dependencies import get_db
+from app.database import repository
+from app.database.models import Contract
 from app.ingestion.parsing import DocumentTextError, extract_text
 from app.ingestion.pipeline import chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
@@ -25,19 +32,40 @@ class QueryResponse(BaseModel):
     recommended_actions: list[str]
 
 
-class UploadContractResponse(BaseModel):
+class ContractSummary(BaseModel):
+    contract_id: UUID
     filename: str
     file_type: str
-    content_type: str | None
     size_bytes: int
-    max_size_bytes: int
-    status: str
     character_count: int
     chunk_count: int
+    status: str
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, contract: Contract) -> "ContractSummary":
+        return cls(
+            contract_id=contract.id,
+            filename=contract.filename,
+            file_type=contract.file_type,
+            size_bytes=contract.size_bytes,
+            character_count=contract.character_count,
+            chunk_count=contract.chunk_count,
+            status=contract.status,
+            created_at=contract.created_at,
+        )
+
+
+class UploadContractResponse(ContractSummary):
+    content_type: str | None
+    max_size_bytes: int
 
 
 @router.post("/contracts/upload", response_model=UploadContractResponse)
-async def upload_contract(file: UploadFile = File(...)) -> UploadContractResponse:
+async def upload_contract(
+    file: UploadFile = File(...),
+    db: psycopg.Connection = Depends(get_db),
+) -> UploadContractResponse:
     upload = await validate_contract_upload(file)
 
     # Parsing and chunking are synchronous CPU work. Running them inline would
@@ -45,16 +73,36 @@ async def upload_contract(file: UploadFile = File(...)) -> UploadContractRespons
     # request on this worker — so they go to the thread pool together.
     text, chunks = await run_in_threadpool(_parse_and_chunk, upload)
 
-    return UploadContractResponse(
+    contract = repository.create_contract(
+        db,
         filename=upload.filename,
         file_type=upload.file_type,
-        content_type=upload.content_type,
         size_bytes=upload.size_bytes,
-        max_size_bytes=MAX_UPLOAD_BYTES,
-        status="processed",
         character_count=len(text),
-        chunk_count=len(chunks),
+        chunks=chunks,
     )
+
+    return UploadContractResponse(
+        **ContractSummary.from_model(contract).model_dump(),
+        content_type=upload.content_type,
+        max_size_bytes=MAX_UPLOAD_BYTES,
+    )
+
+
+@router.get("/contracts", response_model=list[ContractSummary])
+def list_contracts(db: psycopg.Connection = Depends(get_db)) -> list[ContractSummary]:
+    return [ContractSummary.from_model(c) for c in repository.list_contracts(db)]
+
+
+@router.get("/contracts/{contract_id}", response_model=ContractSummary)
+def get_contract(
+    contract_id: UUID,
+    db: psycopg.Connection = Depends(get_db),
+) -> ContractSummary:
+    contract = repository.get_contract(db, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    return ContractSummary.from_model(contract)
 
 
 def _parse_and_chunk(upload: ValidatedUpload) -> tuple[str, list[str]]:
