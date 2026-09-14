@@ -61,6 +61,69 @@ def test_extract_text_reads_docx_tables(make_docx) -> None:
     assert "Term | 36 months" in text
 
 
+def test_docx_tables_stay_in_document_order() -> None:
+    # MAS-37: a table between two paragraphs must not be moved to the end.
+    text = extract_text(_docx_with_table_in_middle(), "docx")
+
+    assert text == "Before table\nTable term\nAfter table"
+
+
+def test_docx_with_several_interleaved_tables_keeps_order() -> None:
+    text = extract_text(_docx_interleaved(), "docx")
+
+    assert text.split("\n") == ["P1", "T1", "P2", "T2 | T2b", "P3"]
+
+
+def test_docx_with_malformed_xml_reports_parse_error() -> None:
+    # MAS-36: a DOCX-shaped ZIP whose parts are not XML must be a clear parse
+    # error, not an unhandled lxml exception.
+    with pytest.raises(DocumentParseError):
+        extract_text(_docx_with_broken_xml(), "docx")
+
+
+def _docx_with_broken_xml() -> bytes:
+    from io import BytesIO
+    from zipfile import ZipFile
+
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<broken")
+        archive.writestr("word/document.xml", "<broken")
+    return buffer.getvalue()
+
+
+def _docx_with_table_in_middle() -> bytes:
+    from io import BytesIO
+
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph("Before table")
+    document.add_table(rows=1, cols=1).rows[0].cells[0].text = "Table term"
+    document.add_paragraph("After table")
+    buffer = BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def _docx_interleaved() -> bytes:
+    from io import BytesIO
+
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph("P1")
+    document.add_table(rows=1, cols=1).rows[0].cells[0].text = "T1"
+    document.add_paragraph("P2")
+    table = document.add_table(rows=1, cols=2)
+    table.rows[0].cells[0].text = "T2"
+    table.rows[0].cells[1].text = "T2b"
+    document.add_paragraph("P3")
+    buffer = BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
 def test_scanned_pdf_reports_no_extractable_text(make_scanned_pdf) -> None:
     with pytest.raises(NoExtractableTextError):
         extract_text(make_scanned_pdf(), "pdf")
@@ -151,6 +214,31 @@ def test_unbroken_run_of_characters_is_still_split() -> None:
 
     assert len(chunks) == 5
     assert all(len(chunk) <= 100 for chunk in chunks)
+
+
+def test_overlap_separator_is_counted_against_max_chars() -> None:
+    # MAS-38: the "\n\n" between overlap and body used to push chunks over the limit.
+    chunks = chunk_contract_text("x" * 250, max_chars=100, overlap_chars=20)
+
+    assert all(len(chunk) <= 100 for chunk in chunks)
+    assert all(chunk for chunk in chunks)
+    # Nothing lost: every body piece is still present in order.
+    assert "".join(chunk.split("\n\n")[-1] for chunk in chunks) == "x" * 250
+
+
+def test_small_valid_budget_still_terminates_and_overlaps() -> None:
+    chunks = chunk_contract_text("word " * 30, max_chars=20, overlap_chars=5)
+
+    assert chunks
+    assert all(0 < len(chunk) <= 20 for chunk in chunks)
+    for previous, following in pairwise(chunks):
+        carried = following.split("\n\n")[0]
+        assert carried in previous
+
+
+def test_overlap_that_leaves_no_room_for_a_body_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        chunk_contract_text("text", max_chars=10, overlap_chars=8)  # 10 - 8 - 2 == 0
 
 
 def test_blank_text_produces_no_chunks() -> None:

@@ -9,6 +9,9 @@ from app.ingestion.parsing import extract_text, normalize_text
 DEFAULT_MAX_CHARS = 1200
 DEFAULT_OVERLAP_CHARS = 150
 
+# Placed between the carried-over overlap and the chunk's own text.
+OVERLAP_SEPARATOR = "\n\n"
+
 
 def load_contract_text(path: Path) -> str:
     """Read a contract from disk, choosing the parser from its extension."""
@@ -35,13 +38,19 @@ def chunk_contract_text(
     if overlap_chars >= max_chars:
         raise ValueError("overlap_chars must be smaller than max_chars.")
 
+    # Pack into the budget left once the overlap prefix and its separator are
+    # added back, so the finished chunks still fit inside max_chars.
+    budget = max_chars - (overlap_chars + len(OVERLAP_SEPARATOR) if overlap_chars else 0)
+    if budget <= 0:
+        raise ValueError(
+            f"max_chars must leave room for overlap_chars plus the "
+            f"{len(OVERLAP_SEPARATOR)}-character separator."
+        )
+
     text = normalize_text(text)
     if not text:
         return []
 
-    # Pack into the budget left once the overlap prefix is added back, so the
-    # finished chunks still fit inside max_chars.
-    budget = max_chars - overlap_chars
     bodies = _pack_paragraphs(_split_paragraphs(text), budget)
 
     chunks = []
@@ -51,7 +60,7 @@ def chunk_contract_text(
             continue
 
         carried = _trailing_context(bodies[index - 1], overlap_chars)
-        chunks.append(f"{carried}\n\n{body}" if carried else body)
+        chunks.append(f"{carried}{OVERLAP_SEPARATOR}{body}" if carried else body)
 
     return chunks
 

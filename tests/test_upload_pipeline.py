@@ -159,6 +159,26 @@ def test_scanned_pdf_gets_a_clear_unsupported_document_message(make_scanned_pdf)
     assert "OCR" in detail
 
 
+def test_docx_with_malformed_xml_is_reported_rather_than_crashing() -> None:
+    # MAS-36: passes DOCX detection (right ZIP entries) but the XML is broken.
+    from io import BytesIO
+    from zipfile import ZipFile
+
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<broken")
+        archive.writestr("word/document.xml", "<broken")
+
+    response = _upload(
+        "bad.docx",
+        buffer.getvalue(),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    assert response.status_code == 422
+    assert "could not be read" in response.json()["detail"]
+
+
 def test_unreadable_pdf_is_reported_rather_than_crashing() -> None:
     # Passes upload validation on the %PDF- signature, but pypdf cannot read it.
     response = _upload("broken.pdf", b"%PDF-1.4\nnot actually a pdf body", "application/pdf")

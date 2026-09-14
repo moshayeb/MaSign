@@ -4,7 +4,7 @@ from uuid import UUID
 import psycopg
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.actions.workflow import build_follow_up_actions
 from app.api.dependencies import get_db
@@ -23,6 +23,13 @@ router = APIRouter(prefix="/api", tags=["contracts"])
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
     contract_id: str | None = None
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def strip_question(cls, value: object) -> object:
+        # Trim before min_length applies, so "   " is rejected like "" and the
+        # retriever never sees surrounding whitespace.
+        return value.strip() if isinstance(value, str) else value
 
 
 class QueryResponse(BaseModel):

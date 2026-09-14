@@ -13,6 +13,10 @@ from zipfile import BadZipFile
 import pypdf
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
+from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
+from lxml.etree import XMLSyntaxError
 
 
 SUPPORTED_FILE_TYPES = ("txt", "pdf", "docx")
@@ -99,20 +103,25 @@ def _extract_pdf(content: bytes) -> str:
 def _extract_docx(content: bytes) -> str:
     try:
         document = Document(BytesIO(content))
-    except (PackageNotFoundError, BadZipFile, KeyError, ValueError) as error:
+    except (PackageNotFoundError, BadZipFile, KeyError, ValueError, XMLSyntaxError) as error:
+        # XMLSyntaxError: a ZIP shaped like a DOCX whose parts are not valid XML.
         raise DocumentParseError(
             "The DOCX file could not be read. It may be corrupted."
         ) from error
 
-    blocks = [paragraph.text for paragraph in document.paragraphs]
-
-    # Contract terms are often laid out in tables (fees, dates, parties), and
-    # those cells are not part of document.paragraphs.
-    for table in document.tables:
-        for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells]
-            line = " | ".join(cell for cell in cells if cell)
-            if line:
-                blocks.append(line)
+    # Walk the body in document order so a table stays between the paragraphs
+    # that surround it; document.paragraphs / document.tables would separate
+    # them and detach fees, dates or parties from their clause. Contract terms
+    # are often laid out in tables, so their cells are included as one line per row.
+    blocks = []
+    for element in document.element.body.iterchildren():
+        if element.tag == qn("w:p"):
+            blocks.append(Paragraph(element, document).text)
+        elif element.tag == qn("w:tbl"):
+            for row in Table(element, document).rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                line = " | ".join(cell for cell in cells if cell)
+                if line:
+                    blocks.append(line)
 
     return "\n".join(blocks)
