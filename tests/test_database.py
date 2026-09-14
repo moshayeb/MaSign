@@ -7,6 +7,7 @@ database from conftest (skipped locally without Postgres, required in CI).
 from pathlib import Path
 
 import psycopg
+import pytest
 
 from app.database import repository
 from app.database.migrations import MIGRATIONS_DIR, discover_migrations, run_migrations
@@ -87,6 +88,23 @@ def test_create_contract_stores_chunks_in_order(db: psycopg.Connection) -> None:
     assert [c.chunk_text for c in chunks] == ["first clause", "second clause", "third clause"]
     assert all(c.embedding_id is None for c in chunks)
     assert contract.id in {c.id for c in repository.list_contracts(db)}
+
+
+def test_failed_chunk_insert_leaves_no_partial_contract(
+    db: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The contract row is inserted first; if storing its chunks then fails,
+    # the whole thing must roll back rather than leave a chunk-less contract.
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("simulated failure while inserting chunks")
+
+    monkeypatch.setattr(psycopg.Cursor, "executemany", explode)
+
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        _store(db, ["a", "b"])
+
+    monkeypatch.undo()
+    assert repository.list_contracts(db) == []
 
 
 def test_set_embedding_ids_updates_only_given_chunks(db: psycopg.Connection) -> None:
