@@ -76,6 +76,29 @@ Check it is up:
 curl http://localhost:8000/health
 ```
 
+## API Endpoints
+
+Interactive docs at `http://localhost:8000/docs`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it. Returns the `contract_id`. |
+| `GET`  | `/api/contracts` | List stored contracts, newest first. |
+| `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
+| `POST` | `/api/query` | Ask a question (scaffold; real retrieval and answers arrive in Sprint 1–2). |
+| `GET`  | `/health` | Liveness check. |
+
+## Running the Tests
+
+```bash
+pytest
+```
+
+Tests that need Postgres use a separate `contract_rag_test` database, created
+automatically from `DATABASE_URL` and emptied after each test — your dev data
+is never touched. Without a reachable Postgres they are skipped; set
+`MASIGN_REQUIRE_DB=1` (as CI does) to make that a failure instead.
+
 ## Development Workflow
 
 Work is tracked in Jira project [MAS](https://moshayeb.atlassian.net/jira/software/projects/MAS/boards/100/backlog),

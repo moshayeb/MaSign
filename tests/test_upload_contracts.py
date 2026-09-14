@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.ingestion.uploads import MAX_UPLOAD_BYTES
@@ -5,6 +6,9 @@ from app.main import app
 
 
 client = TestClient(app)
+
+# Successful uploads are persisted, so every test here needs the test database.
+pytestmark = pytest.mark.usefixtures("db")
 
 
 def test_upload_accepts_text_contract() -> None:
@@ -20,7 +24,8 @@ def test_upload_accepts_text_contract() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {
+    body = response.json()
+    assert body.items() >= {
         "filename": "contract.txt",
         "file_type": "txt",
         "content_type": "text/plain",
@@ -29,7 +34,9 @@ def test_upload_accepts_text_contract() -> None:
         "status": "processed",
         "character_count": 55,
         "chunk_count": 1,
-    }
+    }.items()
+    assert body["contract_id"]
+    assert body["created_at"]
 
 
 def test_upload_accepts_pdf_contract_by_content_signature(make_pdf) -> None:
