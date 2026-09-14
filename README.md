@@ -118,3 +118,5 @@ is verification only.
   then move the Jira issue to Done. Branch and commit names containing the key
   show up automatically in the issue's Development panel via the GitHub for Jira app.
 - CI (`.github/workflows/ci.yml`) runs `pytest` and a Docker build on every push and PR to `main`.
+- UI work follows [docs/frontend.md](docs/frontend.md): React + Vite, and **sonner**
+  toasts for every user action, with error toasts showing the API's `detail` message.
