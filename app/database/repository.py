@@ -48,6 +48,15 @@ def get_contract(connection: psycopg.Connection, contract_id: UUID) -> Contract 
     return Contract(**row) if row else None
 
 
+def existing_contract_ids(connection: psycopg.Connection, contract_ids: set[UUID]) -> set[UUID]:
+    """The subset of `contract_ids` that are stored contracts."""
+    if not contract_ids:
+        return set()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id FROM contracts WHERE id = ANY(%s)", (list(contract_ids),))
+        return {row["id"] for row in cursor.fetchall()}
+
+
 def list_contracts(connection: psycopg.Connection) -> list[Contract]:
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM contracts ORDER BY created_at DESC, id")

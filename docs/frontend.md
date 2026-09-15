@@ -31,3 +31,12 @@ later UI work follow the same rules.
 
 Backend implication: keep error `detail` strings user-readable, since they
 are displayed verbatim.
+
+## Query results
+
+`POST /api/query` returns `retrieved_context` as a list of
+`{chunk_id, contract_id, chunk_index, text, score}` ordered best first (MAS-12).
+Show them as citations next to the answer: the `text` is the exact stored
+chunk, `chunk_index` gives its position in the contract, and `score` (cosine,
+0–1) can drive a relevance hint. `contract_id` is optional in the request —
+default the UI to the selected contract, and offer "all contracts" explicitly.

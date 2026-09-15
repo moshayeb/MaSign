@@ -16,8 +16,8 @@ from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
 from app.retrieval.embeddings import Embedder
 from app.retrieval.indexing import index_contract
-from app.retrieval.retriever import retrieve_contract_context
-from app.retrieval.vector_store import VectorStore, VectorStoreError
+from app.retrieval.retriever import DEFAULT_LIMIT, retrieve_contract_context
+from app.retrieval.vector_store import ChunkHit, VectorStore, VectorStoreError
 from app.risk_analysis.analyzer import analyze_contract_risks
 
 
@@ -28,7 +28,9 @@ router = APIRouter(prefix="/api", tags=["contracts"])
 
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
-    contract_id: str | None = None
+    # Restrict the search to one contract; omit to search every uploaded contract.
+    contract_id: UUID | None = None
+    limit: int = Field(DEFAULT_LIMIT, ge=1, le=20)
 
     @field_validator("question", mode="before")
     @classmethod
@@ -38,9 +40,27 @@ class QueryRequest(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class RetrievedChunk(BaseModel):
+    chunk_id: UUID
+    contract_id: UUID
+    chunk_index: int
+    text: str
+    score: float
+
+    @classmethod
+    def from_hit(cls, hit: ChunkHit) -> "RetrievedChunk":
+        return cls(
+            chunk_id=hit.chunk_id,
+            contract_id=hit.contract_id,
+            chunk_index=hit.chunk_index,
+            text=hit.text,
+            score=hit.score,
+        )
+
+
 class QueryResponse(BaseModel):
     answer: str
-    retrieved_context: list[str]
+    retrieved_context: list[RetrievedChunk]
     risks: list[str]
     recommended_actions: list[str]
 
@@ -178,17 +198,39 @@ def _extract_or_reject(upload: ValidatedUpload) -> str:
 
 
 @router.post("/query", response_model=QueryResponse)
-def query_contract(request: QueryRequest) -> QueryResponse:
-    context = retrieve_contract_context(
-        question=request.question,
-        contract_id=request.contract_id,
-    )
+async def query_contract(
+    request: QueryRequest,
+    db: psycopg.Connection = Depends(get_db),
+    embedder: Embedder = Depends(get_embedder),
+    store: VectorStore = Depends(get_vector_store),
+) -> QueryResponse:
+    # Embedding the question is CPU work and the lookups are synchronous, so
+    # the whole retrieval runs off the event loop like the upload path.
+    hits = await run_in_threadpool(_retrieve, request, db, embedder, store)
+    context = [hit.text for hit in hits]
     risks = analyze_contract_risks(context)
     actions = build_follow_up_actions(risks)
 
     return QueryResponse(
-        answer="This scaffold found relevant context and prepared review items.",
-        retrieved_context=context,
+        answer=(
+            f"Found {len(hits)} relevant passage(s); answer generation arrives with MAS-13."
+            if hits
+            else "No relevant passages found; upload a contract or rephrase the question."
+        ),
+        retrieved_context=[RetrievedChunk.from_hit(hit) for hit in hits],
         risks=risks,
         recommended_actions=actions,
+    )
+
+
+def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore) -> list[ChunkHit]:
+    if request.contract_id is not None and repository.get_contract(db, request.contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    return retrieve_contract_context(
+        request.question,
+        db=db,
+        embedder=embedder,
+        store=store,
+        contract_id=request.contract_id,
+        limit=request.limit,
     )
