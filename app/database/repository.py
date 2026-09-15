@@ -63,6 +63,19 @@ def list_chunks(connection: psycopg.Connection, contract_id: UUID) -> list[Chunk
         return [Chunk(**row) for row in cursor.fetchall()]
 
 
+def replace_chunks(connection: psycopg.Connection, contract_id: UUID, texts: list[str]) -> list[Chunk]:
+    """Swap a contract's chunk rows for `texts`, renumbered from 0 (MAS-55)."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM chunks WHERE contract_id = %s", (contract_id,))
+            cursor.executemany(
+                "INSERT INTO chunks (contract_id, chunk_index, chunk_text) VALUES (%s, %s, %s)",
+                [(contract_id, index, text) for index, text in enumerate(texts)],
+            )
+            cursor.execute("UPDATE contracts SET chunk_count = %s WHERE id = %s", (len(texts), contract_id))
+    return list_chunks(connection, contract_id)
+
+
 def set_embedding_ids(
     connection: psycopg.Connection,
     embedding_ids: dict[UUID, str],
@@ -96,6 +109,13 @@ def get_vector_index(connection: psycopg.Connection, collection: str) -> VectorI
         )
         row = cursor.fetchone()
     return VectorIndex(**row) if row else None
+
+
+def clear_vector_index(connection: psycopg.Connection, collection: str) -> None:
+    """Forget what the collection was built with, so the next start rebuilds it (MAS-56)."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM vector_index WHERE collection = %s", (collection,))
 
 
 def set_vector_index(connection: psycopg.Connection, index: VectorIndex) -> None:

@@ -67,23 +67,47 @@ def chunk_contract_text(
             f"{len(OVERLAP_SEPARATOR)}-character separator."
         )
 
+    if token_budget is not None and token_budget.count("a") > token_budget.max_tokens:
+        raise ValueError(
+            f"The token budget of {token_budget.max_tokens} cannot hold even a one-character "
+            f"chunk once the model's own prefix and special tokens are counted."
+        )
+
     text = normalize_text(text)
     if not text:
         return []
 
+    def within_tokens(chunk: str) -> bool:
+        return token_budget is None or token_budget.count(chunk) <= token_budget.max_tokens
+
+    def carried_from(previous: str | None) -> str:
+        if not previous or not overlap_chars:
+            return ""
+        carried = _trailing_context(previous, overlap_chars)
+        if token_budget is None:
+            return carried
+        # The overlap may take at most half the token budget, so the chunk's
+        # own text always gets the other half; with a small limit it shrinks,
+        # and if even a sliver won't fit it is dropped (MAS-57).
+        chars = overlap_chars
+        while carried and token_budget.count(f"{carried}{OVERLAP_SEPARATOR}") > token_budget.max_tokens // 2:
+            chars //= 2
+            carried = _trailing_context(previous, chars) if chars else ""
+        return carried
+
     def assemble(body: str, previous: str | None) -> str:
-        carried = _trailing_context(previous, overlap_chars) if previous and overlap_chars else ""
+        carried = carried_from(previous)
         return f"{carried}{OVERLAP_SEPARATOR}{body}" if carried else body
 
     def fits(body: str, previous: str | None) -> bool:
-        if len(body) > budget:
-            return False
-        if token_budget is None:
-            return True
-        return token_budget.count(assemble(body, previous)) <= token_budget.max_tokens
+        return len(body) <= budget and within_tokens(assemble(body, previous))
 
     bodies = _pack_paragraphs(_split_paragraphs(text), fits)
-    return [assemble(body, bodies[index - 1] if index else None) for index, body in enumerate(bodies)]
+    chunks = [assemble(body, bodies[index - 1] if index else None) for index, body in enumerate(bodies)]
+    for chunk in chunks:
+        if len(chunk) > max_chars or not within_tokens(chunk):
+            raise AssertionError(f"chunker produced an oversized chunk ({len(chunk)} chars): {chunk[:60]!r}…")
+    return chunks
 
 
 def _split_paragraphs(text: str) -> list[str]:

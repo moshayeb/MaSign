@@ -129,6 +129,21 @@ def test_upload_chunks_within_the_embedders_token_limit(db: psycopg.Connection, 
     assert all(fake_embedder.count_tokens(c.chunk_text) <= 40 for c in chunks)
 
 
+def test_upload_survives_a_token_limit_smaller_than_the_overlap(db: psycopg.Connection, fake_embedder) -> None:
+    # MAS-57: with EMBEDDING_MAX_TOKENS below what the default overlap needs,
+    # the overlap shrinks rather than any chunk exceeding the limit.
+    fake_embedder.max_tokens = 12
+    paragraphs = [" ".join(f"w{n}{i}" for i in range(10)) for n in range(5)]
+
+    response = _upload("tiny-budget.txt", "\n\n".join(paragraphs).encode(), "text/plain")
+
+    assert response.status_code == 200, response.text
+    chunks = repository.list_chunks(db, UUID(response.json()["contract_id"]))
+    assert all(fake_embedder.count_tokens(c.chunk_text) <= 12 for c in chunks)
+    bodies = [c.chunk_text.split("\n\n")[-1] for c in chunks]
+    assert " ".join(bodies).split() == " ".join(paragraphs).split()
+
+
 def test_upload_indexes_every_chunk_in_the_vector_store(db: psycopg.Connection, vector_store) -> None:
     # MAS-11: uploading a contract results in vectors in Qdrant.
     clauses = [f"{n}. Clause\n" + ("The vendor shall indemnify the customer. " * 20) for n in range(1, 16)]
