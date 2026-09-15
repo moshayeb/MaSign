@@ -207,6 +207,20 @@ def test_docx_with_malformed_xml_is_reported_rather_than_crashing() -> None:
     assert "could not be read" in response.json()["detail"]
 
 
+def test_docx_without_body_is_reported_rather_than_crashing() -> None:
+    # MAS-46
+    from tests.test_ingestion import _docx_without_body
+
+    response = _upload(
+        "nobody.docx",
+        _docx_without_body(),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    assert response.status_code == 422
+    assert "no document body" in response.json()["detail"]
+
+
 def test_unreadable_pdf_is_reported_rather_than_crashing() -> None:
     # Passes upload validation on the %PDF- signature, but pypdf cannot read it.
     response = _upload("broken.pdf", b"%PDF-1.4\nnot actually a pdf body", "application/pdf")

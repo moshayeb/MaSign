@@ -79,6 +79,57 @@ def test_docx_with_several_interleaved_tables_keeps_order() -> None:
     assert text.split("\n") == ["P1", "T1", "P2", "T2 | T2b", "P3"]
 
 
+def test_docx_nested_table_text_is_kept_in_order() -> None:
+    # MAS-45: a table inside a cell used to vanish (cell.text ignores it).
+    from io import BytesIO
+
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph("Fees")
+    cell = document.add_table(rows=1, cols=1).rows[0].cells[0]
+    cell.text = "Payment terms"
+    cell.add_table(rows=1, cols=1).rows[0].cells[0].text = "Late payment penalty: 8 percent"
+    document.add_paragraph("Term")
+    buffer = BytesIO()
+    document.save(buffer)
+
+    text = extract_text(buffer.getvalue(), "docx")
+
+    assert text == "Fees\nPayment terms Late payment penalty: 8 percent\nTerm"
+
+
+def test_docx_without_body_reports_parse_error() -> None:
+    # MAS-46: well-formed XML with no <w:body> must be a parse error, not a crash.
+    with pytest.raises(DocumentParseError, match="no document body"):
+        extract_text(_docx_without_body(), "docx")
+
+
+def _docx_without_body() -> bytes:
+    from io import BytesIO
+    from zipfile import ZipFile
+
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph("x")
+    original = BytesIO()
+    document.save(original)
+
+    source = ZipFile(BytesIO(original.getvalue()))
+    rebuilt = BytesIO()
+    with ZipFile(rebuilt, "w") as archive:
+        for item in source.infolist():
+            data = source.read(item.filename)
+            if item.filename == "word/document.xml":
+                data = (
+                    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                    b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:document>'
+                )
+            archive.writestr(item, data)
+    return rebuilt.getvalue()
+
+
 def test_docx_with_malformed_xml_reports_parse_error() -> None:
     # MAS-36: a DOCX-shaped ZIP whose parts are not XML must be a clear parse
     # error, not an unhandled lxml exception.
