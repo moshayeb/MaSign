@@ -117,6 +117,34 @@ def test_chunk_rows_match_the_chunker_output(db: psycopg.Connection) -> None:
     assert chunks[0].chunk_text.startswith("1. Clause")
 
 
+def test_upload_indexes_every_chunk_in_the_vector_store(db: psycopg.Connection, vector_store) -> None:
+    # MAS-11: uploading a contract results in vectors in Qdrant.
+    clauses = [f"{n}. Clause\n" + ("The vendor shall indemnify the customer. " * 20) for n in range(1, 16)]
+    body = _upload("long.txt", "\n\n".join(clauses).encode(), "text/plain").json()
+    contract_id = UUID(body["contract_id"])
+
+    assert body["chunk_count"] > 1
+    assert vector_store.count(contract_id=contract_id) == body["chunk_count"]
+    assert all(c.embedding_id for c in repository.list_chunks(db, contract_id))
+
+
+def test_vector_store_outage_fails_the_upload_cleanly(db: psycopg.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api import dependencies
+    from app.retrieval.vector_store import VectorStoreError
+
+    class DownStore:
+        def upsert(self, vectors):
+            raise VectorStoreError("connection refused (simulated)")
+
+    app.dependency_overrides[dependencies.get_vector_store] = lambda: DownStore()
+
+    response = _upload("acme.txt", SAMPLE_CONTRACT.read_bytes(), "text/plain")
+
+    assert response.status_code == 503
+    assert "Vector store unavailable" in response.json()["detail"]
+    assert repository.list_contracts(db) == []  # no half-processed contract left behind
+
+
 def test_failed_parse_stores_nothing(db: psycopg.Connection, make_scanned_pdf) -> None:
     response = _upload("scan.pdf", make_scanned_pdf(), "application/pdf")
 

@@ -7,13 +7,16 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
 from app.actions.workflow import build_follow_up_actions
-from app.api.dependencies import get_db
+from app.api.dependencies import get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract
 from app.ingestion.parsing import DocumentTextError, extract_text
 from app.ingestion.pipeline import chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
+from app.retrieval.embeddings import Embedder
+from app.retrieval.indexing import index_contract
 from app.retrieval.retriever import retrieve_contract_context
+from app.retrieval.vector_store import VectorStore
 from app.risk_analysis.analyzer import analyze_contract_risks
 
 
@@ -72,13 +75,15 @@ class UploadContractResponse(ContractSummary):
 async def upload_contract(
     file: UploadFile = File(...),
     db: psycopg.Connection = Depends(get_db),
+    embedder: Embedder = Depends(get_embedder),
+    store: VectorStore = Depends(get_vector_store),
 ) -> UploadContractResponse:
     upload = await validate_contract_upload(file)
 
-    # Parsing, chunking and the database write are all synchronous. Running
-    # them inline would block the event loop for the whole upload — a large
-    # PDF or a slow insert stalls every other request on this worker — so
-    # each goes to the thread pool.
+    # Parsing, chunking, the database write and embedding are all synchronous.
+    # Running them inline would block the event loop for the whole upload — a
+    # large PDF or a slow insert stalls every other request on this worker —
+    # so each goes to the thread pool.
     text, chunks = await run_in_threadpool(_parse_and_chunk, upload)
 
     contract = await run_in_threadpool(
@@ -90,6 +95,18 @@ async def upload_contract(
         character_count=len(text),
         chunks=chunks,
     )
+
+    # A contract without vectors can never be searched, so if indexing fails
+    # the upload as a whole fails: remove the rows rather than leave a
+    # half-processed contract that looks fine in the list.
+    try:
+        await run_in_threadpool(index_contract, db, contract, embedder, store)
+    except Exception:
+        # End the failed transaction first: otherwise the delete would nest
+        # inside it and be rolled back along with it when the request exits.
+        db.rollback()
+        repository.delete_contract(db, contract.id)
+        raise
 
     return UploadContractResponse(
         **ContractSummary.from_model(contract).model_dump(),

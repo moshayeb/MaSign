@@ -41,6 +41,7 @@ def slow_database(monkeypatch: pytest.MonkeyPatch):
         )
 
     monkeypatch.setattr(routes.repository, "create_contract", slow_create)
+    monkeypatch.setattr(routes, "index_contract", lambda *args, **kwargs: 0)
     app.dependency_overrides[get_db] = lambda: None  # no real connection needed
     yield
     app.dependency_overrides.pop(get_db, None)
