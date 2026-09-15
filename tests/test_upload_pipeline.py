@@ -117,6 +117,18 @@ def test_chunk_rows_match_the_chunker_output(db: psycopg.Connection) -> None:
     assert chunks[0].chunk_text.startswith("1. Clause")
 
 
+def test_upload_chunks_within_the_embedders_token_limit(db: psycopg.Connection, fake_embedder) -> None:
+    # MAS-49: the chunker is handed the model's token budget, not just max_chars.
+    fake_embedder.max_tokens = 40  # the fake counts words
+    dense = " ".join(f"fee {n} due 1.5% cap 9,999" for n in range(60))
+
+    body = _upload("dense.txt", dense.encode(), "text/plain").json()
+
+    chunks = repository.list_chunks(db, UUID(body["contract_id"]))
+    assert len(chunks) > 1
+    assert all(fake_embedder.count_tokens(c.chunk_text) <= 40 for c in chunks)
+
+
 def test_upload_indexes_every_chunk_in_the_vector_store(db: psycopg.Connection, vector_store) -> None:
     # MAS-11: uploading a contract results in vectors in Qdrant.
     clauses = [f"{n}. Clause\n" + ("The vendor shall indemnify the customer. " * 20) for n in range(1, 16)]

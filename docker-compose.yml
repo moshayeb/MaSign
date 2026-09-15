@@ -19,6 +19,7 @@ services:
       # Changing it rebuilds the Qdrant collection on next start.
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-freelawproject/modernbert-embed-base_finetune_512}
       EMBEDDING_MAX_TOKENS: ${EMBEDDING_MAX_TOKENS:-512}
+      EMBEDDING_PROMPT_FORMAT: ${EMBEDDING_PROMPT_FORMAT:-}
     volumes:
       - uploads:/app/data/uploads
       - hf_cache:/app/.cache/huggingface

@@ -9,7 +9,7 @@ from app.ingestion.parsing import (
     UnsupportedFileTypeError,
     extract_text,
 )
-from app.ingestion.pipeline import chunk_contract_text, load_contract_text
+from app.ingestion.pipeline import TokenBudget, chunk_contract_text, load_contract_text
 
 
 SAMPLE_CONTRACT = (
@@ -307,6 +307,65 @@ def test_invalid_chunk_settings_are_rejected() -> None:
 
     with pytest.raises(ValueError):
         chunk_contract_text("text", max_chars=100, overlap_chars=100)
+
+
+# --- MAS-49: token budget ---------------------------------------------------
+
+
+def _words(text: str) -> int:
+    return len(text.split())
+
+
+# Short words: 1200 characters hold far more than 40 of them, so only the
+# token budget can be the reason to split.
+DENSE_CLAUSE = " ".join(f"fee {n} due 1.5% cap 9,999" for n in range(30)) + " late penalty 8 percent"
+
+
+def test_token_budget_splits_chunks_that_fit_by_characters() -> None:
+    by_chars_only = chunk_contract_text(DENSE_CLAUSE, max_chars=1200, overlap_chars=0)
+    assert len(by_chars_only) == 1  # the character limit alone would keep it whole
+
+    chunks = chunk_contract_text(
+        DENSE_CLAUSE, max_chars=1200, overlap_chars=0, token_budget=TokenBudget(_words, 40)
+    )
+
+    assert len(chunks) > 1
+    assert all(_words(chunk) <= 40 for chunk in chunks)
+    assert chunks[-1].endswith("late penalty 8 percent")  # the end of the clause survives
+    assert " ".join(chunks).split() == DENSE_CLAUSE.split()  # nothing lost, nothing duplicated
+
+
+def test_token_budget_counts_the_overlap_as_part_of_the_chunk() -> None:
+    chunks = chunk_contract_text(
+        DENSE_CLAUSE, max_chars=1200, overlap_chars=60, token_budget=TokenBudget(_words, 40)
+    )
+
+    assert len(chunks) > 1
+    for previous, following in pairwise(chunks):
+        carried = following.split("\n\n")[0]
+        assert carried and previous.endswith(carried)  # the overlap really is there ...
+    assert all(_words(chunk) <= 40 for chunk in chunks)  # ... and is counted in the budget
+
+
+def test_token_budget_applies_when_packing_paragraphs_too() -> None:
+    paragraphs = [f"{n}. Clause\n" + "word " * 15 for n in range(1, 6)]  # 17 words each
+
+    chunks = chunk_contract_text(
+        "\n\n".join(paragraphs), max_chars=1200, overlap_chars=0, token_budget=TokenBudget(_words, 40)
+    )
+
+    assert [chunk.count("Clause") for chunk in chunks] == [2, 2, 1]  # two clauses per 40-word chunk
+    assert all(_words(chunk) <= 40 for chunk in chunks)
+
+
+def test_token_budget_falls_back_to_character_cuts_for_unbroken_runs() -> None:
+    # A single 300-character "word" can never fit a budget of 100 characters;
+    # the token measure (one token per 10 characters) must not loop forever.
+    chunks = chunk_contract_text("x" * 300, max_chars=100, overlap_chars=0, token_budget=TokenBudget(lambda t: len(t) // 10, 5))
+
+    assert chunks
+    assert all(len(chunk) // 10 <= 5 for chunk in chunks)
+    assert "".join(chunks) == "x" * 300
 
 
 # --- end to end -------------------------------------------------------------

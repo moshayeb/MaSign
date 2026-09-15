@@ -12,7 +12,7 @@ from app.api.dependencies import get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract
 from app.ingestion.parsing import DocumentTextError, extract_text
-from app.ingestion.pipeline import chunk_contract_text
+from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
 from app.retrieval.embeddings import Embedder
 from app.retrieval.indexing import index_contract
@@ -87,7 +87,7 @@ async def upload_contract(
     # Running them inline would block the event loop for the whole upload — a
     # large PDF or a slow insert stalls every other request on this worker —
     # so each goes to the thread pool.
-    text, chunks = await run_in_threadpool(_parse_and_chunk, upload)
+    text, chunks = await run_in_threadpool(_parse_and_chunk, upload, embedder)
 
     contract = await run_in_threadpool(
         repository.create_contract,
@@ -151,10 +151,13 @@ def get_contract(
     return ContractSummary.from_model(contract)
 
 
-def _parse_and_chunk(upload: ValidatedUpload) -> tuple[str, list[str]]:
+def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[str, list[str]]:
     """Extract text and split it into chunks. Runs off the event loop."""
     text = _extract_or_reject(upload)
-    return text, chunk_contract_text(text)
+    # Chunk within the model's token limit too, so nothing is truncated when
+    # the chunk is embedded (MAS-49).
+    budget = TokenBudget(count=embedder.count_tokens, max_tokens=embedder.max_tokens)
+    return text, chunk_contract_text(text, token_budget=budget)
 
 
 def _extract_or_reject(upload: ValidatedUpload) -> str:

@@ -8,8 +8,13 @@ import pytest
 from qdrant_client import QdrantClient
 
 from app.database import repository
-from app.retrieval.embeddings import DEFAULT_EMBEDDING_MODEL, SentenceTransformerEmbedder
-from app.retrieval.indexing import index_contract
+from app.retrieval.embeddings import (
+    DEFAULT_EMBEDDING_MODEL,
+    EmbeddingInputTooLong,
+    SentenceTransformerEmbedder,
+    prompt_format_for,
+)
+from app.retrieval.indexing import ensure_index_current, fingerprint, index_contract
 from app.retrieval.vector_store import ChunkVector, VectorStore
 
 
@@ -114,7 +119,176 @@ def test_index_contract_with_no_chunks_is_a_noop(db: psycopg.Connection, vector_
     assert vector_store.count() == 0
 
 
+# --- index fingerprint (MAS-52) ---------------------------------------------------
+
+
+def _store_two_contracts(db: psycopg.Connection) -> list[UUID]:
+    ids = []
+    for name, chunks in (("a.txt", ["1. Term. Three years.", "2. Fees. Monthly."]), ("b.txt", ["Liability capped."])):
+        ids.append(repository.create_contract(db, filename=name, file_type="txt", size_bytes=1, character_count=1, chunks=chunks).id)
+    return ids
+
+
+def test_first_start_indexes_stored_chunks_and_records_the_fingerprint(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder
+) -> None:
+    _store_two_contracts(db)
+
+    assert ensure_index_current(db, fake_embedder, vector_store) == 3
+    assert vector_store.count() == 3
+    assert repository.get_vector_index(db, vector_store.collection) == fingerprint(fake_embedder, vector_store.collection)
+
+    # Same embedder again: nothing to do.
+    assert ensure_index_current(db, fake_embedder, vector_store) is None
+    assert vector_store.count() == 3
+
+
+def test_same_dimension_model_change_rebuilds_the_index(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, caplog: pytest.LogCaptureFixture
+) -> None:
+    _store_two_contracts(db)
+    ensure_index_current(db, fake_embedder, vector_store)
+    # An orphan point that a rebuild must not keep.
+    vector_store.upsert([ChunkVector(uuid4(), uuid4(), 0, "stale", fake_embedder.embed_query("stale"))])
+    assert vector_store.count() == 4
+
+    fake_embedder.prompt_format = "nomic"  # e.g. MAS-51: same model, same 64 dims, different input format
+    with caplog.at_level("WARNING"):
+        reindexed = ensure_index_current(db, fake_embedder, vector_store)
+
+    assert reindexed == 3
+    assert "Rebuilding vector index" in caplog.text
+    assert vector_store.count() == 3  # only the chunks in Postgres survive
+    assert repository.get_vector_index(db, vector_store.collection).prompt_format == "nomic"
+
+
+def test_wiped_collection_is_rebuilt_even_when_the_fingerprint_matches(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder
+) -> None:
+    _store_two_contracts(db)
+    ensure_index_current(db, fake_embedder, vector_store)
+    vector_store._client.delete_collection(vector_store.collection)  # a lost Qdrant volume
+
+    assert ensure_index_current(db, fake_embedder, vector_store) == 3
+    assert vector_store.count() == 3
+
+
+# --- prefixes and token guard (MAS-51 / MAS-49, no model loaded) --------------------
+
+
+class _FakeModel:
+    """Stands in for a SentenceTransformer: records what encode() is given."""
+
+    max_seq_length = 512
+    prompts: dict[str, str] = {}
+
+    def __init__(self) -> None:
+        self.encoded: list[tuple[list[str], str | None]] = []
+
+    @staticmethod
+    def tokenizer(text: str, add_special_tokens: bool = True) -> dict[str, list[int]]:
+        return {"input_ids": [0] * (len(text.split()) + (2 if add_special_tokens else 0))}
+
+    def get_sentence_embedding_dimension(self) -> int:
+        return 4
+
+    def encode(self, texts, prompt_name=None, **_):
+        import numpy as np
+
+        self.encoded.append((list(texts), prompt_name))
+        return np.zeros((len(texts), 4))
+
+
+@pytest.fixture
+def modernbert_like(monkeypatch: pytest.MonkeyPatch) -> tuple[SentenceTransformerEmbedder, _FakeModel]:
+    monkeypatch.delenv("EMBEDDING_PROMPT_FORMAT", raising=False)
+    embedder = SentenceTransformerEmbedder(DEFAULT_EMBEDDING_MODEL)
+    model = _FakeModel()
+    monkeypatch.setattr(embedder, "_load", lambda: model)
+    return embedder, model
+
+
+def test_modernbert_inputs_carry_the_search_prefixes(modernbert_like) -> None:
+    embedder, model = modernbert_like
+
+    embedder.embed_documents(["Fees are due monthly.", "Term: three years."])
+    embedder.embed_query("When are fees due?")
+
+    assert embedder.prompt_format == "nomic"
+    assert model.encoded == [
+        (["search_document: Fees are due monthly.", "search_document: Term: three years."], None),
+        (["search_query: When are fees due?"], None),
+    ]
+
+
+def test_prefix_scheme_follows_the_model_family(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EMBEDDING_PROMPT_FORMAT", raising=False)
+
+    assert prompt_format_for("freelawproject/modernbert-embed-base_finetune_512") == "nomic"
+    assert prompt_format_for("nomic-ai/nomic-embed-text-v1.5") == "nomic"
+    assert prompt_format_for("Qwen/Qwen3-Embedding-0.6B") == "none"  # different instruction format
+
+    monkeypatch.setenv("EMBEDDING_PROMPT_FORMAT", "none")
+    assert prompt_format_for("freelawproject/modernbert-embed-base_finetune_512") == "none"
+
+    monkeypatch.setenv("EMBEDDING_PROMPT_FORMAT", "bogus")
+    with pytest.raises(ValueError, match="EMBEDDING_PROMPT_FORMAT"):
+        prompt_format_for("anything")
+
+
+def test_without_a_prefix_scheme_the_models_own_prompt_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EMBEDDING_PROMPT_FORMAT", raising=False)
+    embedder = SentenceTransformerEmbedder("Qwen/Qwen3-Embedding-0.6B")
+    model = _FakeModel()
+    model.prompts = {"query": "Instruct: retrieve passages\nQuery: "}
+    monkeypatch.setattr(embedder, "_load", lambda: model)
+
+    embedder.embed_documents(["clause"])
+    embedder.embed_query("question")
+
+    assert model.encoded == [(["clause"], None), (["question"], "query")]
+
+
+def test_token_count_includes_prefix_and_special_tokens(modernbert_like) -> None:
+    embedder, _ = modernbert_like
+
+    # "search_document:" + 3 words + 2 special tokens, as the fake tokenizer counts.
+    assert embedder.count_tokens("one two three") == 1 + 3 + 2
+    assert embedder.max_tokens == 512
+
+
+def test_overlong_chunk_is_refused_rather_than_truncated(modernbert_like) -> None:
+    embedder, model = modernbert_like
+    model.max_seq_length = 8
+
+    with pytest.raises(EmbeddingInputTooLong, match="exceeds the 8-token limit"):
+        embedder.embed_documents(["one two three four five six seven"])
+    assert model.encoded == []  # nothing reached the model
+
+
 # --- real model (opt-in) ----------------------------------------------------------
+
+
+@pytest.mark.skipif(os.getenv("MASIGN_REAL_EMBEDDINGS") != "1", reason="set MASIGN_REAL_EMBEDDINGS=1 to load the real model")
+def test_real_tokenizer_budget_keeps_dense_financial_text_within_the_limit() -> None:
+    # MAS-49: the text that produced 529 tokens for a 1192-character chunk.
+    from app.ingestion.pipeline import TokenBudget, chunk_contract_text
+
+    embedder = SentenceTransformerEmbedder(DEFAULT_EMBEDDING_MODEL)
+    financial = " ".join(
+        f"Fee {i}: USD 12,345.67 due on 2026-0{i % 9 + 1}-15; late payment penalty 1.5% per month (18% p.a.), "
+        f"cap EUR 9,999.99; ref. §4.2(b)(iii)/Sched. A-{i}."
+        for i in range(60)
+    ) + " Final clause: termination fee EUR 50,000."
+
+    by_chars_only = chunk_contract_text(financial)
+    assert any(embedder.count_tokens(chunk) > embedder.max_tokens for chunk in by_chars_only)  # the bug
+
+    chunks = chunk_contract_text(financial, token_budget=TokenBudget(embedder.count_tokens, embedder.max_tokens))
+
+    assert all(embedder.count_tokens(chunk) <= embedder.max_tokens for chunk in chunks)
+    assert "termination fee EUR 50,000" in chunks[-1]
+    embedder.embed_documents(chunks)  # the guard must not fire
 
 
 @pytest.mark.skipif(os.getenv("MASIGN_REAL_EMBEDDINGS") != "1", reason="set MASIGN_REAL_EMBEDDINGS=1 to load the real model")

@@ -5,6 +5,8 @@ they never exercise the lifespan. These do, with run_migrations mocked so no
 real database is touched.
 """
 
+from contextlib import nullcontext
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -21,20 +23,24 @@ class _StubEmbedder:
 
 
 class _StubStore:
-    ensured_with: int | None = None
-
-    def ensure_collection(self, dimension: int) -> None:
-        self.ensured_with = dimension
+    index_checked_with: tuple | None = None
 
 
 @pytest.fixture
 def production_like_env(monkeypatch: pytest.MonkeyPatch) -> tuple[_StubEmbedder, _StubStore]:
-    # Startup also warms the embedding model and prepares the vector store;
-    # stub both so no model is downloaded and no Qdrant is needed.
+    # Startup also warms the embedding model and checks the vector index
+    # against it (MAS-52); stub all of that so no model is downloaded and
+    # neither Postgres nor Qdrant is needed.
     monkeypatch.setenv("APP_ENV", "development")
     embedder, store = _StubEmbedder(), _StubStore()
     monkeypatch.setattr(main, "get_embedder", lambda: embedder)
     monkeypatch.setattr(main, "get_vector_store", lambda: store)
+    monkeypatch.setattr(main, "get_connection", lambda: nullcontext("fake connection"))
+
+    def fake_ensure_index_current(db, embedder, store):
+        store.index_checked_with = (db, embedder)
+
+    monkeypatch.setattr(main, "ensure_index_current", fake_ensure_index_current)
     return embedder, store
 
 
@@ -50,9 +56,9 @@ def test_startup_runs_migrations_before_serving(
         assert client.get("/health").status_code == 200
 
     assert calls == ["migrated"]
-    # MAS-11: the model is loaded and the collection sized to it before serving.
+    # MAS-11 / MAS-52: the model is loaded and the index checked against it before serving.
     assert embedder.warmed_up is True
-    assert store.ensured_with == embedder.dimension
+    assert store.index_checked_with == ("fake connection", embedder)
 
 
 def test_startup_fails_when_migrations_fail(

@@ -4,7 +4,7 @@ from uuid import UUID
 
 import psycopg
 
-from app.database.models import Chunk, Contract
+from app.database.models import Chunk, Contract, VectorIndex
 
 
 def create_contract(
@@ -84,3 +84,33 @@ def delete_contract(connection: psycopg.Connection, contract_id: UUID) -> bool:
         with connection.cursor() as cursor:
             cursor.execute("DELETE FROM contracts WHERE id = %s", (contract_id,))
             return cursor.rowcount > 0
+
+
+def get_vector_index(connection: psycopg.Connection, collection: str) -> VectorIndex | None:
+    """What the collection was last built with, or None if never recorded (MAS-52)."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT collection, model_name, dimension, max_tokens, prompt_format "
+            "FROM vector_index WHERE collection = %s",
+            (collection,),
+        )
+        row = cursor.fetchone()
+    return VectorIndex(**row) if row else None
+
+
+def set_vector_index(connection: psycopg.Connection, index: VectorIndex) -> None:
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO vector_index (collection, model_name, dimension, max_tokens, prompt_format)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (collection) DO UPDATE SET
+                    model_name = EXCLUDED.model_name,
+                    dimension = EXCLUDED.dimension,
+                    max_tokens = EXCLUDED.max_tokens,
+                    prompt_format = EXCLUDED.prompt_format,
+                    created_at = now()
+                """,
+                (index.collection, index.model_name, index.dimension, index.max_tokens, index.prompt_format),
+            )
