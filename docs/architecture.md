@@ -18,4 +18,17 @@ yet recorded in `schema_migrations` and runs on API startup, so
 `docker compose up --build` always brings a fresh database to the current
 schema. `app/database/repository.py` is the only module that issues SQL.
 
+## Embeddings and vector store
+
+`app/retrieval/embeddings.py` wraps a local sentence-transformers model chosen by
+`EMBEDDING_MODEL` (default: Free Law's legal-fine-tuned ModernBERT; see CLAUDE.md
+for the benchmark behind that choice). `app/retrieval/vector_store.py` keeps one
+Qdrant collection, `contract_chunks`, where each point's id **is** the chunk's
+Postgres UUID and the payload carries `contract_id`, `chunk_index` and `text`.
+On upload, `app/retrieval/indexing.py` embeds the stored chunks, upserts them and
+writes the point id back to `chunks.embedding_id`; if that fails the contract is
+removed again so nothing unsearchable lingers. At startup the API loads the model
+and checks the collection's vector size — a different size means the model
+changed, so the collection is rebuilt (existing contracts must be re-uploaded).
+
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

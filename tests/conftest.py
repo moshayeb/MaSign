@@ -6,7 +6,9 @@ need genuine documents rather than byte stubs.
 """
 
 import os
+import re
 import uuid
+import zlib
 from collections.abc import Iterator
 from io import BytesIO
 
@@ -20,8 +22,64 @@ os.environ.setdefault("APP_ENV", "test")
 from docx import Document
 from pypdf import PdfWriter
 
+from app.api import dependencies
 from app.database.migrations import run_migrations
 from app.database.session import get_connection, get_database_url
+from app.main import app
+from app.retrieval.vector_store import VectorStore
+
+
+# --- embeddings and vector store ---------------------------------------------
+
+
+class FakeEmbedder:
+    """Deterministic bag-of-words vectors: texts sharing words score higher.
+
+    Enough to test indexing, filtering and ranking without loading a model.
+    """
+
+    model_name = "fake-embedder"
+    dimension = 64
+
+    def _vector(self, text: str) -> list[float]:
+        vector = [0.0] * self.dimension
+        # crc32 rather than hash(): stable across processes, so tests can't
+        # flake on a different collision pattern per run.
+        for word in re.findall(r"[a-z0-9]+", text.lower()):
+            vector[zlib.crc32(word.encode()) % self.dimension] += 1.0
+        norm = sum(v * v for v in vector) ** 0.5 or 1.0
+        return [v / norm for v in vector]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._vector(t) for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._vector(text)
+
+
+@pytest.fixture
+def fake_embedder() -> FakeEmbedder:
+    return FakeEmbedder()
+
+
+@pytest.fixture
+def vector_store(fake_embedder: FakeEmbedder) -> VectorStore:
+    """An in-process Qdrant (no server) with the collection ready."""
+    from qdrant_client import QdrantClient
+
+    store = VectorStore(QdrantClient(":memory:"), collection="test_chunks")
+    store.ensure_collection(fake_embedder.dimension)
+    return store
+
+
+@pytest.fixture(autouse=True)
+def _fake_retrieval_stack(fake_embedder: FakeEmbedder, vector_store: VectorStore) -> Iterator[None]:
+    """Every API test gets the fake embedder and in-memory store by default."""
+    app.dependency_overrides[dependencies.get_embedder] = lambda: fake_embedder
+    app.dependency_overrides[dependencies.get_vector_store] = lambda: vector_store
+    yield
+    app.dependency_overrides.pop(dependencies.get_embedder, None)
+    app.dependency_overrides.pop(dependencies.get_vector_store, None)
 
 
 # --- database ---------------------------------------------------------------

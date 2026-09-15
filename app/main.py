@@ -10,7 +10,12 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.api.routes import router as api_router
 from app.database.migrations import run_migrations
+from app.retrieval.embeddings import get_embedder
+from app.retrieval.vector_store import VectorStoreError, get_vector_store
 
+# Uvicorn configures only its own loggers; without this the app's startup and
+# error lines (migrations, model loading, outages) never reach the container log.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Local runs read settings from .env (see .env.example). Real environment
@@ -27,6 +32,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if os.getenv("APP_ENV") != "test":
         applied = run_migrations()
         logger.info("Database ready (%d migration(s) applied)", len(applied))
+
+        # Load the embedding model now (first load downloads it) and make sure
+        # the Qdrant collection matches its vector size, so the first upload
+        # doesn't pay for either.
+        embedder = get_embedder()
+        embedder.warm_up()
+        get_vector_store().ensure_collection(embedder.dimension)
+        logger.info("Embeddings ready: %s (%d dims)", embedder.model_name, embedder.dimension)
     yield
 
 
@@ -48,6 +61,15 @@ async def database_unavailable(_: Request, error: psycopg.OperationalError) -> J
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"detail": "Database unavailable. Check that Postgres is running and DATABASE_URL is correct."},
+    )
+
+
+@app.exception_handler(VectorStoreError)
+async def vector_store_unavailable(_: Request, error: VectorStoreError) -> JSONResponse:
+    logger.error("Vector store unavailable: %s", error)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Vector store unavailable. Check that Qdrant is running and VECTOR_STORE_URL is correct."},
     )
 
 

@@ -11,26 +11,52 @@ from fastapi.testclient import TestClient
 from app import main
 
 
+class _StubEmbedder:
+    model_name = "stub"
+    dimension = 4
+    warmed_up = False
+
+    def warm_up(self) -> None:
+        self.warmed_up = True
+
+
+class _StubStore:
+    ensured_with: int | None = None
+
+    def ensure_collection(self, dimension: int) -> None:
+        self.ensured_with = dimension
+
+
 @pytest.fixture
-def production_like_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def production_like_env(monkeypatch: pytest.MonkeyPatch) -> tuple[_StubEmbedder, _StubStore]:
+    # Startup also warms the embedding model and prepares the vector store;
+    # stub both so no model is downloaded and no Qdrant is needed.
     monkeypatch.setenv("APP_ENV", "development")
+    embedder, store = _StubEmbedder(), _StubStore()
+    monkeypatch.setattr(main, "get_embedder", lambda: embedder)
+    monkeypatch.setattr(main, "get_vector_store", lambda: store)
+    return embedder, store
 
 
 def test_startup_runs_migrations_before_serving(
-    production_like_env: None, monkeypatch: pytest.MonkeyPatch
+    production_like_env: tuple[_StubEmbedder, _StubStore], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[str] = []
     monkeypatch.setattr(main, "run_migrations", lambda: calls.append("migrated") or [])
+    embedder, store = production_like_env
 
     with TestClient(main.app) as client:
         assert calls == ["migrated"]  # already applied when the first request can be made
         assert client.get("/health").status_code == 200
 
     assert calls == ["migrated"]
+    # MAS-11: the model is loaded and the collection sized to it before serving.
+    assert embedder.warmed_up is True
+    assert store.ensured_with == embedder.dimension
 
 
 def test_startup_fails_when_migrations_fail(
-    production_like_env: None, monkeypatch: pytest.MonkeyPatch
+    production_like_env: tuple[_StubEmbedder, _StubStore], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def broken_migrations():
         raise RuntimeError("simulated unavailable database")

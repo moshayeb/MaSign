@@ -83,6 +83,13 @@ Check it is up:
 curl http://localhost:8000/health
 ```
 
+The first start downloads the embedding model (~600 MB) into the `hf_cache`
+volume, so it takes a minute or two; later starts reuse it. Embeddings run on
+the CPU inside the `api` container — a 30-page contract takes roughly 20 s to
+index. To use a different model set `EMBEDDING_MODEL` (see `.env.example` and
+`CLAUDE.md`); the vector collection is rebuilt automatically when the model's
+dimension changes.
+
 ## API Endpoints
 
 Interactive docs at `http://localhost:8000/docs`.
