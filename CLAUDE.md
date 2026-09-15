@@ -14,16 +14,22 @@ Project conventions that are not derivable from the code. Read before working.
 
 ## Embedding Model Decision (MAS-11)
 
-- Model: Qwen3-Embedding-0.6B (Apache 2.0, 1024 dims, 32k context)
-- Chosen via MLEB contract-only benchmark (0.766 vs OpenAI
-  text-embedding-3-small's 0.742), runs on CPU
-- Upgrade path: swap to Qwen3-Embedding-4B (same family/code,
-  re-index only) if 0.6B quality isn't sufficient
+- Default model: `freelawproject/modernbert-embed-base_finetune_512`
+  (Apache 2.0, 150M params, 768 dims, 8k context, fine-tuned on legal text)
+- Chosen via the MLEB contract-only benchmark **and** a CPU benchmark on the
+  dev machine (2026-09-15): MLEB contract score 0.741 vs Qwen3-Embedding-0.6B
+  0.766 (−3%), but 296 ms/chunk vs 10.7 s/chunk (36× faster) — Qwen3-0.6B
+  meant ~10 minutes per 30-page contract on CPU, ModernBERT ~18 s.
+  Both beat nothing-legal generic small models; OpenAI text-embedding-3-small
+  scores 0.742 on the same benchmark.
+- The model is set by `EMBEDDING_MODEL`; the collection is rebuilt if the
+  dimension changes. Upgrade path: `Qwen/Qwen3-Embedding-0.6B` (1024 dims) or
+  `Qwen3-Embedding-4B` (0.842, beats OpenAI large) if GPU inference becomes
+  available — same code path, re-index only.
 - Known gap: no benchmark covers financial/economic contract terms
   (fees, penalties, payment clauses) specifically — MAS-32's
   evaluation set MUST include financial-term questions to actually
-  measure this, not assume Qwen3's general MTEB strength carries
-  over
+  measure this, not assume general MTEB strength carries over.
 
 ## Frontend Decision
 
