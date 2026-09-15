@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -11,14 +12,16 @@ from app.api.dependencies import get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract
 from app.ingestion.parsing import DocumentTextError, extract_text
-from app.ingestion.pipeline import chunk_contract_text
+from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
 from app.retrieval.embeddings import Embedder
 from app.retrieval.indexing import index_contract
 from app.retrieval.retriever import retrieve_contract_context
-from app.retrieval.vector_store import VectorStore
+from app.retrieval.vector_store import VectorStore, VectorStoreError
 from app.risk_analysis.analyzer import analyze_contract_risks
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["contracts"])
 
@@ -84,7 +87,7 @@ async def upload_contract(
     # Running them inline would block the event loop for the whole upload — a
     # large PDF or a slow insert stalls every other request on this worker —
     # so each goes to the thread pool.
-    text, chunks = await run_in_threadpool(_parse_and_chunk, upload)
+    text, chunks = await run_in_threadpool(_parse_and_chunk, upload, embedder)
 
     contract = await run_in_threadpool(
         repository.create_contract,
@@ -102,10 +105,7 @@ async def upload_contract(
     try:
         await run_in_threadpool(index_contract, db, contract, embedder, store)
     except Exception:
-        # End the failed transaction first: otherwise the delete would nest
-        # inside it and be rolled back along with it when the request exits.
-        db.rollback()
-        repository.delete_contract(db, contract.id)
+        await run_in_threadpool(_discard_failed_upload, db, store, contract.id)
         raise
 
     return UploadContractResponse(
@@ -113,6 +113,26 @@ async def upload_contract(
         content_type=upload.content_type,
         max_size_bytes=MAX_UPLOAD_BYTES,
     )
+
+
+def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_id: UUID) -> None:
+    """Remove what a failed upload left in Postgres and Qdrant. Runs off the loop.
+
+    Indexing may have failed before or after Qdrant accepted the vectors, so
+    both stores are cleaned. Each step is best effort: a failure here is
+    logged, never raised, so the client still sees the original upload error.
+    """
+    try:
+        # End the failed transaction first: otherwise the delete would nest
+        # inside it and be rolled back along with it when the request exits.
+        db.rollback()
+        repository.delete_contract(db, contract_id)
+    except Exception:
+        logger.exception("Failed upload: could not delete contract %s from the database", contract_id)
+    try:
+        store.delete_contract(contract_id)
+    except VectorStoreError as error:
+        logger.warning("Failed upload: could not delete vectors for contract %s: %s", contract_id, error)
 
 
 @router.get("/contracts", response_model=list[ContractSummary])
@@ -131,10 +151,13 @@ def get_contract(
     return ContractSummary.from_model(contract)
 
 
-def _parse_and_chunk(upload: ValidatedUpload) -> tuple[str, list[str]]:
+def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[str, list[str]]:
     """Extract text and split it into chunks. Runs off the event loop."""
     text = _extract_or_reject(upload)
-    return text, chunk_contract_text(text)
+    # Chunk within the model's token limit too, so nothing is truncated when
+    # the chunk is embedded (MAS-49).
+    budget = TokenBudget(count=embedder.count_tokens, max_tokens=embedder.max_tokens)
+    return text, chunk_contract_text(text, token_budget=budget)
 
 
 def _extract_or_reject(upload: ValidatedUpload) -> str:

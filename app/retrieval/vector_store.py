@@ -56,24 +56,33 @@ class VectorStore:
         self._client = client
         self.collection = collection
 
-    def ensure_collection(self, dimension: int) -> None:
+    def ensure_collection(self, dimension: int) -> bool:
         """Create the collection, or rebuild it if the vector size changed.
 
         A size change means EMBEDDING_MODEL changed; old vectors are useless
         to the new model, so dropping them (and re-indexing) is the only
-        sensible outcome.
+        sensible outcome. Returns True if the collection is new or was rebuilt,
+        i.e. it is empty and needs indexing.
         """
         try:
             if self._client.collection_exists(self.collection):
                 current = self._client.get_collection(self.collection).config.params.vectors.size
                 if current == dimension:
-                    return
+                    return False
                 logger.warning(
                     "Rebuilding collection %s: vector size %d -> %d (embedding model changed)",
                     self.collection, current, dimension,
                 )
-                self._client.delete_collection(self.collection)
+            self.reset_collection(dimension)
+        except (ResponseHandlingException, UnexpectedResponse) as error:
+            raise VectorStoreError(str(error)) from error
+        return True
 
+    def reset_collection(self, dimension: int) -> None:
+        """Drop the collection (if any) and create it empty with this vector size."""
+        try:
+            if self._client.collection_exists(self.collection):
+                self._client.delete_collection(self.collection)
             self._client.create_collection(
                 self.collection,
                 vectors_config=VectorParams(size=dimension, distance=Distance.COSINE),

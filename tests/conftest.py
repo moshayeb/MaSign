@@ -40,6 +40,12 @@ class FakeEmbedder:
 
     model_name = "fake-embedder"
     dimension = 64
+    max_tokens = 512
+    prompt_format = "none"
+
+    def count_tokens(self, text: str) -> int:
+        # One "token" per word: enough to exercise the chunker's token budget.
+        return len(text.split())
 
     def _vector(self, text: str) -> list[float]:
         vector = [0.0] * self.dimension
@@ -143,7 +149,7 @@ def db(database: str) -> Iterator[psycopg.Connection]:
     """A connection to the test database, emptied after each test."""
     with get_connection(database) as connection:
         yield connection
-        connection.execute("TRUNCATE contracts CASCADE")
+        connection.execute("TRUNCATE contracts, vector_index CASCADE")
 
 
 # --- documents --------------------------------------------------------------

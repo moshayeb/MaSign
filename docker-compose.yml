@@ -14,9 +14,12 @@ services:
       # Inside the compose network the services are reached by name, not localhost.
       DATABASE_URL: postgresql://rag_user:rag_password@postgres:5432/contract_rag
       VECTOR_STORE_URL: http://qdrant:6333
-      # See CLAUDE.md for the model choice. Changing it rebuilds the Qdrant
-      # collection on next start (existing contracts must be re-uploaded).
-      EMBEDDING_MODEL: freelawproject/modernbert-embed-base_finetune_512
+      # See CLAUDE.md for the model choice. Override in .env (or the shell);
+      # a literal value here would win over env_file and pin the model.
+      # Changing it rebuilds the Qdrant collection on next start.
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-freelawproject/modernbert-embed-base_finetune_512}
+      EMBEDDING_MAX_TOKENS: ${EMBEDDING_MAX_TOKENS:-512}
+      EMBEDDING_PROMPT_FORMAT: ${EMBEDDING_PROMPT_FORMAT:-}
     volumes:
       - uploads:/app/data/uploads
       - hf_cache:/app/.cache/huggingface

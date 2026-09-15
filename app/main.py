@@ -11,7 +11,9 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.api.routes import router as api_router
 from app.database.migrations import run_migrations
+from app.database.session import get_connection
 from app.retrieval.embeddings import get_embedder
+from app.retrieval.indexing import ensure_index_current
 from app.retrieval.vector_store import VectorStoreError, get_vector_store
 
 # Uvicorn configures only its own loggers; without this the app's startup and
@@ -35,11 +37,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.info("Database ready (%d migration(s) applied)", len(applied))
 
         # Load the embedding model now (first load downloads it) and make sure
-        # the Qdrant collection matches its vector size, so the first upload
+        # the Qdrant collection was built by this very embedder — rebuilding
+        # it from the stored chunks if not — so the first upload or query
         # doesn't pay for either.
         embedder = get_embedder()
         embedder.warm_up()
-        get_vector_store().ensure_collection(embedder.dimension)
+        with get_connection() as db:
+            ensure_index_current(db, embedder, get_vector_store())
         logger.info("Embeddings ready: %s (%d dims)", embedder.model_name, embedder.dimension)
     yield
 

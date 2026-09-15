@@ -117,6 +117,18 @@ def test_chunk_rows_match_the_chunker_output(db: psycopg.Connection) -> None:
     assert chunks[0].chunk_text.startswith("1. Clause")
 
 
+def test_upload_chunks_within_the_embedders_token_limit(db: psycopg.Connection, fake_embedder) -> None:
+    # MAS-49: the chunker is handed the model's token budget, not just max_chars.
+    fake_embedder.max_tokens = 40  # the fake counts words
+    dense = " ".join(f"fee {n} due 1.5% cap 9,999" for n in range(60))
+
+    body = _upload("dense.txt", dense.encode(), "text/plain").json()
+
+    chunks = repository.list_chunks(db, UUID(body["contract_id"]))
+    assert len(chunks) > 1
+    assert all(fake_embedder.count_tokens(c.chunk_text) <= 40 for c in chunks)
+
+
 def test_upload_indexes_every_chunk_in_the_vector_store(db: psycopg.Connection, vector_store) -> None:
     # MAS-11: uploading a contract results in vectors in Qdrant.
     clauses = [f"{n}. Clause\n" + ("The vendor shall indemnify the customer. " * 20) for n in range(1, 16)]
@@ -128,21 +140,52 @@ def test_upload_indexes_every_chunk_in_the_vector_store(db: psycopg.Connection, 
     assert all(c.embedding_id for c in repository.list_chunks(db, contract_id))
 
 
-def test_vector_store_outage_fails_the_upload_cleanly(db: psycopg.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+class _DownStore:
+    """A vector store whose server is unreachable: every call fails."""
+
+    def upsert(self, vectors):
+        from app.retrieval.vector_store import VectorStoreError
+
+        raise VectorStoreError("connection refused (simulated)")
+
+    def delete_contract(self, contract_id):
+        from app.retrieval.vector_store import VectorStoreError
+
+        raise VectorStoreError("still refused (simulated)")
+
+
+def test_vector_store_outage_fails_the_upload_cleanly(db: psycopg.Connection, caplog) -> None:
     from app.api import dependencies
-    from app.retrieval.vector_store import VectorStoreError
 
-    class DownStore:
-        def upsert(self, vectors):
-            raise VectorStoreError("connection refused (simulated)")
+    app.dependency_overrides[dependencies.get_vector_store] = lambda: _DownStore()
 
-    app.dependency_overrides[dependencies.get_vector_store] = lambda: DownStore()
-
-    response = _upload("acme.txt", SAMPLE_CONTRACT.read_bytes(), "text/plain")
+    with caplog.at_level("WARNING", logger="app.api.routes"):
+        response = _upload("acme.txt", SAMPLE_CONTRACT.read_bytes(), "text/plain")
 
     assert response.status_code == 503
     assert "Vector store unavailable" in response.json()["detail"]
     assert repository.list_contracts(db) == []  # no half-processed contract left behind
+    # MAS-50: the failed vector cleanup is logged, and the client still sees the
+    # original outage rather than the cleanup's own failure.
+    assert any("could not delete vectors" in r.message for r in caplog.records)
+    assert "still refused" not in response.json()["detail"]
+
+
+def test_failure_after_vectors_were_stored_removes_them_again(
+    db: psycopg.Connection, vector_store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # MAS-50: Qdrant has accepted the points, then recording the embedding ids
+    # fails. Neither store may keep anything of the contract.
+    def failing_set_embedding_ids(connection, embedding_ids):
+        raise psycopg.OperationalError("connection lost (simulated)")
+
+    monkeypatch.setattr(repository, "set_embedding_ids", failing_set_embedding_ids)
+
+    response = _upload("acme.txt", SAMPLE_CONTRACT.read_bytes(), "text/plain")
+
+    assert response.status_code == 503
+    assert repository.list_contracts(db) == []
+    assert vector_store.count() == 0
 
 
 def test_failed_parse_stores_nothing(db: psycopg.Connection, make_scanned_pdf) -> None:

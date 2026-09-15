@@ -1,4 +1,4 @@
-"""Plain records mirroring the contracts and chunks tables."""
+"""Plain records mirroring the contracts, chunks and vector_index tables."""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,3 +25,19 @@ class Chunk:
     chunk_text: str
     embedding_id: str | None
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class VectorIndex:
+    """Fingerprint of the embedder a Qdrant collection was built with (MAS-52).
+
+    Vectors from two different models — or the same model with a different
+    prefix scheme or token limit — are not comparable even when their
+    dimension matches, so all of it is part of the identity.
+    """
+
+    collection: str
+    model_name: str
+    dimension: int
+    max_tokens: int
+    prompt_format: str

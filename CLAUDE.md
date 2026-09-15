@@ -24,10 +24,14 @@ Project conventions that are not derivable from the code. Read before working.
   meant ~10 minutes per 30-page contract on CPU, ModernBERT ~18 s.
   Both beat nothing-legal generic small models; OpenAI text-embedding-3-small
   scores 0.742 on the same benchmark.
-- The model is set by `EMBEDDING_MODEL`; the collection is rebuilt if the
-  dimension changes. Upgrade path: `Qwen/Qwen3-Embedding-0.6B` (1024 dims) or
-  `Qwen3-Embedding-4B` (0.842, beats OpenAI large) if GPU inference becomes
-  available — same code path, re-index only.
+- The model is set by `EMBEDDING_MODEL`. The embedder adds the family's input
+  prefixes itself (`search_document: `/`search_query: ` for ModernBERT-embed,
+  MAS-51) and gives the chunker a token budget so no chunk is truncated
+  (MAS-49). The index fingerprint (model, dims, token limit, prompt format) is
+  stored in `vector_index`; any change rebuilds the collection from the stored
+  chunks at startup (MAS-52). Upgrade path: `Qwen/Qwen3-Embedding-0.6B`
+  (1024 dims) or `Qwen3-Embedding-4B` (0.842, beats OpenAI large) if GPU
+  inference becomes available — a config change, re-indexed automatically.
 - Known gap: no benchmark covers financial/economic contract terms
   (fees, penalties, payment clauses) specifically — MAS-32's
   evaluation set MUST include financial-term questions to actually

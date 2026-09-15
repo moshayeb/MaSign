@@ -87,8 +87,8 @@ The first start downloads the embedding model (~600 MB) into the `hf_cache`
 volume, so it takes a minute or two; later starts reuse it. Embeddings run on
 the CPU inside the `api` container — a 30-page contract takes roughly 20 s to
 index. To use a different model set `EMBEDDING_MODEL` (see `.env.example` and
-`CLAUDE.md`); the vector collection is rebuilt automatically when the model's
-dimension changes.
+`CLAUDE.md`); on the next start the vector index is rebuilt automatically from
+the stored chunk text, so already-uploaded contracts stay searchable.
 
 ## API Endpoints
 
