@@ -1,0 +1,105 @@
+MASTER SERVICES AGREEMENT
+
+This Master Services Agreement (the "Agreement") is entered into as of 1 March 2026 (the "Effective Date") between Northwind Analytics AB, a company registered in Sweden with registration number 556123-4567 and its principal office at Sveavägen 44, 111 34 Stockholm ("Customer"), and Contoso Cloud Services GmbH, a company registered in Germany with registration number HRB 98765 and its principal office at Friedrichstraße 200, 10117 Berlin ("Vendor"). Customer and Vendor are each a "Party" and together the "Parties".
+
+1. Services
+
+1.1 Vendor shall provide the hosted data-processing platform, related professional services and support described in one or more statements of work executed by the Parties (each a "Statement of Work" or "SOW"). Each SOW is incorporated into this Agreement by reference.
+
+1.2 Vendor shall perform the Services in a professional and workmanlike manner, using suitably qualified personnel, and in accordance with the service levels in Schedule 2.
+
+1.3 Customer shall provide Vendor with timely access to the information, personnel and systems reasonably required for the performance of the Services.
+
+2. Fees and Payment
+
+2.1 Customer shall pay Vendor a platform subscription fee of EUR 18,500 per month (the "Subscription Fee"), invoiced monthly in advance, and professional services fees at the daily rate of EUR 1,250 per consultant day, invoiced monthly in arrears against approved timesheets.
+
+2.2 All invoices are payable within thirty (30) days of the invoice date by bank transfer to the account designated on the invoice. Fees are exclusive of value added tax and any other applicable taxes, which shall be added to the invoice at the prevailing rate.
+
+2.3 Late payment. Any amount not paid when due shall accrue interest at the rate of 1.5% per month (18% per annum), or the maximum rate permitted by applicable law if lower, from the due date until paid in full. In addition, Customer shall reimburse Vendor's reasonable costs of collection, including legal fees. If any undisputed invoice remains unpaid more than sixty (60) days after its due date, Vendor may suspend the Services on ten (10) business days' written notice until all overdue amounts are paid.
+
+2.4 Fee adjustment. Vendor may increase the Subscription Fee once per calendar year, on not less than ninety (90) days' written notice, by no more than the greater of 3% or the annual change in the Swedish consumer price index (KPI) published by Statistics Sweden.
+
+2.5 Disputed invoices. Customer may withhold payment of any amount it disputes in good faith, provided it notifies Vendor in writing of the dispute and the reasons for it within fifteen (15) days of the invoice date and pays the undisputed portion when due.
+
+3. Term and Renewal
+
+3.1 This Agreement commences on the Effective Date and continues for an initial term of thirty-six (36) months (the "Initial Term").
+
+3.2 After the Initial Term this Agreement renews automatically for successive periods of twelve (12) months (each a "Renewal Term") unless either Party gives the other written notice of non-renewal at least ninety (90) days before the end of the then-current term.
+
+4. Termination
+
+4.1 Termination for cause. Either Party may terminate this Agreement with immediate effect by written notice if the other Party commits a material breach of this Agreement and, where the breach is capable of remedy, fails to remedy it within thirty (30) days of receiving written notice describing the breach.
+
+4.2 Insolvency. Either Party may terminate this Agreement with immediate effect if the other Party becomes insolvent, enters into liquidation, has a receiver or administrator appointed over any of its assets, or ceases to carry on business.
+
+4.3 Termination for convenience. Customer may terminate this Agreement for convenience at any time after the first twelve (12) months of the Initial Term on ninety (90) days' written notice, subject to payment of an early termination fee equal to fifty percent (50%) of the Subscription Fees that would otherwise have been payable for the remainder of the Initial Term.
+
+4.4 Effect of termination. On termination Customer shall pay all fees accrued up to the effective date of termination, Vendor shall make Customer Data available for export in a commonly used machine-readable format for sixty (60) days, and thereafter Vendor shall delete Customer Data in accordance with Section 8.
+
+5. Limitation of Liability
+
+5.1 Neither Party shall be liable to the other for any indirect, incidental, special, consequential or punitive damages, or for any loss of profits, revenue, business or anticipated savings, however arising.
+
+5.2 Subject to Section 5.3, the total aggregate liability of each Party arising out of or in connection with this Agreement, whether in contract, tort (including negligence) or otherwise, shall not exceed the total fees paid or payable by Customer under this Agreement in the twelve (12) months immediately preceding the event giving rise to the claim.
+
+5.3 Nothing in this Agreement limits or excludes either Party's liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of Section 7 (Confidentiality), or any liability that cannot be limited or excluded under applicable law. Vendor's liability for breach of Section 8 (Data Protection) is capped at two (2) times the amount in Section 5.2.
+
+6. Intellectual Property
+
+6.1 Vendor and its licensors retain all intellectual property rights in the platform, its documentation and any improvements, and grant Customer a non-exclusive, non-transferable licence to use them during the term solely for Customer's internal business purposes.
+
+6.2 Customer retains all rights in Customer Data. Deliverables created specifically for Customer under a SOW are assigned to Customer on payment of the applicable fees, excluding any Vendor pre-existing materials incorporated into them, which are licensed to Customer on the terms of Section 6.1.
+
+7. Confidentiality
+
+7.1 Each Party shall keep the other Party's Confidential Information confidential, use it only for the purposes of this Agreement, and disclose it only to those of its employees, contractors and professional advisers who need to know it and are bound by obligations of confidentiality no less protective than these.
+
+7.2 These obligations do not apply to information that is or becomes public through no fault of the receiving Party, was lawfully known to the receiving Party before disclosure, is independently developed, or must be disclosed by law or court order, provided the receiving Party gives prompt notice where legally permitted.
+
+7.3 The obligations in this Section 7 survive for five (5) years after termination of this Agreement, and indefinitely in respect of trade secrets.
+
+8. Data Protection
+
+8.1 Vendor processes personal data on behalf of Customer as a processor within the meaning of the EU General Data Protection Regulation (Regulation (EU) 2016/679, "GDPR"). The Parties' data processing agreement in Schedule 3 forms part of this Agreement.
+
+8.2 Vendor shall store and process Customer Data only in data centres located within the European Economic Area and shall not transfer Customer Data outside the EEA without Customer's prior written consent and appropriate safeguards under Chapter V of the GDPR.
+
+8.3 Vendor shall notify Customer without undue delay, and in any event within forty-eight (48) hours, after becoming aware of a personal data breach affecting Customer Data.
+
+8.4 Vendor shall delete or return all Customer Data within ninety (90) days after termination of this Agreement, except to the extent retention is required by law.
+
+9. Service Levels and Service Credits
+
+9.1 Vendor shall make the platform available at least 99.9% of the time in each calendar month, measured as set out in Schedule 2, excluding scheduled maintenance notified at least five (5) business days in advance and not exceeding eight (8) hours per month.
+
+9.2 If availability in any month falls below 99.9%, Customer is entitled to a service credit of 5% of that month's Subscription Fee; below 99.0%, a credit of 15%; and below 95.0%, a credit of 30%. Service credits are Customer's sole and exclusive remedy for failure to meet the availability commitment, except that Customer may terminate under Section 4.1 if availability falls below 95.0% in any three (3) months in a rolling twelve (12) month period.
+
+10. Indemnification
+
+10.1 Vendor shall defend Customer against any third-party claim alleging that the platform, as provided by Vendor and used in accordance with this Agreement, infringes a patent, copyright or trade mark, and shall pay any damages finally awarded or agreed in settlement. If such a claim is made or is likely, Vendor may procure the right for Customer to continue using the platform, modify it so that it is non-infringing, or, if neither is commercially reasonable, terminate the affected Services and refund any prepaid fees for the unused period.
+
+10.2 Customer shall defend Vendor against any third-party claim arising from Customer Data or Customer's use of the Services in breach of this Agreement or applicable law.
+
+11. Insurance
+
+11.1 Vendor shall maintain, throughout the term, professional indemnity insurance of not less than EUR 5,000,000 per claim and cyber liability insurance of not less than EUR 10,000,000 per claim with reputable insurers, and shall provide certificates of insurance on request.
+
+12. Governing Law and Disputes
+
+12.1 This Agreement and any dispute or claim arising out of or in connection with it are governed by the laws of Sweden, excluding its conflict of laws rules.
+
+12.2 Any dispute that the Parties cannot resolve through good-faith negotiation within thirty (30) days shall be finally settled by arbitration in accordance with the Rules of the Arbitration Institute of the Stockholm Chamber of Commerce. The seat of arbitration shall be Stockholm and the language of the proceedings shall be English.
+
+13. General
+
+13.1 Neither Party may assign this Agreement without the other Party's prior written consent, not to be unreasonably withheld, except that either Party may assign it to a successor in connection with a merger or sale of substantially all of its assets on written notice.
+
+13.2 Neither Party is liable for any failure or delay in performance caused by events beyond its reasonable control, including natural disasters, war, terrorism, epidemic, or failure of public utilities or telecommunications networks, provided it notifies the other Party promptly and uses reasonable efforts to resume performance. If such an event continues for more than sixty (60) days, either Party may terminate this Agreement on written notice.
+
+13.3 This Agreement, including its Schedules and any SOWs, constitutes the entire agreement between the Parties and supersedes all prior agreements and understandings relating to its subject matter. Amendments must be in writing and signed by both Parties.
+
+Signed for and on behalf of Northwind Analytics AB: ______________________ Name: Anna Lindqvist Title: Chief Operating Officer
+
+Signed for and on behalf of Contoso Cloud Services GmbH: ______________________ Name: Markus Weber Title: Managing Director

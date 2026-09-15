@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import routes
+from app.api.dependencies import get_db
 from app.main import app
 
 
@@ -14,12 +15,14 @@ client = TestClient(app)
 def retriever_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     calls: list[str] = []
 
-    def fake_retrieve(*, question: str, contract_id: str | None) -> list[str]:
+    def fake_retrieve(question: str, **_) -> list:
         calls.append(question)
-        return ["some clause"]
+        return []
 
     monkeypatch.setattr(routes, "retrieve_contract_context", fake_retrieve)
-    return calls
+    app.dependency_overrides[get_db] = lambda: None  # retrieval is faked; no database needed
+    yield calls
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.mark.parametrize("question", ["", "   ", "\t\t", "\n\t \n"])

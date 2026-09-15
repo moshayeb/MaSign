@@ -99,7 +99,7 @@ Interactive docs at `http://localhost:8000/docs`.
 | `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it. Returns the `contract_id`. |
 | `GET`  | `/api/contracts` | List stored contracts, newest first. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
-| `POST` | `/api/query` | Ask a question (scaffold; real retrieval and answers arrive in Sprint 1–2). |
+| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → the most relevant chunks (`retrieved_context`, best first, with scores). Omit `contract_id` to search every contract. Generated answers arrive in Sprint 2. |
 | `GET`  | `/health` | Liveness check. |
 
 ## Running the Tests

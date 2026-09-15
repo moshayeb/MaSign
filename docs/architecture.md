@@ -38,6 +38,16 @@ embeds the stored chunks, upserts them and writes the point id back to
 `chunks.embedding_id`; if that fails the contract is removed from both stores
 again so nothing unsearchable lingers.
 
+`app/retrieval/retriever.py` answers `/api/query`: it embeds the question (query
+prefix applied by the embedder), searches the collection — filtered to one
+contract when `contract_id` is given — and returns the top `limit` hits, best
+first, dropping any whose contract no longer exists in Postgres (a failed
+upload's Qdrant cleanup is best effort). The response carries each hit's
+`chunk_id`, `contract_id`, `chunk_index`, `text` and cosine `score`, so the UI
+can cite the exact clause and the answer step (MAS-13) can quote it. Verified
+against `data/sample_contracts/northwind_master_services_agreement.txt`: eight
+questions, including four on financial terms, all rank the right clause first.
+
 At startup the API loads the model and compares the collection's recorded
 fingerprint (`vector_index`: model, dimension, token limit, prompt format) with
 the configured embedder. Any difference — or a missing collection — rebuilds the
