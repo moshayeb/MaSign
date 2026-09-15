@@ -19,7 +19,10 @@ later UI work follow the same rules.
    response body — never a generic "Something went wrong". This is why every
    API error path returns `{"detail": "<human-readable reason>"}` (400, 404,
    413, 415, 422, 503). If a response has no `detail`, fall back to the HTTP
-   status text.
+   status text. Validation errors (422) follow the same contract: `detail` is
+   one readable line such as `question: String should have at least 1
+   character`; the structured per-field list is available under `errors` for
+   inline form hints.
 3. Success toasts only where the outcome isn't already obvious on screen.
    "contract.pdf uploaded — 12 chunks" is useful; "Answer ready" next to a
    rendered answer is noise.

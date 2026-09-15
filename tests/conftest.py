@@ -124,14 +124,15 @@ def database() -> Iterator[str]:
             raise
         pytest.skip(f"Postgres not reachable at {base_url}: {error}")
 
-    run_migrations(test_url)
     previous = os.environ.get("DATABASE_URL")
-    os.environ["DATABASE_URL"] = test_url
     try:
+        # Inside the try so a failing migration still drops the database.
+        run_migrations(test_url)
+        os.environ["DATABASE_URL"] = test_url
         yield test_url
     finally:
         if previous is None:
-            del os.environ["DATABASE_URL"]
+            os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = previous
         _drop_database(base_url, name)

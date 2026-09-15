@@ -112,19 +112,30 @@ def _extract_docx(content: bytes) -> str:
             "The DOCX file could not be read. It may be corrupted."
         ) from error
 
-    # Walk the body in document order so a table stays between the paragraphs
-    # that surround it; document.paragraphs / document.tables would separate
-    # them and detach fees, dates or parties from their clause. Contract terms
-    # are often laid out in tables, so their cells are included as one line per row.
-    blocks = []
-    for element in document.element.body.iterchildren():
+    body = document.element.body
+    if body is None:
+        # Well-formed XML, but no <w:body>: nothing python-docx can read from.
+        raise DocumentParseError("The DOCX file could not be read. It has no document body.")
+
+    return "\n".join(_iter_block_text(body, document))
+
+
+def _iter_block_text(container, document) -> list[str]:
+    """Paragraph and table text in document order, recursing into table cells.
+
+    Walking the XML children (rather than document.paragraphs + document.tables)
+    keeps a table between the paragraphs that surround it, so fees, dates or
+    parties stay attached to their clause. Cells are walked the same way, so a
+    table nested inside a cell is not lost.
+    """
+    blocks: list[str] = []
+    for element in container.iterchildren():
         if element.tag == qn("w:p"):
             blocks.append(Paragraph(element, document).text)
         elif element.tag == qn("w:tbl"):
             for row in Table(element, document).rows:
-                cells = [cell.text.strip() for cell in row.cells]
+                cells = [" ".join(_iter_block_text(cell._tc, document)).strip() for cell in row.cells]
                 line = " | ".join(cell for cell in cells if cell)
                 if line:
                     blocks.append(line)
-
-    return "\n".join(blocks)
+    return blocks

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.api.routes import router as api_router
@@ -51,6 +52,29 @@ app = FastAPI(
 )
 
 app.include_router(api_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def readable_validation_error(_: Request, error: RequestValidationError) -> JSONResponse:
+    # FastAPI's default 422 puts a list of error objects in `detail`. Every
+    # other error here carries a readable string that the UI shows verbatim in
+    # a toast (docs/frontend.md), so give validation errors the same shape and
+    # keep the structured list under `errors` for programmatic clients.
+    errors = error.errors()
+    messages = []
+    for item in errors:
+        location = ".".join(str(part) for part in item.get("loc", ()) if part not in ("body", "query", "path"))
+        messages.append(f"{location}: {item['msg']}" if location else item["msg"])
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": "; ".join(messages), "errors": _jsonable(errors)},
+    )
+
+
+def _jsonable(errors: list[dict]) -> list[dict]:
+    # pydantic error dicts can carry the offending input and an exception
+    # object under `ctx`; neither is guaranteed JSON-serialisable.
+    return [{k: (str(v) if k == "ctx" else v) for k, v in e.items() if k != "input"} for e in errors]
 
 
 @app.exception_handler(psycopg.OperationalError)
