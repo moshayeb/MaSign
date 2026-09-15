@@ -358,6 +358,55 @@ def test_token_budget_applies_when_packing_paragraphs_too() -> None:
     assert all(_words(chunk) <= 40 for chunk in chunks)
 
 
+def _bodies(chunks: list[str]) -> list[str]:
+    """Each chunk's own text, without the carried-over overlap."""
+    return [chunk.split("\n\n")[-1] for chunk in chunks]
+
+
+def test_overlap_shrinks_to_leave_the_body_half_the_token_budget() -> None:
+    # MAS-57: 39-character, ten-word paragraphs; max_chars keeps one per chunk.
+    # A 30-character overlap (~7 words) would eat most of a 12-word budget, so it
+    # is cut down until it takes at most half — and nothing exceeds the limit.
+    paragraphs = [" ".join(f"w{n}{i}" for i in range(10)) for n in range(4)]
+    text = "\n\n".join(paragraphs)
+
+    chunks = chunk_contract_text(text, max_chars=75, overlap_chars=30, token_budget=TokenBudget(_words, 12))
+
+    assert all(_words(chunk) <= 12 for chunk in chunks)
+    assert " ".join(_bodies(chunks)).split() == text.split()  # nothing lost or duplicated
+    assert any("\n\n" in chunk for chunk in chunks)  # a (shorter) overlap survives
+    assert all(_words(chunk.split("\n\n")[0]) <= 6 for chunk in chunks if "\n\n" in chunk)
+
+
+def test_overlap_is_dropped_when_even_a_sliver_cannot_fit() -> None:
+    # MAS-57: a model whose prefix and special tokens (9) already exceed half of
+    # a 16-token budget leaves no room for any overlap; the clauses stay intact.
+    paragraphs = [" ".join(f"w{n}{i}" for i in range(6)) for n in range(4)]  # 23 chars each
+
+    chunks = chunk_contract_text(
+        "\n\n".join(paragraphs), max_chars=45, overlap_chars=20, token_budget=TokenBudget(lambda t: 9 + _words(t), 16)
+    )
+
+    assert chunks == paragraphs
+
+
+def test_overlap_is_kept_where_the_token_budget_allows_it() -> None:
+    paragraphs = [" ".join(f"w{n}{i}" for i in range(10)) for n in range(3)]
+
+    chunks = chunk_contract_text(
+        "\n\n".join(paragraphs), max_chars=75, overlap_chars=30, token_budget=TokenBudget(_words, 40)
+    )
+
+    assert chunks[0] == paragraphs[0]
+    assert chunks[1].endswith(paragraphs[1]) and chunks[1] != paragraphs[1]  # overlap present
+
+
+def test_token_budget_too_small_for_any_chunk_is_rejected() -> None:
+    # A budget the prefix and special tokens alone exhaust can never be met.
+    with pytest.raises(ValueError, match="token budget"):
+        chunk_contract_text("some text", token_budget=TokenBudget(lambda t: 10 + _words(t), 8))
+
+
 def test_token_budget_falls_back_to_character_cuts_for_unbroken_runs() -> None:
     # A single 300-character "word" can never fit a budget of 100 characters;
     # the token measure (one token per 10 characters) must not loop forever.

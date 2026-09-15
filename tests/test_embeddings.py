@@ -162,6 +162,61 @@ def test_same_dimension_model_change_rebuilds_the_index(
     assert repository.get_vector_index(db, vector_store.collection).prompt_format == "nomic"
 
 
+def test_rebuild_splits_stored_chunks_that_exceed_the_token_limit(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, caplog: pytest.LogCaptureFixture
+) -> None:
+    # MAS-55: a chunk stored before the token budget existed (or under a larger
+    # EMBEDDING_MAX_TOKENS) must not make the rebuild — and so startup — fail.
+    fake_embedder.max_tokens = 40
+    oversized = "1. Fees\n" + " ".join(f"term{i}" for i in range(100))  # 101 words
+    contract = repository.create_contract(
+        db, filename="old.txt", file_type="txt", size_bytes=1, character_count=1, chunks=["0. Intro short.", oversized]
+    )
+
+    with caplog.at_level("WARNING"):
+        indexed = ensure_index_current(db, fake_embedder, vector_store)
+
+    chunks = repository.list_chunks(db, contract.id)
+    assert len(chunks) > 2 and indexed == len(chunks)
+    assert all(fake_embedder.count_tokens(c.chunk_text) <= 40 for c in chunks)
+    assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
+    assert " ".join(c.chunk_text for c in chunks).split() == ("0. Intro short. " + oversized).split()
+    assert repository.get_contract(db, contract.id).chunk_count == len(chunks)
+    assert all(c.embedding_id == str(c.id) for c in chunks)
+    assert vector_store.count(contract_id=contract.id) == len(chunks)
+    assert "exceed" in caplog.text and "old.txt" in caplog.text
+
+
+def test_interrupted_rebuild_is_redone_on_the_next_start(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # MAS-56: a lost collection with a matching fingerprint; the rebuild dies
+    # after the first contract. The next start must not believe the index is complete.
+    from app.retrieval import indexing
+
+    _store_two_contracts(db)
+    ensure_index_current(db, fake_embedder, vector_store)
+    vector_store._client.delete_collection(vector_store.collection)
+
+    real_index_contract, calls = indexing.index_contract, []
+
+    def dies_on_second_contract(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("simulated crash mid-rebuild")
+        return real_index_contract(*args, **kwargs)
+
+    monkeypatch.setattr(indexing, "index_contract", dies_on_second_contract)
+    with pytest.raises(RuntimeError, match="mid-rebuild"):
+        ensure_index_current(db, fake_embedder, vector_store)
+    assert repository.get_vector_index(db, vector_store.collection) is None  # marked incomplete
+    monkeypatch.setattr(indexing, "index_contract", real_index_contract)
+
+    assert ensure_index_current(db, fake_embedder, vector_store) == 3
+    assert vector_store.count() == 3
+    assert ensure_index_current(db, fake_embedder, vector_store) is None  # and now it is complete
+
+
 def test_wiped_collection_is_rebuilt_even_when_the_fingerprint_matches(
     db: psycopg.Connection, vector_store: VectorStore, fake_embedder
 ) -> None:

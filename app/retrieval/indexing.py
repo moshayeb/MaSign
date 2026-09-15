@@ -6,6 +6,7 @@ import psycopg
 
 from app.database import repository
 from app.database.models import Contract, VectorIndex
+from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.retrieval.embeddings import Embedder
 from app.retrieval.vector_store import ChunkVector, VectorStore
 
@@ -78,9 +79,46 @@ def ensure_index_current(db: psycopg.Connection, embedder: Embedder, store: Vect
         )
         store.reset_collection(wanted.dimension)
 
+    # From here until the fingerprint is written the index is incomplete. A
+    # missing row already means "rebuild", so forget the old one — and commit,
+    # so a crash mid-rebuild cannot leave a fingerprint that looks valid (MAS-56).
+    repository.clear_vector_index(db, store.collection)
+    db.commit()
+
     contracts = repository.list_contracts(db)
     logger.info("Re-indexing %d contract(s) with %s", len(contracts), embedder.model_name)
-    indexed = sum(index_contract(db, contract, embedder, store) for contract in contracts)
+    indexed = 0
+    for contract in contracts:
+        _refit_oversized_chunks(db, contract, embedder)
+        indexed += index_contract(db, contract, embedder, store)
     repository.set_vector_index(db, wanted)
+    db.commit()
     logger.info("Vector index %s ready: %d chunk(s) indexed", store.collection, indexed)
     return indexed
+
+
+def _refit_oversized_chunks(db: psycopg.Connection, contract: Contract, embedder: Embedder) -> None:
+    """Re-split stored chunks that no longer fit the embedder's token limit (MAS-55).
+
+    Chunks stored before the token budget existed, or under a larger
+    EMBEDDING_MAX_TOKENS, would trip the embedder's guard and abort startup.
+    Splitting them (without overlap — the neighbours already carry it) keeps
+    every clause searchable; the chunk rows are replaced so Postgres matches
+    what is embedded.
+    """
+    chunks = repository.list_chunks(db, contract.id)
+    budget = TokenBudget(count=embedder.count_tokens, max_tokens=embedder.max_tokens)
+    if all(budget.count(chunk.chunk_text) <= budget.max_tokens for chunk in chunks):
+        return
+
+    texts: list[str] = []
+    for chunk in chunks:
+        if budget.count(chunk.chunk_text) <= budget.max_tokens:
+            texts.append(chunk.chunk_text)
+        else:
+            texts.extend(chunk_contract_text(chunk.chunk_text, overlap_chars=0, token_budget=budget))
+    logger.warning(
+        "Contract %s (%s): stored chunks exceed the %d-token limit; re-split %d -> %d chunks",
+        contract.id, contract.filename, budget.max_tokens, len(chunks), len(texts),
+    )
+    repository.replace_chunks(db, contract.id, texts)
