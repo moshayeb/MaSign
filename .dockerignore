@@ -6,3 +6,7 @@ __pycache__/
 .env
 data/uploads/
 data/indexes/
+
+# Built in the image (Dockerfile stage 1); host copies must not leak in.
+frontend/node_modules/
+frontend/dist/
