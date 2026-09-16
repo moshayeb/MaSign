@@ -399,6 +399,7 @@ class _FakeEmbeddingServer:
         self.requests: list[tuple[str, dict]] = []
         self.tokenize = tokenize
         self.tokenize_status = 200  # flip to simulate a passing outage
+        self.tokenize_body: object = None  # set to answer /tokenize with something malformed
         self.embeddings_data: object = None  # set to answer /v1/embeddings with something malformed
         self.transport = httpx.MockTransport(self._handle)
 
@@ -416,6 +417,8 @@ class _FakeEmbeddingServer:
         if request.url.path == "/tokenize" and self.tokenize:
             if self.tokenize_status != 200:
                 return httpx.Response(self.tokenize_status, text="loading model")
+            if self.tokenize_body is not None:
+                return httpx.Response(200, json=self.tokenize_body)
             return httpx.Response(200, json={"tokens": list(range(len(body["content"].split())))})
         return httpx.Response(404, json={"error": "not found"})
 
@@ -492,6 +495,28 @@ def test_http_embedder_without_tokenize_needs_a_configured_tokenizer(monkeypatch
     assert loaded == ["Qwen/Qwen3-Embedding-4B"]
     assert embedder.count_tokens("one two three") == 3 * 2 + 1
     assert all(body["content"] == "probe" for path, body in server.requests if path == "/tokenize")  # only probed
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"tokens": "abc"}, {"tokens": ["a", "b"]}, {"tokens": 3}, {"count": 3}, {"tokens": None}],
+)
+def test_http_embedder_rejects_malformed_tokenize_responses(body: object, qwen_over_http) -> None:
+    # MAS-67: {"tokens": "abc"} must not count as 3 tokens for a 600-word chunk.
+    embedder, server = qwen_over_http
+    embedder.warm_up()
+
+    server.tokenize_body = body
+    with pytest.raises(EmbeddingServiceError, match="unusable /tokenize response"):
+        embedder.count_tokens("one " * 600)
+    with pytest.raises(EmbeddingServiceError, match="unusable /tokenize response"):
+        embedder.embed_documents(["one " * 600])  # the guard never lets it through
+
+    # And such a server is refused at warm-up, not trusted until the first count.
+    fresh = _FakeEmbeddingServer()
+    fresh.tokenize_body = body
+    with pytest.raises(EmbeddingServiceError, match="unusable /tokenize response"):
+        OpenAICompatibleEmbedder("m", "http://api", transport=fresh.transport).warm_up()
 
 
 def test_http_embedder_tokenize_outage_is_temporary(qwen_over_http) -> None:
