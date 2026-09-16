@@ -37,6 +37,33 @@ Project conventions that are not derivable from the code. Read before working.
   evaluation set MUST include financial-term questions to actually
   measure this, not assume general MTEB strength carries over.
 
+### GPU benchmark and profiles (MAS-58, 2026-09-16)
+
+The teacher's advice was "strongest model possible" (Qwen3-Embedding-4B
+Q4_K_M); the earlier timings were all CPU-only. Re-measured on the dev
+machine's Quadro P1000 (4 GB, ~1.2 GB used by other apps), same 12 Northwind
+chunks, 18 questions (10 on fees/penalties/payment terms):
+
+| Model | Device | ≈ 30 pages | query | VRAM | top-1 |
+|---|---|---|---|---|---|
+| ModernBERT | CPU | 31 s | 97 ms | – | 16/18 |
+| ModernBERT | GPU | 5 s | 48 ms | 0.7 GB | 16/18 |
+| Qwen3-0.6B | GPU fp32 | 27 s | 180 ms | 1.6 GB | 16/18 |
+| Qwen3-4B Q4_K_M | GPU llama.cpp | 100 s | 178 ms | 2.7 GB (all that is free) | 16/18 |
+
+Quality was a tie on this contract (different near-misses, all rank 2–3);
+MLEB (0.842 vs 0.741) remains the reason to believe 4B wins on harder cases.
+
+**Decision — two deployment profiles, the deployer chooses (MAS-61):**
+`portable` (default) = ModernBERT, CPU or GPU, runs on any laptop;
+`quality` = Qwen3-Embedding-4B Q4_K_M via `llama-server` on a GPU with
+≥3 GB free VRAM, through an OpenAI-compatible embedder backend. ModernBERT
+stays the default because it runs everywhere and no measurable gap has been
+shown yet; MAS-32's evaluation decides which profile the project recommends.
+"Compare mode" (both indexes, the end user chooses per question) is a parked
+suggestion: MAS-62. Never quote CPU timings for Qwen models again — the
+"10 minutes per 30 pages" figure was a CPU artefact.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error
