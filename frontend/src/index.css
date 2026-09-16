@@ -292,3 +292,74 @@ details.others summary {
   margin: 4px 0 0;
   padding-left: 20px;
 }
+
+/* --- risk flags (MAS-15/16) --- */
+
+.risks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+li.risk {
+  border: 1px solid #dfe3e8;
+  border-left-width: 5px;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+li.risk.severity-high {
+  border-left-color: #c62828;
+}
+
+li.risk.severity-medium {
+  border-left-color: #ef8f00;
+}
+
+li.risk.severity-low {
+  border-left-color: #2e7d32;
+}
+
+.risk-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.risk-head .severity {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  background: #5b6675;
+}
+
+.severity-high .severity {
+  background: #c62828;
+}
+
+.severity-medium .severity {
+  background: #ef8f00;
+}
+
+.severity-low .severity {
+  background: #2e7d32;
+}
+
+.risk-reason {
+  margin: 4px 0 2px;
+}
+
+li.risk blockquote {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: #3b4652;
+  white-space: pre-wrap;
+}

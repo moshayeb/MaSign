@@ -86,13 +86,18 @@ class FakeChatModel:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
         self.reply: str | Callable[[str], str] = "The passage states it [1]."
+        # The risk analysis (MAS-16) is a second call with its own system
+        # prompt; by default it finds nothing.
+        self.risk_reply: str | Callable[[str], str] = "[]"
         self.truncated = False
 
     def complete(self, system: str, user: str, *, max_tokens: int):
         from app.answering.llm import Completion
+        from app.risk_analysis.analyzer import SYSTEM_PROMPT as RISK_PROMPT
 
         self.calls.append((system, user))
-        return Completion(self.reply(user) if callable(self.reply) else self.reply, truncated=self.truncated)
+        reply = self.risk_reply if system == RISK_PROMPT else self.reply
+        return Completion(reply(user) if callable(reply) else reply, truncated=self.truncated)
 
 
 @pytest.fixture

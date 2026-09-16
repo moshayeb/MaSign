@@ -74,13 +74,28 @@ export interface CitedChunk extends RetrievedChunk {
   label: number // the [n] used in the answer text
 }
 
+export type Severity = 'Low' | 'Medium' | 'High'
+
+export interface RiskFlag {
+  category: string
+  category_name: string
+  severity: Severity
+  reason: string
+  quote: string
+  label: number // the [n] of the passage among retrieved_context
+  chunk_id: string
+  contract_id: string
+  chunk_index: number
+}
+
 export interface QueryResponse {
   answer: string
   grounded: boolean
   citations: CitedChunk[]
   answer_model: string | null
   retrieved_context: RetrievedChunk[]
-  risks: string[]
+  risks: RiskFlag[]
+  risks_checked: boolean
   recommended_actions: string[]
 }
 

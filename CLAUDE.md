@@ -85,6 +85,15 @@ grounding.py`) and nothing model-specific is stored — but rerun the MAS-32 set
 after a switch. Every answer must carry `[n]` citations; uncited answers are
 returned with `grounded: false`, never silently accepted.
 
+## Risk rubric (MAS-15/16)
+
+Seven categories, Customer perspective, High/Medium/Low thresholds live in
+`app/risk_analysis/rubric.py` and are the single source for the prompt and
+`docs/risk-rubric.md` (regenerate the doc when the rubric changes). A finding
+must quote its passage verbatim or it is dropped; an unreadable model reply is
+`risks_checked: false`, never an empty "no risks". Scope is the retrieved
+passages of one query, not the whole contract.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error

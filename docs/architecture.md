@@ -84,4 +84,17 @@ contract." An empty retrieval never reaches the model. Citations in the reply
 are parsed and resolved to the chunks; an answer that cites nothing is still
 returned but `grounded: false`, so the UI can flag it and MAS-32 can count it.
 
+## Risk analysis
+
+`app/risk_analysis/rubric.py` defines seven categories (liability cap,
+termination, indemnification, auto-renewal, confidentiality, payment terms, IP
+assignment) with High/Medium/Low criteria from the Customer's perspective;
+`docs/risk-rubric.md` is generated from it. `analyzer.py` makes one model call
+per query over the same numbered passages the answer used and asks for JSON
+findings; each is kept only if its category and severity are in the rubric,
+its passage exists and its quote appears verbatim in that passage. The call
+runs in parallel with the answer. An unreadable or cut-off reply yields
+`risks_checked: false` rather than a reassuring empty list;
+`app/actions/workflow.py` turns the findings into suggested next steps.
+
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.
