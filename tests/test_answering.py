@@ -276,11 +276,26 @@ def test_query_is_a_503_with_the_reason_when_the_model_is_unavailable(northwind:
 
 
 @pytest.mark.skipif(os.getenv("MASIGN_REAL_LLM") != "1", reason="set MASIGN_REAL_LLM=1 (and the provider's API key) to call the real model")
-def test_real_model_answers_northwind_questions_with_citations(northwind: str) -> None:
-    from app.answering.llm import get_chat_model
+def test_real_model_answers_northwind_questions_with_citations(db) -> None:
+    # End to end with the real embedder as well: the fake bag-of-words embedder
+    # can miss the right clause, and then "not found" is the correct answer.
+    from qdrant_client import QdrantClient
 
+    from app.answering.llm import get_chat_model
+    from app.retrieval.embeddings import DEFAULT_EMBEDDING_MODEL, SentenceTransformerEmbedder
+    from app.retrieval.vector_store import VectorStore
+
+    embedder = SentenceTransformerEmbedder(DEFAULT_EMBEDDING_MODEL)
+    store = VectorStore(QdrantClient(":memory:"), collection="real")
+    store.ensure_collection(embedder.dimension)
     get_chat_model.cache_clear()
+    app.dependency_overrides[dependencies.get_embedder] = lambda: embedder
+    app.dependency_overrides[dependencies.get_vector_store] = lambda: store
     app.dependency_overrides[dependencies.get_chat_model] = get_chat_model
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / "data" / "sample_contracts" / "northwind_master_services_agreement.txt"
+    northwind = client.post("/api/contracts/upload", files={"file": ("northwind.txt", path.read_bytes(), "text/plain")}).json()["contract_id"]
     checks = [
         ("What is the monthly fee?", "18,500"),
         ("What interest applies to late payment?", "1.5"),
