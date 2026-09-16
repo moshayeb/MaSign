@@ -38,10 +38,14 @@ class FakeEmbedder:
     Enough to test indexing, filtering and ranking without loading a model.
     """
 
+    backend = "fake"
     model_name = "fake-embedder"
     dimension = 64
     max_tokens = 512
     prompt_format = "none"
+
+    def warm_up(self) -> None:
+        pass
 
     def count_tokens(self, text: str) -> int:
         # One "token" per word: enough to exercise the chunker's token budget.

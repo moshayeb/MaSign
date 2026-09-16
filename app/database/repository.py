@@ -109,7 +109,7 @@ def get_vector_index(connection: psycopg.Connection, collection: str) -> VectorI
     """What the collection was last built with, or None if never recorded (MAS-52)."""
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT collection, model_name, dimension, max_tokens, prompt_format "
+            "SELECT collection, backend, model_name, dimension, max_tokens, prompt_format "
             "FROM vector_index WHERE collection = %s",
             (collection,),
         )
@@ -129,14 +129,18 @@ def set_vector_index(connection: psycopg.Connection, index: VectorIndex) -> None
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO vector_index (collection, model_name, dimension, max_tokens, prompt_format)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO vector_index (collection, backend, model_name, dimension, max_tokens, prompt_format)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (collection) DO UPDATE SET
+                    backend = EXCLUDED.backend,
                     model_name = EXCLUDED.model_name,
                     dimension = EXCLUDED.dimension,
                     max_tokens = EXCLUDED.max_tokens,
                     prompt_format = EXCLUDED.prompt_format,
                     created_at = now()
                 """,
-                (index.collection, index.model_name, index.dimension, index.max_tokens, index.prompt_format),
+                (
+                    index.collection, index.backend, index.model_name,
+                    index.dimension, index.max_tokens, index.prompt_format,
+                ),
             )

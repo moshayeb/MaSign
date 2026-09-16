@@ -49,6 +49,7 @@ def index_contract(
 def fingerprint(embedder: Embedder, collection: str) -> VectorIndex:
     return VectorIndex(
         collection=collection,
+        backend=embedder.backend,
         model_name=embedder.model_name,
         dimension=embedder.dimension,
         max_tokens=embedder.max_tokens,

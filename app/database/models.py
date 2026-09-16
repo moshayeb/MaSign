@@ -32,11 +32,12 @@ class VectorIndex:
     """Fingerprint of the embedder a Qdrant collection was built with (MAS-52).
 
     Vectors from two different models — or the same model with a different
-    prefix scheme or token limit — are not comparable even when their
-    dimension matches, so all of it is part of the identity.
+    prefix scheme, token limit or backend (MAS-61) — are not comparable even
+    when their dimension matches, so all of it is part of the identity.
     """
 
     collection: str
+    backend: str
     model_name: str
     dimension: int
     max_tokens: int

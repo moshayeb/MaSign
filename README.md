@@ -83,12 +83,25 @@ Check it is up:
 curl http://localhost:8000/health
 ```
 
-The first start downloads the embedding model (~600 MB) into the `hf_cache`
-volume, so it takes a minute or two; later starts reuse it. Embeddings run on
-the CPU inside the `api` container — a 30-page contract takes roughly 20 s to
-index. To use a different model set `EMBEDDING_MODEL` (see `.env.example` and
-`CLAUDE.md`); on the next start the vector index is rebuilt automatically from
-the stored chunk text, so already-uploaded contracts stay searchable.
+### Embedding profiles
+
+The deployer picks one of two profiles (benchmark and rationale in `CLAUDE.md`,
+MAS-58). Switching changes the index fingerprint, so on the next start the
+vector index is rebuilt automatically from the stored chunk text — nothing has
+to be re-uploaded.
+
+| Profile | Command | Model | Needs | ≈ 30-page contract |
+|---|---|---|---|---|
+| `portable` (default) | `docker compose up` | ModernBERT (legal fine-tune), in-process | any laptop; first start downloads ~600 MB into `hf_cache` | ~30 s on CPU, ~5 s on a GPU |
+| `quality` | `docker compose -f docker-compose.yml -f docker-compose.quality.yml up` | Qwen3-Embedding-4B Q4_K_M via `llama-server` | NVIDIA GPU with ≥3 GB free VRAM, CUDA 12.x driver, Docker GPU access; first start downloads a 2.5 GB GGUF into `llama_models` | ~25 s on a 4 GB Quadro P1000 (3.7 GB VRAM in use) |
+
+The `api` container ships CPU-only torch, so the `portable` profile runs on
+the CPU there; running the API natively with a CUDA torch build and
+`EMBEDDING_DEVICE=auto` (or `cuda`) uses the GPU. The `quality` profile
+sets `EMBEDDING_BACKEND=openai-compatible` and points `EMBEDDING_API_URL` at
+the `llama-server` service; any server speaking the OpenAI embeddings API
+works the same way (`.env.example` lists every setting). Both profiles serve
+the same API, so nothing else changes.
 
 ## API Endpoints
 
