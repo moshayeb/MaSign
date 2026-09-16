@@ -100,7 +100,9 @@ the CPU there; running the API natively with a CUDA torch build and
 `EMBEDDING_DEVICE=auto` (or `cuda`) uses the GPU. The `quality` profile
 sets `EMBEDDING_BACKEND=openai-compatible` and points `EMBEDDING_API_URL` at
 the `llama-server` service; any server speaking the OpenAI embeddings API
-works the same way (`.env.example` lists every setting). Both profiles serve
+works the same way — one without llama-server's `/tokenize` endpoint also
+needs `EMBEDDING_TOKENIZER` (the model's Hugging Face tokenizer) so token
+counts stay exact (`.env.example` lists every setting). Both profiles serve
 the same API, so nothing else changes.
 
 ## API Endpoints

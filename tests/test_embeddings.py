@@ -398,18 +398,24 @@ class _FakeEmbeddingServer:
     def __init__(self, *, tokenize: bool = True) -> None:
         self.requests: list[tuple[str, dict]] = []
         self.tokenize = tokenize
+        self.tokenize_status = 200  # flip to simulate a passing outage
+        self.embeddings_data: object = None  # set to answer /v1/embeddings with something malformed
         self.transport = httpx.MockTransport(self._handle)
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         self.requests.append((request.url.path, body | {"_auth": request.headers.get("authorization")}))
         if request.url.path == "/v1/embeddings":
+            if self.embeddings_data is not None:
+                return httpx.Response(200, json={"data": self.embeddings_data})
             data = [
                 {"index": index, "embedding": [float(len(text.split())), 2.0, 0.0]}
                 for index, text in enumerate(body["input"])
             ]
             return httpx.Response(200, json={"data": list(reversed(data)), "model": body["model"]})
         if request.url.path == "/tokenize" and self.tokenize:
+            if self.tokenize_status != 200:
+                return httpx.Response(self.tokenize_status, text="loading model")
             return httpx.Response(200, json={"tokens": list(range(len(body["content"].split())))})
         return httpx.Response(404, json={"error": "not found"})
 
@@ -452,22 +458,92 @@ def test_http_embedder_learns_the_dimension_and_counts_tokens_via_the_server(qwe
     assert embedder.dimension == 3
     assert embedder.max_tokens == 8
     assert embedder.count_tokens("a b c") == 3
-    assert [path for path, _ in server.requests] == ["/v1/embeddings", "/tokenize"]
+    # warm_up probes both endpoints once; the count itself is one more /tokenize.
+    assert [path for path, _ in server.requests] == ["/v1/embeddings", "/tokenize", "/tokenize"]
     with pytest.raises(EmbeddingInputTooLong, match="exceeds the 8-token limit"):
         embedder.embed_documents(["1 2 3 4 5 6 7 8 9"])
     assert [path for path, _ in server.requests][-1] == "/tokenize"  # nothing reached /v1/embeddings
 
 
-def test_http_embedder_estimates_tokens_when_the_server_has_no_tokenize(caplog: pytest.LogCaptureFixture) -> None:
+def test_http_embedder_without_tokenize_needs_a_configured_tokenizer(monkeypatch: pytest.MonkeyPatch) -> None:
+    # MAS-63: no estimate — exact counts or refuse to start.
     server = _FakeEmbeddingServer(tokenize=False)
     embedder = OpenAICompatibleEmbedder("some/api-model", "http://api", transport=server.transport)
 
-    with caplog.at_level("WARNING"):
-        first, second = embedder.count_tokens("ten chars."), embedder.count_tokens("ten chars.")
+    with pytest.raises(EmbeddingServiceError, match="no /tokenize endpoint.*set EMBEDDING_TOKENIZER"):
+        embedder.warm_up()
+    with pytest.raises(EmbeddingServiceError, match="EMBEDDING_TOKENIZER"):
+        embedder.count_tokens("anything")  # never estimated
 
-    assert first == second == 5  # 0.5 tokens per character, rounded up
-    assert caplog.text.count("no /tokenize endpoint") == 1  # asked once, then remembered
-    assert [path for path, _ in server.requests] == ["/tokenize"]
+    class _Tokenizer:
+        def __call__(self, text: str, add_special_tokens: bool) -> dict[str, list[int]]:
+            return {"input_ids": [0] * (len(text.split()) * 2 + (1 if add_special_tokens else 0))}
+
+    loaded: list[str] = []
+    import transformers
+
+    monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", lambda name: loaded.append(name) or _Tokenizer())
+    embedder = OpenAICompatibleEmbedder(
+        "some/api-model", "http://api", tokenizer="Qwen/Qwen3-Embedding-4B", transport=server.transport
+    )
+
+    embedder.warm_up()
+
+    assert loaded == ["Qwen/Qwen3-Embedding-4B"]
+    assert embedder.count_tokens("one two three") == 3 * 2 + 1
+    assert all(body["content"] == "probe" for path, body in server.requests if path == "/tokenize")  # only probed
+
+
+def test_http_embedder_tokenize_outage_is_temporary(qwen_over_http) -> None:
+    # MAS-64: a 503 from /tokenize is an outage for that request only.
+    embedder, server = qwen_over_http
+    embedder.warm_up()
+
+    server.tokenize_status = 503
+    with pytest.raises(EmbeddingServiceError, match="HTTP 503 to /tokenize"):
+        embedder.count_tokens("a b c")
+
+    server.tokenize_status = 200
+    assert embedder.count_tokens("a b c") == 3  # exact again, no restart needed
+
+    # And an outage during warm_up is reported, not mistaken for "no endpoint".
+    fresh = _FakeEmbeddingServer()
+    fresh.tokenize_status = 503
+    embedder = OpenAICompatibleEmbedder("m", "http://api", transport=fresh.transport)
+    with pytest.raises(EmbeddingServiceError, match="HTTP 503 to /tokenize"):
+        embedder.warm_up()
+
+
+@pytest.mark.parametrize(
+    "data, problem",
+    [
+        ([{"index": 0}], "no numeric embedding list"),
+        ([{"index": 0, "embedding": "0.1,0.2"}], "no numeric embedding list"),
+        ([{"embedding": [0.1]}], "without an integer index"),
+        ([{"index": 0, "embedding": [0.1, 0.2]}, {"index": 1, "embedding": [0.1]}], "differing lengths"),
+        ([{"index": 0, "embedding": [0.1]}, {"index": 0, "embedding": [0.2]}], "do not cover"),
+        ("not a list", "expected 1 vectors"),
+    ],
+)
+def test_http_embedder_rejects_malformed_responses_readably(data: object, problem: str) -> None:
+    # MAS-65: an unusable 200 response is an EmbeddingServiceError (-> 503 with
+    # a readable detail), never a bare KeyError/TypeError 500.
+    server = _FakeEmbeddingServer()
+    server.embeddings_data = data
+    embedder = OpenAICompatibleEmbedder("m", "http://api", transport=server.transport)
+    inputs = ["a", "b"] if isinstance(data, list) and len(data) == 2 else ["a"]
+
+    with pytest.raises(EmbeddingServiceError, match=f"unusable response: .*{problem}"):
+        embedder._request_vectors(inputs)
+
+
+def test_http_embedder_rejects_a_vector_size_change_after_warm_up(qwen_over_http) -> None:
+    embedder, server = qwen_over_http
+    embedder.warm_up()
+
+    server.embeddings_data = [{"index": 0, "embedding": [1.0, 2.0]}]  # server swapped to a 2-dim model
+    with pytest.raises(EmbeddingServiceError, match="different size than the 3 dims"):
+        embedder.embed_query("q")
 
 
 def test_http_embedder_reports_an_unreachable_service() -> None:
