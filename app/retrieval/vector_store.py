@@ -7,6 +7,7 @@ without a round trip to Postgres.
 """
 
 import logging
+from collections.abc import Iterable
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -19,6 +20,7 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     FilterSelector,
+    MatchAny,
     MatchValue,
     PointStruct,
     VectorParams,
@@ -56,6 +58,15 @@ class VectorStore:
         self._client = client
         self.collection = collection
 
+    def matches(self, dimension: int) -> bool:
+        """Whether the collection exists with this vector size. Read-only."""
+        try:
+            if not self._client.collection_exists(self.collection):
+                return False
+            return self._client.get_collection(self.collection).config.params.vectors.size == dimension
+        except (ResponseHandlingException, UnexpectedResponse) as error:
+            raise VectorStoreError(str(error)) from error
+
     def ensure_collection(self, dimension: int) -> bool:
         """Create the collection, or rebuild it if the vector size changed.
 
@@ -64,18 +75,18 @@ class VectorStore:
         sensible outcome. Returns True if the collection is new or was rebuilt,
         i.e. it is empty and needs indexing.
         """
+        if self.matches(dimension):
+            return False
         try:
             if self._client.collection_exists(self.collection):
                 current = self._client.get_collection(self.collection).config.params.vectors.size
-                if current == dimension:
-                    return False
                 logger.warning(
                     "Rebuilding collection %s: vector size %d -> %d (embedding model changed)",
                     self.collection, current, dimension,
                 )
-            self.reset_collection(dimension)
         except (ResponseHandlingException, UnexpectedResponse) as error:
             raise VectorStoreError(str(error)) from error
+        self.reset_collection(dimension)
         return True
 
     def reset_collection(self, dimension: int) -> None:
@@ -107,10 +118,26 @@ class VectorStore:
         except (ResponseHandlingException, UnexpectedResponse) as error:
             raise VectorStoreError(str(error)) from error
 
-    def search(self, vector: list[float], *, contract_id: UUID | None = None, limit: int = 5) -> list[ChunkHit]:
+    def search(
+        self,
+        vector: list[float],
+        *,
+        contract_id: UUID | None = None,
+        contract_ids: Iterable[UUID] | None = None,
+        limit: int = 5,
+    ) -> list[ChunkHit]:
+        """Nearest chunks, best first; restricted to one contract or to a set of them.
+
+        `contract_ids` lets the caller exclude points of contracts that no
+        longer exist *before* the top-`limit` cut, so leftovers cannot crowd
+        out real results (MAS-60).
+        """
         query_filter = None
         if contract_id is not None:
             query_filter = Filter(must=[FieldCondition(key="contract_id", match=MatchValue(value=str(contract_id)))])
+        elif contract_ids is not None:
+            allowed = [str(c) for c in contract_ids]
+            query_filter = Filter(must=[FieldCondition(key="contract_id", match=MatchAny(any=allowed))])
         try:
             response = self._client.query_points(
                 self.collection, query=vector, query_filter=query_filter, limit=limit, with_payload=True

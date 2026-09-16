@@ -217,6 +217,45 @@ def test_interrupted_rebuild_is_redone_on_the_next_start(
     assert ensure_index_current(db, fake_embedder, vector_store) is None  # and now it is complete
 
 
+def test_crash_right_after_the_collection_is_recreated_is_redone_on_the_next_start(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # MAS-59: the fingerprint must be gone *before* Qdrant is touched, or a
+    # crash right after the (empty) collection is created passes as complete.
+    _store_two_contracts(db)
+    ensure_index_current(db, fake_embedder, vector_store)
+    vector_store._client.delete_collection(vector_store.collection)  # lost volume, fingerprint still matches
+
+    real_reset = vector_store.reset_collection
+
+    def reset_then_die(dimension: int) -> None:
+        real_reset(dimension)
+        raise ConnectionError("simulated crash right after the collection was created")
+
+    monkeypatch.setattr(vector_store, "reset_collection", reset_then_die)
+    with pytest.raises(ConnectionError):
+        ensure_index_current(db, fake_embedder, vector_store)
+    assert vector_store.matches(fake_embedder.dimension)  # the empty collection exists ...
+    assert repository.get_vector_index(db, vector_store.collection) is None  # ... but nothing vouches for it
+    monkeypatch.setattr(vector_store, "reset_collection", real_reset)
+
+    assert ensure_index_current(db, fake_embedder, vector_store) == 3
+    assert vector_store.count() == 3
+
+
+def test_qdrant_is_not_touched_while_the_fingerprint_is_valid(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _store_two_contracts(db)
+    ensure_index_current(db, fake_embedder, vector_store)
+
+    def must_not_be_called(dimension: int) -> None:
+        raise AssertionError("reset_collection called although the index is current")
+
+    monkeypatch.setattr(vector_store, "reset_collection", must_not_be_called)
+    assert ensure_index_current(db, fake_embedder, vector_store) is None
+
+
 def test_wiped_collection_is_rebuilt_even_when_the_fingerprint_matches(
     db: psycopg.Connection, vector_store: VectorStore, fake_embedder
 ) -> None:
