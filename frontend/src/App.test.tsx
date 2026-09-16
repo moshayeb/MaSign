@@ -98,6 +98,59 @@ describe('contract list', () => {
   })
 })
 
+describe('refresh', () => {
+  it('reports the refresh through a toast (MAS-68)', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(200, []))
+      .mockResolvedValueOnce(json(200, [contract(), contract({ contract_id: 'c2', filename: 'nda.pdf' })]))
+
+    render(<App />)
+    await screen.findByText(/No contracts yet/)
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() => expect(shown).toEqual([['success', 'Contract list up to date — 2 contracts']]))
+    expect(await screen.findByText('nda.pdf')).toBeInTheDocument()
+  })
+
+  it('shows the API detail when the refresh fails and keeps the list', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(200, [contract()]))
+      .mockResolvedValueOnce(json(503, { detail: 'Database unavailable. Check that Postgres is running and DATABASE_URL is correct.' }))
+
+    render(<App />)
+    await screen.findByText('msa.txt')
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() =>
+      expect(shown).toEqual([['error', 'Database unavailable. Check that Postgres is running and DATABASE_URL is correct.']]),
+    )
+    expect(screen.getByText('msa.txt')).toBeInTheDocument()
+  })
+
+  it('ignores a slow earlier load that returns after a newer one (MAS-66)', async () => {
+    // Initial load; then Refresh (slow) and an upload whose reload is fast.
+    let releaseSlowRefresh: (value: Response) => void = () => {}
+    const slowRefresh = new Promise<Response>((resolve) => (releaseSlowRefresh = resolve))
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(200, []))
+      .mockReturnValueOnce(slowRefresh)
+      .mockResolvedValueOnce(json(200, contract({ contract_id: 'new', filename: 'northwind.txt', chunk_count: 12 })))
+      .mockResolvedValueOnce(json(200, [contract({ contract_id: 'new', filename: 'northwind.txt', chunk_count: 12 })]))
+
+    render(<App />)
+    await screen.findByText(/No contracts yet/)
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await userEvent.upload(screen.getByLabelText(/Contract file/), new File(['1. Fees'], 'northwind.txt', { type: 'text/plain' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
+    expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toBeInTheDocument()
+
+    releaseSlowRefresh(json(200, [])) // the stale list from before the upload arrives last
+
+    await waitFor(() => expect(shown).toHaveLength(2)) // upload success + refresh success
+    expect(screen.getByRole('button', { name: /northwind\.txt/ })).toBeInTheDocument() // not hidden by the stale response
+  })
+})
+
 describe('upload', () => {
   it('reports success with the filename and chunk count, then refreshes and selects it', async () => {
     const fetchMock = vi
