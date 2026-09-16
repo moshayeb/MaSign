@@ -39,6 +39,10 @@ non-2xx response into an `ApiError` whose message is the API's `detail` (or the
 status text), which is what every toast shows. `UploadForm` wraps the upload
 in `toast.promise` and hands the new contract to `App`, which keeps the
 selected contract and reloads the list; `ContractList` renders and selects.
+List loads are numbered and only the latest may set the list, so a slow
+earlier response can never hide a newer one (MAS-66). Automatic loads (mount,
+after upload) toast only on failure; the Refresh button runs in
+`toast.promise` like every user action (MAS-68).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
