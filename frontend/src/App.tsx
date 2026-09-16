@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import { listContracts, type Contract } from './api'
+import { AnswerView } from './components/AnswerView'
 import { ContractList } from './components/ContractList'
+import { QuestionPanel, type Asked } from './components/QuestionPanel'
 import { UploadForm } from './components/UploadForm'
 
 export default function App() {
   const [contracts, setContracts] = useState<Contract[] | null>(null)
   const [selected, setSelected] = useState<Contract | null>(null)
+  const [asked, setAsked] = useState<Asked | null>(null)
   // Loads can overlap (Refresh while an upload's reload is in flight); only
   // the most recent request may set the list, whatever order they return in (MAS-66).
   const latestLoad = useRef(0)
@@ -54,7 +57,7 @@ export default function App() {
       <Toaster position="top-right" richColors closeButton />
       <header className="app-header">
         <h1>MaSign</h1>
-        <p className="muted">Upload a contract, then pick it to ask questions about it.</p>
+        <p className="muted">Upload a contract, pick it, and ask questions — every answer cites the passages it came from.</p>
       </header>
       <main>
         <UploadForm
@@ -64,15 +67,8 @@ export default function App() {
           }}
         />
         <ContractList contracts={contracts} selectedId={selected?.contract_id ?? null} onSelect={setSelected} onReload={refresh} />
-        {selected && (
-          <section className="selected">
-            <h2>Selected</h2>
-            <p>
-              <strong>{selected.filename}</strong> — {selected.chunk_count} chunks, {selected.character_count.toLocaleString()}{' '}
-              characters. Questions and risk analysis arrive with MAS-18.
-            </p>
-          </section>
-        )}
+        <QuestionPanel selected={selected} onAnswered={setAsked} />
+        {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
       </main>
     </>
   )

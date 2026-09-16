@@ -43,6 +43,15 @@ List loads are numbered and only the latest may set the list, so a slow
 earlier response can never hide a newer one (MAS-66). Automatic loads (mount,
 after upload) toast only on failure; the Refresh button runs in
 `toast.promise` like every user action (MAS-68).
+
+`QuestionPanel` (MAS-18) posts to `/api/query` scoped to the selected
+contract or all contracts; the loading toast is dismissed on success because
+the answer renders (rule 3), failures show the `detail`. `AnswerView` turns
+each `[n]` in the answer into a button that highlights the cited passage,
+shows an **Unverified** badge when `grounded` is false, renders "Not found in
+contract." distinctly with the considered passages still listed, offers Copy
+per citation ("Citation [n] copied"), and lists the risk flags and suggested
+actions (placeholders until MAS-15/16).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 

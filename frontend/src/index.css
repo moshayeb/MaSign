@@ -126,3 +126,169 @@ button.contract.selected {
   font-size: 0.85rem;
   color: #5b6675;
 }
+
+/* --- question and answer (MAS-18) --- */
+
+form.question label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+form.question textarea {
+  width: 100%;
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid #c9d0d8;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.question-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+fieldset.scope {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.9rem;
+}
+
+fieldset.scope label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 400;
+  margin: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.answer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.answer-question {
+  margin: 2px 0 10px;
+  font-style: italic;
+}
+
+.answer-text {
+  font-size: 1.05rem;
+  margin: 0 0 8px;
+}
+
+.answer-text.not-found {
+  font-weight: 600;
+}
+
+button.cite-marker {
+  font: inherit;
+  font-size: 0.8em;
+  padding: 0 4px;
+  margin: 0 1px;
+  vertical-align: super;
+  background: #eaf0fd;
+  color: #2a5bd7;
+  border: 1px solid #c6d4f7;
+  border-radius: 4px;
+}
+
+.badge.unverified {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fff4e0;
+  border: 1px solid #f0c36d;
+  color: #6b4a00;
+  font-size: 0.9rem;
+}
+
+h3 {
+  font-size: 0.95rem;
+  margin: 16px 0 6px;
+}
+
+.citations,
+.others ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+li.citation {
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #f8f9fb;
+}
+
+li.citation.highlighted {
+  border-color: #2a5bd7;
+  background: #eaf0fd;
+}
+
+.citation-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.cite-label {
+  font-weight: 700;
+  color: #2a5bd7;
+}
+
+.citation blockquote {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  font-size: 0.92rem;
+}
+
+button.link {
+  background: none;
+  border: 0;
+  color: #2a5bd7;
+  padding: 0;
+  margin-left: auto;
+  text-decoration: underline;
+}
+
+details.others summary {
+  cursor: pointer;
+  margin: 12px 0 6px;
+  font-size: 0.9rem;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.risks,
+.actions {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
