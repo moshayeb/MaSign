@@ -67,8 +67,8 @@ def test_answer_cites_the_passages_it_used_in_order_of_use() -> None:
     assert user.endswith("Question: fees?")
 
 
-@pytest.mark.parametrize("reply", ["[1, 2] are relevant.", "See [1] and [2].", "[2][1]", "Cited [1], also [7] and [0]."])
-def test_citation_formats_and_out_of_range_labels(reply: str) -> None:
+@pytest.mark.parametrize("reply", ["[1, 2] are relevant.", "See [1] and [2].", "[2][1]", "[1] twice [1]."])
+def test_citation_formats(reply: str) -> None:
     model = FakeChatModel()
     model.reply = reply
 
@@ -77,6 +77,40 @@ def test_citation_formats_and_out_of_range_labels(reply: str) -> None:
     assert answer.grounded is True
     assert all(1 <= c.label <= 2 for c in answer.citations)
     assert len({c.label for c in answer.citations}) == len(answer.citations)  # no duplicates
+
+
+@pytest.mark.parametrize("reply", ["The fee is X [1], the term Y [99].", "Cited [1], also [7] and [0].", "Only [3]."])
+def test_a_reference_to_a_nonexistent_passage_makes_the_answer_unverified(reply: str, caplog: pytest.LogCaptureFixture) -> None:
+    # MAS-69: [99] points at nothing, so the answer as a whole cannot be trusted.
+    model = FakeChatModel()
+    model.reply = reply
+
+    with caplog.at_level("WARNING"):
+        answer = answer_question("q", _hits("a", "b"), model)
+
+    assert answer.grounded is False
+    assert answer.text == reply  # still shown, flagged
+    assert all(1 <= c.label <= 2 for c in answer.citations)  # the real ones are still resolved
+    assert "invalid=" in caplog.text
+
+
+def test_a_cut_off_answer_is_unverified_even_when_it_cites(caplog: pytest.LogCaptureFixture) -> None:
+    # MAS-70: generation hit max_tokens mid-sentence.
+    model = FakeChatModel()
+    model.reply = "The fee is EUR 18,500 [1] and late payment bears interest at"
+    model.truncated = True
+
+    with caplog.at_level("WARNING"):
+        answer = answer_question("q", _hits("fees"), model)
+
+    assert answer.grounded is False
+    assert [c.label for c in answer.citations] == [1]
+    assert "truncated=True" in caplog.text
+
+    model.reply = "NOT_FOUND"  # a cut-off reply is never read as a deliberate NOT_FOUND
+    answer = answer_question("q", _hits("fees"), model)
+    assert answer.text == "NOT_FOUND"
+    assert answer.grounded is False
 
 
 @pytest.mark.parametrize("reply", ["NOT_FOUND", "NOT_FOUND.", "not_found", "NOT_FOUND\nThe passages cover fees only."])
@@ -113,43 +147,53 @@ def test_uncited_answer_is_returned_but_marked_ungrounded(caplog: pytest.LogCapt
     assert answer.text == "The fee is EUR 18,500 per month."
     assert answer.grounded is False
     assert answer.citations == []
-    assert "Uncited answer" in caplog.text
+    assert "Unverified answer" in caplog.text and "cited=[]" in caplog.text
 
 
 # --- providers (SDK clients faked) ------------------------------------------------------
 
 
 class _AnthropicClient:
-    def __init__(self, outcome) -> None:
-        self.outcome, self.calls = outcome, []
+    def __init__(self, outcome, stop_reason: str = "end_turn") -> None:
+        self.outcome, self.calls, self.stop_reason = outcome, [], stop_reason
         self.messages = self
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
         if isinstance(self.outcome, Exception):
             raise self.outcome
-        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self.outcome)])
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self.outcome)], stop_reason=self.stop_reason)
 
 
 class _OpenAIClient:
-    def __init__(self, outcome) -> None:
-        self.outcome, self.calls = outcome, []
+    def __init__(self, outcome, finish_reason: str = "stop") -> None:
+        self.outcome, self.calls, self.finish_reason = outcome, [], finish_reason
         self.chat = SimpleNamespace(completions=self)
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
         if isinstance(self.outcome, Exception):
             raise self.outcome
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=self.outcome))])
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=self.outcome), finish_reason=self.finish_reason)]
+        )
 
 
 def test_anthropic_adapter_sends_system_and_user_and_returns_the_text() -> None:
     client = _AnthropicClient("  Fee is X [1].  ")
     model = AnthropicChatModel("claude-sonnet-5", "key", client=client)
 
-    assert model.complete("SYS", "USER", max_tokens=42) == "Fee is X [1]."
+    completion = model.complete("SYS", "USER", max_tokens=42)
+
+    assert (completion.text, completion.truncated) == ("Fee is X [1].", False)
     assert client.calls == [
-        {"model": "claude-sonnet-5", "max_tokens": 42, "system": "SYS", "messages": [{"role": "user", "content": "USER"}]}
+        {
+            "model": "claude-sonnet-5",
+            "max_tokens": 42,
+            "system": "SYS",
+            "messages": [{"role": "user", "content": "USER"}],
+            "thinking": {"type": "disabled"},  # MAS-70: the budget is the answer's alone
+        }
     ]
 
 
@@ -157,9 +201,25 @@ def test_openai_adapter_sends_system_and_user_and_returns_the_text() -> None:
     client = _OpenAIClient("Fee is X [1].")
     model = OpenAIChatModel("gpt-4.1-mini", "key", client=client)
 
-    assert model.complete("SYS", "USER", max_tokens=42) == "Fee is X [1]."
+    completion = model.complete("SYS", "USER", max_tokens=42)
+
+    assert (completion.text, completion.truncated) == ("Fee is X [1].", False)
     assert client.calls[0]["messages"] == [{"role": "system", "content": "SYS"}, {"role": "user", "content": "USER"}]
     assert client.calls[0]["max_completion_tokens"] == 42
+
+
+def test_adapters_report_cut_off_replies_and_refuse_empty_ones() -> None:
+    # MAS-70
+    cut = AnthropicChatModel("m", "k", client=_AnthropicClient("The fee is EUR 18,500 [1] and", stop_reason="max_tokens"))
+    assert cut.complete("s", "u", max_tokens=5).truncated is True
+
+    cut = OpenAIChatModel("m", "k", client=_OpenAIClient("The fee is", finish_reason="length"))
+    assert cut.complete("s", "u", max_tokens=5).truncated is True
+
+    with pytest.raises(ChatModelError, match="returned an empty answer"):
+        AnthropicChatModel("m", "k", client=_AnthropicClient("   ", stop_reason="max_tokens")).complete("s", "u", max_tokens=1)
+    with pytest.raises(ChatModelError, match="returned an empty answer"):
+        OpenAIChatModel("m", "k", client=_OpenAIClient(None)).complete("s", "u", max_tokens=1)
 
 
 def test_provider_errors_become_readable_chat_model_errors() -> None:
@@ -261,6 +321,17 @@ def test_query_reports_not_found_for_an_unanswerable_question(northwind: str, fa
     assert body["retrieved_context"]  # the passages are still shown, so the user can check
 
 
+def test_query_marks_a_cut_off_answer_unverified(northwind: str, fake_chat_model: FakeChatModel) -> None:
+    fake_chat_model.reply = "The monthly fee is EUR 18,500 [1] and the"
+    fake_chat_model.truncated = True
+
+    body = client.post("/api/query", json={"question": "fee?", "contract_id": northwind}).json()
+
+    assert body["answer"] == "The monthly fee is EUR 18,500 [1] and the"
+    assert body["grounded"] is False
+    assert [c["label"] for c in body["citations"]] == [1]
+
+
 def test_query_is_a_503_with_the_reason_when_the_model_is_unavailable(northwind: str) -> None:
     app.dependency_overrides[dependencies.get_chat_model] = lambda: UnconfiguredChatModel("anthropic")
 
@@ -276,22 +347,42 @@ def test_query_is_a_503_with_the_reason_when_the_model_is_unavailable(northwind:
 
 
 @pytest.mark.skipif(os.getenv("MASIGN_REAL_LLM") != "1", reason="set MASIGN_REAL_LLM=1 (and the provider's API key) to call the real model")
-def test_real_model_answers_northwind_questions_with_citations(northwind: str) -> None:
-    from app.answering.llm import get_chat_model
+def test_real_model_answers_northwind_questions_with_citations(db) -> None:
+    # End to end with the real embedder as well: the fake bag-of-words embedder
+    # can miss the right clause, and then "not found" is the correct answer.
+    from pathlib import Path
 
+    from qdrant_client import QdrantClient
+
+    from app.answering.llm import get_chat_model
+    from app.retrieval.embeddings import DEFAULT_EMBEDDING_MODEL, SentenceTransformerEmbedder
+    from app.retrieval.vector_store import VectorStore
+
+    embedder = SentenceTransformerEmbedder(DEFAULT_EMBEDDING_MODEL)
+    store = VectorStore(QdrantClient(":memory:"), collection="real")
+    store.ensure_collection(embedder.dimension)
     get_chat_model.cache_clear()
+    app.dependency_overrides[dependencies.get_embedder] = lambda: embedder
+    app.dependency_overrides[dependencies.get_vector_store] = lambda: store
     app.dependency_overrides[dependencies.get_chat_model] = get_chat_model
+    path = Path(__file__).resolve().parent.parent / "data" / "sample_contracts" / "northwind_master_services_agreement.txt"
+    northwind = client.post("/api/contracts/upload", files={"file": ("northwind.txt", path.read_bytes(), "text/plain")}).json()["contract_id"]
+    import re
+
+    # MAS-71: the complete value with its unit, in the answer AND in a cited
+    # passage — "136 days" or "EUR 18,500 termination fee" must not pass.
     checks = [
-        ("What is the monthly fee?", "18,500"),
-        ("What interest applies to late payment?", "1.5"),
-        ("How long is the initial term?", "36"),
-        ("What is the termination fee?", "50"),
+        ("What is the monthly fee?", r"EUR 18,500 per month"),
+        ("What interest applies to late payment?", r"1\.5% per month"),
+        ("How long is the initial term?", r"thirty-six \(36\) months"),
+        ("What is the termination fee?", r"fifty percent \(50%\) of the Subscription Fees"),
     ]
-    for question, marker in checks:
+    for question, value in checks:
         body = client.post("/api/query", json={"question": question, "contract_id": northwind, "limit": 5}).json()
         assert body["grounded"] is True, body
-        assert marker in body["answer"], body["answer"]
-        assert body["citations"], body
+        assert re.search(value, body["answer"]), (question, body["answer"])
+        assert any(re.search(value, c["text"]) for c in body["citations"]), (question, [c["chunk_index"] for c in body["citations"]])
 
     body = client.post("/api/query", json={"question": "Who is the CEO of Northwind?", "contract_id": northwind}).json()
     assert body["answer"] == "Not found in contract.", body["answer"]
+    assert body["grounded"] is False and body["citations"] == []

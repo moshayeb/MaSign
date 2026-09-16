@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 NOT_FOUND_TOKEN = "NOT_FOUND"
 NOT_FOUND_ANSWER = "Not found in contract."
-MAX_ANSWER_TOKENS = 600
+# Generous for "one to four sentences": running out would leave a cut-off
+# answer, which is returned unverified rather than trusted (MAS-70).
+MAX_ANSWER_TOKENS = 1024
 
 SYSTEM_PROMPT = f"""You are MaSign, an assistant that answers questions about a contract using only the passages provided.
 
@@ -39,7 +41,9 @@ class Citation:
 @dataclass(frozen=True)
 class Answer:
     text: str
-    grounded: bool  # True when the text is supported by at least one citation
+    # True only when the answer is complete, cites at least one passage and
+    # every [n] it uses names a real passage (MAS-69/70).
+    grounded: bool
     citations: list[Citation] = field(default_factory=list)
     model: str | None = None
 
@@ -56,19 +60,28 @@ def answer_question(
         # Nothing to ground on: never ask the model (MAS-14).
         return Answer(NOT_FOUND_ANSWER, grounded=False)
 
-    reply = model.complete(SYSTEM_PROMPT, build_user_prompt(question, hits, filenames or {}), max_tokens=MAX_ANSWER_TOKENS)
+    completion = model.complete(
+        SYSTEM_PROMPT, build_user_prompt(question, hits, filenames or {}), max_tokens=MAX_ANSWER_TOKENS
+    )
+    reply = completion.text
 
-    if _says_not_found(reply):
+    if not completion.truncated and _says_not_found(reply):
         return Answer(NOT_FOUND_ANSWER, grounded=False, model=model.model_name)
 
-    labels = _cited_labels(reply, len(hits))
-    if not labels:
-        # The model answered but cited nothing: the answer is shown, marked
-        # ungrounded, so the UI can flag it and MAS-32 can count it.
-        logger.warning("Uncited answer from %s for %r: %.120r", model.model_name, question, reply)
+    labels, invalid = _cited_labels(reply, len(hits))
+    # The answer is shown either way; it is only *trusted* (grounded) when it
+    # is complete, cites something, and every reference names a real passage.
+    # Anything else is marked unverified so the UI can flag it and MAS-32 can
+    # count it.
+    grounded = bool(labels) and not invalid and not completion.truncated
+    if not grounded:
+        logger.warning(
+            "Unverified answer from %s for %r (cited=%s, invalid=%s, truncated=%s): %.120r",
+            model.model_name, question, labels, invalid, completion.truncated, reply,
+        )
     return Answer(
         reply,
-        grounded=bool(labels),
+        grounded=grounded,
         citations=[Citation(label, hits[label - 1]) for label in labels],
         model=model.model_name,
     )
@@ -90,12 +103,16 @@ def _says_not_found(reply: str) -> bool:
 _CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 
-def _cited_labels(reply: str, passages: int) -> list[int]:
-    """The [n] labels in the reply that name a real passage, in order of first use."""
+def _cited_labels(reply: str, passages: int) -> tuple[list[int], list[int]]:
+    """The [n] labels in the reply, split into real passages (in order of first use) and invalid ones."""
     labels: list[int] = []
+    invalid: list[int] = []
     for group in _CITATION.findall(reply):
         for number in group.split(","):
             label = int(number)
-            if 1 <= label <= passages and label not in labels:
+            if not 1 <= label <= passages:
+                if label not in invalid:
+                    invalid.append(label)
+            elif label not in labels:
                 labels.append(label)
-    return labels
+    return labels, invalid
