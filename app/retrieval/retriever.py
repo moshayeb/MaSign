@@ -23,12 +23,14 @@ def retrieve_contract_context(
     """Embed the question and return the best-matching chunks, best first.
 
     With `contract_id` the search is restricted to that contract; without it,
-    every uploaded contract is searched. Hits whose contract no longer exists
-    in Postgres are dropped: a failed upload's cleanup is best effort (MAS-50),
-    so the vector store may hold points for a contract that was removed.
+    every contract currently stored in Postgres is searched. The restriction is
+    applied inside the search, not afterwards: a failed upload's cleanup is
+    best effort (MAS-50), so the vector store may hold points for contracts
+    that were removed, and those must not take any of the `limit` slots (MAS-60).
     """
-    hits = store.search(embedder.embed_query(question), contract_id=contract_id, limit=limit)
-    if not hits:
-        return []
-    known = repository.existing_contract_ids(db, {hit.contract_id for hit in hits})
-    return [hit for hit in hits if hit.contract_id in known]
+    if contract_id is None:
+        contract_ids = repository.list_contract_ids(db)
+        if not contract_ids:
+            return []
+        return store.search(embedder.embed_query(question), contract_ids=contract_ids, limit=limit)
+    return store.search(embedder.embed_query(question), contract_id=contract_id, limit=limit)

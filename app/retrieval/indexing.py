@@ -61,29 +61,31 @@ def ensure_index_current(db: psycopg.Connection, embedder: Embedder, store: Vect
 
     The collection is rebuilt and every stored chunk re-embedded when the
     recorded fingerprint differs from the embedder (a model, prefix or token
-    limit change — even at the same dimension), or when the collection had to
-    be created (first run, or a wiped Qdrant volume). Returns the number of
+    limit change — even at the same dimension), or when the collection is
+    missing or the wrong size (first run, or a wiped Qdrant volume). Qdrant is
+    only modified once the old fingerprint is gone. Returns the number of
     chunks re-indexed, or None when nothing needed doing.
     """
     wanted = fingerprint(embedder, store.collection)
     recorded = repository.get_vector_index(db, store.collection)
 
-    created = store.ensure_collection(wanted.dimension)
-    if recorded == wanted and not created:
+    if recorded == wanted and store.matches(wanted.dimension):
         return None
 
-    if not created:
-        logger.warning(
-            "Rebuilding vector index %s: built with %s, embedder is now %s",
-            store.collection, recorded or "unrecorded settings", wanted,
-        )
-        store.reset_collection(wanted.dimension)
-
-    # From here until the fingerprint is written the index is incomplete. A
-    # missing row already means "rebuild", so forget the old one — and commit,
-    # so a crash mid-rebuild cannot leave a fingerprint that looks valid (MAS-56).
+    logger.warning(
+        "Rebuilding vector index %s: %s, embedder is now %s",
+        store.collection,
+        f"built with {recorded}" if recorded == wanted else f"built with {recorded or 'unrecorded settings'}",
+        wanted if recorded != wanted else "the same, but the collection is missing or has the wrong size",
+    )
+    # Forget the old fingerprint and commit BEFORE touching Qdrant: from here
+    # until the new fingerprint is written the index is incomplete, and a
+    # missing row makes the next start rebuild. Deleting it after creating the
+    # collection left a window where a crash produced an empty index with a
+    # valid-looking fingerprint (MAS-56, MAS-59).
     repository.clear_vector_index(db, store.collection)
     db.commit()
+    store.reset_collection(wanted.dimension)
 
     contracts = repository.list_contracts(db)
     logger.info("Re-indexing %d contract(s) with %s", len(contracts), embedder.model_name)

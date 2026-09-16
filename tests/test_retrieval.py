@@ -151,6 +151,22 @@ def test_points_of_a_deleted_contract_are_not_returned(db: psycopg.Connection, v
     assert vector_store.count(contract_id=ghost) == 1  # the point is still there; it is just filtered
 
 
+def test_leftover_points_cannot_crowd_out_valid_results(db: psycopg.Connection, vector_store, fake_embedder) -> None:
+    # MAS-60: more leftover points than `limit`, every one of them a better
+    # match than the real chunk. The real chunk must still be returned.
+    _upload("msa.txt", FEES)
+    question = "late payment interest"
+    for _ in range(6):
+        vector = fake_embedder.embed_documents([question])[0]  # identical words: a perfect score
+        vector_store.upsert([ChunkVector(uuid4(), uuid4(), 0, question, vector)])
+
+    hits = retrieve_contract_context(question, db=db, embedder=fake_embedder, store=vector_store, limit=2)
+
+    assert len(hits) == 1 and "2. Fees" in hits[0].text
+    response = _query(question, limit=2)
+    assert response.status_code == 200 and "2. Fees" in response.json()["retrieved_context"][0]["text"]
+
+
 def test_vector_store_outage_is_a_503() -> None:
     from app.api import dependencies
     from app.retrieval.vector_store import VectorStoreError
@@ -159,6 +175,7 @@ def test_vector_store_outage_is_a_503() -> None:
         def search(self, *args, **kwargs):
             raise VectorStoreError("connection refused (simulated)")
 
+    _upload("msa.txt", FEES)  # something to search, so the outage is actually hit
     app.dependency_overrides[dependencies.get_vector_store] = lambda: DownStore()
 
     response = _query("anything")
