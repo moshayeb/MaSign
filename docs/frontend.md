@@ -32,6 +32,16 @@ later UI work follow the same rules.
 Backend implication: keep error `detail` strings user-readable, since they
 are displayed verbatim.
 
+## Layout (MAS-17)
+
+`frontend/src/api.ts` is the only module that calls `fetch`: it turns any
+non-2xx response into an `ApiError` whose message is the API's `detail` (or the
+status text), which is what every toast shows. `UploadForm` wraps the upload
+in `toast.promise` and hands the new contract to `App`, which keeps the
+selected contract and reloads the list; `ContractList` renders and selects.
+Build output (`frontend/dist`) is served by FastAPI from `/` when present
+(`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
+
 ## Query results
 
 `POST /api/query` returns `retrieved_context` as a list of

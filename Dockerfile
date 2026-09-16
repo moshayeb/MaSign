@@ -1,3 +1,12 @@
+# Stage 1: the React UI (frontend/), built to static files.
+FROM node:24-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: the API, which serves the UI from frontend/dist (app/main.py).
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -18,6 +27,7 @@ RUN pip install --upgrade pip \
 
 COPY app ./app
 COPY data/sample_contracts ./data/sample_contracts
+COPY --from=frontend /frontend/dist ./frontend/dist
 
 # Uploads, indexes and the model cache are written at runtime; keep them owned
 # by the app user.

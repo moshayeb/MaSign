@@ -83,6 +83,11 @@ Check it is up:
 curl http://localhost:8000/health
 ```
 
+Then open **http://localhost:8000** — the web UI (built into the image from
+`frontend/`) lets you upload a contract and pick one from the list; every
+action reports its outcome in a toast, errors with the API's own message.
+The interactive API docs stay at `/docs`.
+
 ### Embedding profiles
 
 The deployer picks one of two profiles (benchmark and rationale in `CLAUDE.md`,
@@ -120,6 +125,10 @@ Interactive docs at `http://localhost:8000/docs`.
 ```bash
 pytest
 ```
+
+Frontend (from `frontend/`, needs Node 24): `npm ci`, then `npm test` and
+`npm run build`; `npm run dev` serves the UI on :5173 with `/api` proxied to
+a locally running API. See `frontend/README.md`.
 
 Tests that need Postgres use a separate `contract_rag_test` database, created
 automatically from `DATABASE_URL` and emptied after each test — your dev data

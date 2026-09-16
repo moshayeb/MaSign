@@ -2,12 +2,14 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router as api_router
 from app.database.migrations import run_migrations
@@ -116,12 +118,21 @@ async def embedding_service_unavailable(_: Request, error: EmbeddingServiceError
     )
 
 
-@app.get("/", include_in_schema=False)
-def root() -> RedirectResponse:
-    # No web UI yet (MAS-17/18); send visitors to the interactive API docs.
-    return RedirectResponse(url="/docs")
-
-
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# The built React app (frontend/dist, MAS-17) is served from the root when it
+# exists — the Docker image builds it in; a bare API checkout (or the tests)
+# has no dist, and then visitors are sent to the interactive API docs instead.
+# Mounted last so /api, /health and /docs keep winning.
+FRONTEND_DIST = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent.parent / "frontend" / "dist"))
+
+if (FRONTEND_DIST / "index.html").is_file():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+else:
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
