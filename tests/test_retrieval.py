@@ -78,7 +78,8 @@ def test_most_relevant_chunk_comes_first() -> None:
     assert "2. Fees" in body["retrieved_context"][0]["text"]
     scores = [hit["score"] for hit in body["retrieved_context"]]
     assert scores == sorted(scores, reverse=True)
-    assert "3 relevant passage" in body["answer"]
+    assert body["answer"] == "The passage states it [1]."  # the fake model cites the top hit
+    assert body["grounded"] is True
 
 
 def test_hits_identify_their_chunk(db: psycopg.Connection) -> None:
@@ -135,7 +136,8 @@ def test_empty_index_returns_no_context_not_an_error() -> None:
 
     assert response.status_code == 200
     assert response.json()["retrieved_context"] == []
-    assert "No relevant passages" in response.json()["answer"]
+    assert response.json()["answer"] == "Not found in contract."
+    assert response.json()["grounded"] is False
 
 
 def test_points_of_a_deleted_contract_are_not_returned(db: psycopg.Connection, vector_store, fake_embedder) -> None:

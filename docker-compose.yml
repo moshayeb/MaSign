@@ -28,6 +28,9 @@ services:
       EMBEDDING_API_URL: ${EMBEDDING_API_URL:-}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       EMBEDDING_TOKENIZER: ${EMBEDDING_TOKENIZER:-}
+      # Answer generation (MAS-13); the API key comes from .env via env_file.
+      CHAT_PROVIDER: ${CHAT_PROVIDER:-anthropic}
+      CHAT_MODEL: ${CHAT_MODEL:-}
     volumes:
       - uploads:/app/data/uploads
       - hf_cache:/app/.cache/huggingface

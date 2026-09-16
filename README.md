@@ -119,7 +119,7 @@ Interactive docs at `http://localhost:8000/docs`.
 | `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it. Returns the `contract_id`. |
 | `GET`  | `/api/contracts` | List stored contracts, newest first. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
-| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → the most relevant chunks (`retrieved_context`, best first, with scores). Omit `contract_id` to search every contract. Generated answers arrive in Sprint 2. |
+| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness check. |
 
 ## Running the Tests
