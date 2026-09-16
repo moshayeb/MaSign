@@ -21,15 +21,25 @@ schema. `app/database/repository.py` is the only module that issues SQL.
 
 ## Embeddings and vector store
 
-`app/retrieval/embeddings.py` wraps a local sentence-transformers model chosen by
-`EMBEDDING_MODEL` (default: Free Law's legal-fine-tuned ModernBERT; see CLAUDE.md
-for the benchmark behind that choice). The embedder owns the model's input
-format: the ModernBERT/nomic family expects `search_document: ` / `search_query: `
-prefixes, which it adds itself so no caller has to know. It also exposes
+`app/retrieval/embeddings.py` has two implementations of one `Embedder`
+protocol, chosen by `EMBEDDING_BACKEND` (MAS-61): `sentence-transformers` runs
+the `EMBEDDING_MODEL` in-process (default: Free Law's legal-fine-tuned
+ModernBERT; see CLAUDE.md for the benchmark behind that choice) on the CPU or,
+with `EMBEDDING_DEVICE=auto|cuda` and a CUDA torch build, the GPU;
+`openai-compatible` calls a `/v1/embeddings` endpoint at `EMBEDDING_API_URL`
+(the `quality` profile's `llama-server` hosting Qwen3-Embedding-4B, see
+`docker-compose.quality.yml`), learns the dimension from the first vector and
+counts tokens through llama-server's `/tokenize` — or, for a server without
+it, estimates 0.5 tokens per character, which is conservative. Either way the
+embedder owns the model's input format: the ModernBERT/nomic family expects
+`search_document: ` / `search_query: ` prefixes and Qwen3-Embedding a query-side
+instruction, which it adds itself so no caller has to know. It also exposes
 `count_tokens`/`max_tokens`, and the upload route hands those to the chunker as a
 `TokenBudget` so every chunk fits the model's sequence limit — characters alone
 are not a safe proxy (number-dense clauses reach ~0.45 tokens/char). An oversized
 text reaching `embed_documents` is a bug and raises rather than being truncated.
+An unreachable embedding service is a 503 (`EmbeddingServiceError`) during a
+request and fatal at startup.
 
 `app/retrieval/vector_store.py` keeps one Qdrant collection, `contract_chunks`,
 where each point's id **is** the chunk's Postgres UUID and the payload carries
@@ -49,8 +59,8 @@ against `data/sample_contracts/northwind_master_services_agreement.txt`: eight
 questions, including four on financial terms, all rank the right clause first.
 
 At startup the API loads the model and compares the collection's recorded
-fingerprint (`vector_index`: model, dimension, token limit, prompt format) with
-the configured embedder. Any difference — or a missing collection — rebuilds the
+fingerprint (`vector_index`: backend, model, dimension, token limit, prompt
+format) with the configured embedder. Any difference — or a missing collection — rebuilds the
 collection and re-embeds every chunk from Postgres, so switching models is a
 config change with no re-upload.
 

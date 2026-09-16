@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from app.api.routes import router as api_router
 from app.database.migrations import run_migrations
 from app.database.session import get_connection
-from app.retrieval.embeddings import get_embedder
+from app.retrieval.embeddings import EmbeddingServiceError, get_embedder
 from app.retrieval.indexing import ensure_index_current
 from app.retrieval.vector_store import VectorStoreError, get_vector_store
 
@@ -36,12 +36,18 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         applied = run_migrations()
         logger.info("Database ready (%d migration(s) applied)", len(applied))
 
-        # Load the embedding model now (first load downloads it) and make sure
-        # the Qdrant collection was built by this very embedder — rebuilding
-        # it from the stored chunks if not — so the first upload or query
-        # doesn't pay for either.
+        # Load the embedding model now (first load downloads it; the HTTP
+        # backend contacts its service) and make sure the Qdrant collection
+        # was built by this very embedder — rebuilding it from the stored
+        # chunks if not — so the first upload or query doesn't pay for either.
+        # An unreachable embedding service is fatal here: nothing can be
+        # indexed or queried without it.
         embedder = get_embedder()
-        embedder.warm_up()
+        try:
+            embedder.warm_up()
+        except EmbeddingServiceError as error:
+            logger.error("Cannot start: %s", error)
+            raise
         with get_connection() as db:
             ensure_index_current(db, embedder, get_vector_store())
         logger.info("Embeddings ready: %s (%d dims)", embedder.model_name, embedder.dimension)
@@ -98,6 +104,15 @@ async def vector_store_unavailable(_: Request, error: VectorStoreError) -> JSONR
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"detail": "Vector store unavailable. Check that Qdrant is running and VECTOR_STORE_URL is correct."},
+    )
+
+
+@app.exception_handler(EmbeddingServiceError)
+async def embedding_service_unavailable(_: Request, error: EmbeddingServiceError) -> JSONResponse:
+    logger.error("Embedding service unavailable: %s", error)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Embedding service unavailable. Check that the server behind EMBEDDING_API_URL is running."},
     )
 
 

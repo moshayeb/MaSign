@@ -64,6 +64,16 @@ shown yet; MAS-32's evaluation decides which profile the project recommends.
 suggestion: MAS-62. Never quote CPU timings for Qwen models again — the
 "10 minutes per 30 pages" figure was a CPU artefact.
 
+Implemented in MAS-61: `EMBEDDING_BACKEND=sentence-transformers|openai-compatible`,
+`EMBEDDING_DEVICE=auto|cpu|cuda`, `EMBEDDING_API_URL`; the quality profile is
+`docker compose -f docker-compose.yml -f docker-compose.quality.yml up` (a
+compose *profile* cannot reconfigure the `api` service, hence an override
+file). The backend is part of the index fingerprint (migration 003): the same
+model name through the two backends gives different vectors. Measured in
+compose on the P1000: 12-chunk Northwind upload 25 s (llama-server runs
+batches on parallel slots, so the benchmark's one-request-per-chunk 100 s was
+pessimistic), queries 160–240 ms end to end, 8/8 Northwind questions top-1.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error

@@ -182,3 +182,24 @@ def test_vector_store_outage_is_a_503() -> None:
 
     assert response.status_code == 503
     assert "Vector store unavailable" in response.json()["detail"]
+
+
+def test_embedding_service_outage_is_a_503() -> None:
+    # MAS-61: the quality profile's llama-server is down (or ran out of VRAM).
+    from app.api import dependencies
+    from app.retrieval.embeddings import EmbeddingServiceError
+
+    class DownEmbedder:
+        backend, model_name, dimension, max_tokens, prompt_format = "openai-compatible", "qwen", 3, 512, "qwen3"
+
+        def embed_query(self, text):
+            raise EmbeddingServiceError("Embedding service at http://llama-server:8081 is unreachable (simulated)")
+
+    _upload("msa.txt", FEES)
+    app.dependency_overrides[dependencies.get_embedder] = lambda: DownEmbedder()
+
+    response = _query("anything")
+
+    assert response.status_code == 503
+    assert "Embedding service unavailable" in response.json()["detail"]
+    assert "EMBEDDING_API_URL" in response.json()["detail"]

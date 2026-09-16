@@ -1,18 +1,24 @@
 """MAS-11 / MAS-44: chunk vectors land in Qdrant and can be queried."""
 
+import json
 import os
 from uuid import UUID, uuid4
 
+import httpx
 import psycopg
 import pytest
 from qdrant_client import QdrantClient
 
 from app.database import repository
+from app.retrieval import embeddings
 from app.retrieval.embeddings import (
     DEFAULT_EMBEDDING_MODEL,
     EmbeddingInputTooLong,
+    EmbeddingServiceError,
+    OpenAICompatibleEmbedder,
     SentenceTransformerEmbedder,
     prompt_format_for,
+    resolve_device,
 )
 from app.retrieval.indexing import ensure_index_current, fingerprint, index_contract
 from app.retrieval.vector_store import ChunkVector, VectorStore
@@ -320,7 +326,9 @@ def test_prefix_scheme_follows_the_model_family(monkeypatch: pytest.MonkeyPatch)
 
     assert prompt_format_for("freelawproject/modernbert-embed-base_finetune_512") == "nomic"
     assert prompt_format_for("nomic-ai/nomic-embed-text-v1.5") == "nomic"
-    assert prompt_format_for("Qwen/Qwen3-Embedding-0.6B") == "none"  # different instruction format
+    assert prompt_format_for("Qwen/Qwen3-Embedding-0.6B") == "qwen3"  # query instruction only
+    assert prompt_format_for("Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M") == "qwen3"
+    assert prompt_format_for("BAAI/bge-m3") == "none"
 
     monkeypatch.setenv("EMBEDDING_PROMPT_FORMAT", "none")
     assert prompt_format_for("freelawproject/modernbert-embed-base_finetune_512") == "none"
@@ -330,11 +338,28 @@ def test_prefix_scheme_follows_the_model_family(monkeypatch: pytest.MonkeyPatch)
         prompt_format_for("anything")
 
 
-def test_without_a_prefix_scheme_the_models_own_prompt_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_qwen3_queries_carry_the_instruction_and_documents_do_not(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("EMBEDDING_PROMPT_FORMAT", raising=False)
     embedder = SentenceTransformerEmbedder("Qwen/Qwen3-Embedding-0.6B")
     model = _FakeModel()
-    model.prompts = {"query": "Instruct: retrieve passages\nQuery: "}
+    monkeypatch.setattr(embedder, "_load", lambda: model)
+
+    embedder.embed_documents(["clause"])
+    embedder.embed_query("question")
+
+    assert embedder.prompt_format == "qwen3"
+    assert model.encoded == [
+        (["clause"], None),
+        (["Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: question"], None),
+    ]
+    assert embedder.count_tokens("one two") == 2 + 2  # no document prefix, special tokens only
+
+
+def test_without_a_prefix_scheme_the_models_own_prompt_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EMBEDDING_PROMPT_FORMAT", raising=False)
+    embedder = SentenceTransformerEmbedder("BAAI/bge-m3")
+    model = _FakeModel()
+    model.prompts = {"query": "Represent this sentence for searching relevant passages: "}
     monkeypatch.setattr(embedder, "_load", lambda: model)
 
     embedder.embed_documents(["clause"])
@@ -358,6 +383,166 @@ def test_overlong_chunk_is_refused_rather_than_truncated(modernbert_like) -> Non
     with pytest.raises(EmbeddingInputTooLong, match="exceeds the 8-token limit"):
         embedder.embed_documents(["one two three four five six seven"])
     assert model.encoded == []  # nothing reached the model
+
+
+# --- HTTP backend and profiles (MAS-61, no server needed) ---------------------------
+
+
+class _FakeEmbeddingServer:
+    """Stands in for llama-server: /v1/embeddings and /tokenize over httpx.MockTransport.
+
+    Vectors are 3-dimensional word counts (not normalised, so the client's
+    normalisation is visible); tokens are words.
+    """
+
+    def __init__(self, *, tokenize: bool = True) -> None:
+        self.requests: list[tuple[str, dict]] = []
+        self.tokenize = tokenize
+        self.transport = httpx.MockTransport(self._handle)
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        self.requests.append((request.url.path, body | {"_auth": request.headers.get("authorization")}))
+        if request.url.path == "/v1/embeddings":
+            data = [
+                {"index": index, "embedding": [float(len(text.split())), 2.0, 0.0]}
+                for index, text in enumerate(body["input"])
+            ]
+            return httpx.Response(200, json={"data": list(reversed(data)), "model": body["model"]})
+        if request.url.path == "/tokenize" and self.tokenize:
+            return httpx.Response(200, json={"tokens": list(range(len(body["content"].split())))})
+        return httpx.Response(404, json={"error": "not found"})
+
+
+@pytest.fixture
+def qwen_over_http(monkeypatch: pytest.MonkeyPatch) -> tuple[OpenAICompatibleEmbedder, _FakeEmbeddingServer]:
+    monkeypatch.delenv("EMBEDDING_PROMPT_FORMAT", raising=False)
+    server = _FakeEmbeddingServer()
+    embedder = OpenAICompatibleEmbedder(
+        "Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M", "http://llama-server:8081/", api_key="secret",
+        max_tokens=8, transport=server.transport,
+    )
+    return embedder, server
+
+
+def test_http_embedder_sends_prefixed_inputs_and_returns_unit_vectors_in_order(qwen_over_http) -> None:
+    embedder, server = qwen_over_http
+
+    docs = embedder.embed_documents(["one two", "one"])
+    query = embedder.embed_query("q")
+
+    assert embedder.backend == "openai-compatible"
+    assert embedder.prompt_format == "qwen3"
+    assert [body["input"] for path, body in server.requests if path == "/v1/embeddings"][-2:] == [
+        ["one two", "one"],  # documents: no prefix for Qwen3
+        ["Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: q"],
+    ]
+    assert all(body["model"] == "Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M" for path, body in server.requests if path == "/v1/embeddings")
+    assert all(body["_auth"] == "Bearer secret" for _, body in server.requests)
+    # The server answered out of order; the client restores it and normalises.
+    assert [round(v[0], 3) for v in docs] == [round(2 / 8**0.5, 3), round(1 / 5**0.5, 3)]
+    assert round(sum(x * x for x in query), 6) == 1.0
+
+
+def test_http_embedder_learns_the_dimension_and_counts_tokens_via_the_server(qwen_over_http) -> None:
+    embedder, server = qwen_over_http
+
+    embedder.warm_up()
+
+    assert embedder.dimension == 3
+    assert embedder.max_tokens == 8
+    assert embedder.count_tokens("a b c") == 3
+    assert [path for path, _ in server.requests] == ["/v1/embeddings", "/tokenize"]
+    with pytest.raises(EmbeddingInputTooLong, match="exceeds the 8-token limit"):
+        embedder.embed_documents(["1 2 3 4 5 6 7 8 9"])
+    assert [path for path, _ in server.requests][-1] == "/tokenize"  # nothing reached /v1/embeddings
+
+
+def test_http_embedder_estimates_tokens_when_the_server_has_no_tokenize(caplog: pytest.LogCaptureFixture) -> None:
+    server = _FakeEmbeddingServer(tokenize=False)
+    embedder = OpenAICompatibleEmbedder("some/api-model", "http://api", transport=server.transport)
+
+    with caplog.at_level("WARNING"):
+        first, second = embedder.count_tokens("ten chars."), embedder.count_tokens("ten chars.")
+
+    assert first == second == 5  # 0.5 tokens per character, rounded up
+    assert caplog.text.count("no /tokenize endpoint") == 1  # asked once, then remembered
+    assert [path for path, _ in server.requests] == ["/tokenize"]
+
+
+def test_http_embedder_reports_an_unreachable_service() -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused (simulated)", request=request)
+
+    embedder = OpenAICompatibleEmbedder("m", "http://llama-server:8081", transport=httpx.MockTransport(refuse))
+
+    with pytest.raises(EmbeddingServiceError, match="http://llama-server:8081 is unreachable"):
+        embedder.warm_up()
+    with pytest.raises(EmbeddingServiceError, match="unreachable"):
+        embedder.count_tokens("x")
+
+    failing = httpx.MockTransport(lambda request: httpx.Response(500, text="CUDA error: out of memory"))
+    embedder = OpenAICompatibleEmbedder("m", "http://llama-server:8081", transport=failing)
+    with pytest.raises(EmbeddingServiceError, match="HTTP 500: CUDA error"):
+        embedder.embed_query("q")
+
+
+def test_embedding_device_setting() -> None:
+    assert resolve_device("auto", cuda_available=True) == "cuda"
+    assert resolve_device("auto", cuda_available=False) == "cpu"
+    assert resolve_device("cpu", cuda_available=True) == "cpu"
+    assert resolve_device("cuda", cuda_available=True) == "cuda"
+    with pytest.raises(ValueError, match="cannot see a GPU"):
+        resolve_device("cuda", cuda_available=False)
+    with pytest.raises(ValueError, match="EMBEDDING_DEVICE"):
+        resolve_device("gpu", cuda_available=True)
+
+
+def test_backend_is_chosen_by_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EMBEDDING_PROMPT_FORMAT", raising=False)
+    monkeypatch.setenv("EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M")
+    embeddings.get_embedder.cache_clear()
+
+    monkeypatch.delenv("EMBEDDING_BACKEND", raising=False)
+    monkeypatch.setenv("EMBEDDING_DEVICE", "cuda")
+    embedder = embeddings.get_embedder()
+    assert isinstance(embedder, SentenceTransformerEmbedder)
+    assert embedder._requested_device == "cuda"  # no model is loaded until warm_up
+
+    embeddings.get_embedder.cache_clear()
+    monkeypatch.setenv("EMBEDDING_BACKEND", "openai-compatible")
+    with pytest.raises(ValueError, match="EMBEDDING_API_URL"):
+        embeddings.get_embedder()
+
+    embeddings.get_embedder.cache_clear()
+    monkeypatch.setenv("EMBEDDING_API_URL", "http://llama-server:8081")
+    monkeypatch.setenv("EMBEDDING_MAX_TOKENS", "1024")
+    embedder = embeddings.get_embedder()
+    assert isinstance(embedder, OpenAICompatibleEmbedder)
+    assert (embedder.model_name, embedder.base_url, embedder.max_tokens) == (
+        "Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M", "http://llama-server:8081", 1024,
+    )
+
+    embeddings.get_embedder.cache_clear()
+    monkeypatch.setenv("EMBEDDING_BACKEND", "tensorflow")
+    with pytest.raises(ValueError, match="EMBEDDING_BACKEND"):
+        embeddings.get_embedder()
+    embeddings.get_embedder.cache_clear()
+
+
+def test_switching_backends_for_the_same_model_rebuilds_the_index(
+    db: psycopg.Connection, vector_store: VectorStore, fake_embedder
+) -> None:
+    # The GGUF served over HTTP and the sentence-transformers checkpoint are
+    # not the same vectors even under the same model name.
+    _store_two_contracts(db)
+    fake_embedder.backend = "sentence-transformers"
+    ensure_index_current(db, fake_embedder, vector_store)
+
+    fake_embedder.backend = "openai-compatible"
+
+    assert ensure_index_current(db, fake_embedder, vector_store) == 3
+    assert repository.get_vector_index(db, vector_store.collection).backend == "openai-compatible"
 
 
 # --- real model (opt-in) ----------------------------------------------------------

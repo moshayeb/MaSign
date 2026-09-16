@@ -14,12 +14,19 @@ services:
       # Inside the compose network the services are reached by name, not localhost.
       DATABASE_URL: postgresql://rag_user:rag_password@postgres:5432/contract_rag
       VECTOR_STORE_URL: http://qdrant:6333
-      # See CLAUDE.md for the model choice. Override in .env (or the shell);
-      # a literal value here would win over env_file and pin the model.
-      # Changing it rebuilds the Qdrant collection on next start.
+      # The "portable" embedding profile (see CLAUDE.md for the model choice);
+      # docker-compose.quality.yml overrides these for the GPU profile.
+      # Override in .env (or the shell); a literal value here would win over
+      # env_file and pin the model. Changing any of them rebuilds the Qdrant
+      # collection on next start.
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-sentence-transformers}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-freelawproject/modernbert-embed-base_finetune_512}
       EMBEDDING_MAX_TOKENS: ${EMBEDDING_MAX_TOKENS:-512}
       EMBEDDING_PROMPT_FORMAT: ${EMBEDDING_PROMPT_FORMAT:-}
+      # The image ships CPU-only torch, so "auto" means CPU here.
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-auto}
+      EMBEDDING_API_URL: ${EMBEDDING_API_URL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
     volumes:
       - uploads:/app/data/uploads
       - hf_cache:/app/.cache/huggingface

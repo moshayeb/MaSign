@@ -14,6 +14,7 @@ from app import main
 
 
 class _StubEmbedder:
+    backend = "stub"
     model_name = "stub"
     dimension = 4
     warmed_up = False
@@ -72,6 +73,30 @@ def test_startup_fails_when_migrations_fail(
     with pytest.raises(RuntimeError, match="simulated unavailable database"):
         with TestClient(main.app):
             pass
+
+
+def test_startup_fails_when_the_embedding_service_is_down(
+    production_like_env: tuple[_StubEmbedder, _StubStore], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # MAS-61: EMBEDDING_BACKEND=openai-compatible with nothing listening at
+    # EMBEDDING_API_URL. Serving would only produce 503s, so refuse to start.
+    import httpx
+
+    from app.retrieval.embeddings import EmbeddingServiceError, OpenAICompatibleEmbedder
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused (simulated)", request=request)
+
+    monkeypatch.setattr(main, "run_migrations", lambda: [])
+    embedder = OpenAICompatibleEmbedder("qwen", "http://llama-server:8081", transport=httpx.MockTransport(refuse))
+    monkeypatch.setattr(main, "get_embedder", lambda: embedder)
+
+    with caplog.at_level("ERROR", logger="app.main"):
+        with pytest.raises(EmbeddingServiceError, match="http://llama-server:8081 is unreachable"):
+            with TestClient(main.app):
+                pass
+
+    assert "Cannot start: Embedding service at http://llama-server:8081 is unreachable" in caplog.text
 
 
 def test_test_environment_skips_migrations(monkeypatch: pytest.MonkeyPatch) -> None:
