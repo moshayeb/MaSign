@@ -8,6 +8,7 @@ use a fake, so no key is needed there.
 
 import logging
 import os
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Protocol
 
@@ -26,13 +27,31 @@ class ChatModelError(RuntimeError):
     """
 
 
+@dataclass(frozen=True)
+class Completion:
+    text: str
+    # Generation stopped at max_tokens: the text is incomplete and must not be
+    # trusted as a finished answer (MAS-70).
+    truncated: bool = False
+
+
 class ChatModel(Protocol):
     provider: str
     model_name: str
 
-    def complete(self, system: str, user: str, *, max_tokens: int) -> str:
-        """One system prompt, one user message, the model's text reply."""
+    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
+        """One system prompt, one user message, the model's reply.
+
+        Raises ChatModelError when the model cannot be used or returns no text.
+        """
         ...
+
+
+def _completion(text: str, truncated: bool, model_name: str) -> Completion:
+    text = text.strip()
+    if not text:
+        raise ChatModelError(f"{model_name} returned an empty answer.")
+    return Completion(text, truncated=truncated)
 
 
 class AnthropicChatModel:
@@ -50,7 +69,7 @@ class AnthropicChatModel:
             self._client = anthropic.Anthropic(api_key=self._api_key)
         return self._client
 
-    def complete(self, system: str, user: str, *, max_tokens: int) -> str:
+    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
         import anthropic
 
         try:
@@ -59,12 +78,17 @@ class AnthropicChatModel:
                 max_tokens=max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": user}],
+                # Sonnet 5 thinks adaptively by default and that would share
+                # max_tokens with the answer; extractive Q&A over a handful
+                # of passages does not need it (MAS-70).
+                thinking={"type": "disabled"},
             )
         except anthropic.APIStatusError as error:
             raise ChatModelError(f"Anthropic API refused the request (HTTP {error.status_code}): {error.message}") from error
         except anthropic.APIConnectionError as error:
             raise ChatModelError(f"Anthropic API is unreachable: {error}") from error
-        return "".join(block.text for block in response.content if getattr(block, "type", "") == "text").strip()
+        text = "".join(block.text for block in response.content if getattr(block, "type", "") == "text")
+        return _completion(text, response.stop_reason == "max_tokens", self.model_name)
 
 
 class OpenAIChatModel:
@@ -82,7 +106,7 @@ class OpenAIChatModel:
             self._client = openai.OpenAI(api_key=self._api_key)
         return self._client
 
-    def complete(self, system: str, user: str, *, max_tokens: int) -> str:
+    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
         import openai
 
         try:
@@ -95,7 +119,8 @@ class OpenAIChatModel:
             raise ChatModelError(f"OpenAI API refused the request (HTTP {error.status_code}): {error.message}") from error
         except openai.APIConnectionError as error:
             raise ChatModelError(f"OpenAI API is unreachable: {error}") from error
-        return (response.choices[0].message.content or "").strip()
+        choice = response.choices[0]
+        return _completion(choice.message.content or "", choice.finish_reason == "length", self.model_name)
 
 
 class UnconfiguredChatModel:
@@ -106,7 +131,7 @@ class UnconfiguredChatModel:
         self.model_name = "unconfigured"
         self.key_variable = KEY_VARIABLES[provider]
 
-    def complete(self, system: str, user: str, *, max_tokens: int) -> str:
+    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
         raise ChatModelError(
             f"Answer generation is not configured: set {self.key_variable} (CHAT_PROVIDER={self.provider})."
         )

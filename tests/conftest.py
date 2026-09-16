@@ -76,7 +76,8 @@ class FakeChatModel:
     """Answers by citing the first passage, and records every prompt it was given.
 
     `reply` can be replaced per test (a fixed string, or a callable taking the
-    user prompt) to script NOT_FOUND, uncited or malformed answers.
+    user prompt) to script NOT_FOUND, uncited or malformed answers;
+    `truncated` simulates running out of tokens.
     """
 
     provider = "fake"
@@ -85,10 +86,13 @@ class FakeChatModel:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
         self.reply: str | Callable[[str], str] = "The passage states it [1]."
+        self.truncated = False
 
-    def complete(self, system: str, user: str, *, max_tokens: int) -> str:
+    def complete(self, system: str, user: str, *, max_tokens: int):
+        from app.answering.llm import Completion
+
         self.calls.append((system, user))
-        return self.reply(user) if callable(self.reply) else self.reply
+        return Completion(self.reply(user) if callable(self.reply) else self.reply, truncated=self.truncated)
 
 
 @pytest.fixture
