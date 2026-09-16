@@ -9,7 +9,7 @@ import os
 import re
 import uuid
 import zlib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from io import BytesIO
 
 import psycopg
@@ -72,6 +72,30 @@ def fake_embedder() -> FakeEmbedder:
     return FakeEmbedder()
 
 
+class FakeChatModel:
+    """Answers by citing the first passage, and records every prompt it was given.
+
+    `reply` can be replaced per test (a fixed string, or a callable taking the
+    user prompt) to script NOT_FOUND, uncited or malformed answers.
+    """
+
+    provider = "fake"
+    model_name = "fake-chat"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self.reply: str | Callable[[str], str] = "The passage states it [1]."
+
+    def complete(self, system: str, user: str, *, max_tokens: int) -> str:
+        self.calls.append((system, user))
+        return self.reply(user) if callable(self.reply) else self.reply
+
+
+@pytest.fixture
+def fake_chat_model() -> FakeChatModel:
+    return FakeChatModel()
+
+
 @pytest.fixture
 def vector_store(fake_embedder: FakeEmbedder) -> VectorStore:
     """An in-process Qdrant (no server) with the collection ready."""
@@ -83,13 +107,17 @@ def vector_store(fake_embedder: FakeEmbedder) -> VectorStore:
 
 
 @pytest.fixture(autouse=True)
-def _fake_retrieval_stack(fake_embedder: FakeEmbedder, vector_store: VectorStore) -> Iterator[None]:
-    """Every API test gets the fake embedder and in-memory store by default."""
+def _fake_retrieval_stack(
+    fake_embedder: FakeEmbedder, vector_store: VectorStore, fake_chat_model: FakeChatModel
+) -> Iterator[None]:
+    """Every API test gets the fake embedder, in-memory store and fake chat model by default."""
     app.dependency_overrides[dependencies.get_embedder] = lambda: fake_embedder
     app.dependency_overrides[dependencies.get_vector_store] = lambda: vector_store
+    app.dependency_overrides[dependencies.get_chat_model] = lambda: fake_chat_model
     yield
     app.dependency_overrides.pop(dependencies.get_embedder, None)
     app.dependency_overrides.pop(dependencies.get_vector_store, None)
+    app.dependency_overrides.pop(dependencies.get_chat_model, None)
 
 
 # --- database ---------------------------------------------------------------

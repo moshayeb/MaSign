@@ -74,6 +74,17 @@ compose on the P1000: 12-chunk Northwind upload 25 s (llama-server runs
 batches on parallel slots, so the benchmark's one-request-per-chunk 100 s was
 pessimistic), queries 160–240 ms end to end, 8/8 Northwind questions top-1.
 
+## LLM decision (MAS-13, 2026-09-16)
+
+Default `CHAT_PROVIDER=anthropic`, `CHAT_MODEL=claude-sonnet-5`; OpenAI
+(`gpt-4.1-mini`) is the switch. Sonnet over Haiku because MAS-15/16 (risk
+detection) and MAS-14/32 (grounding discipline) need legal reading
+comprehension more than raw Q&A does, and per-query cost is cents either way.
+Switching providers is config only: the prompt is ours (`app/answering/
+grounding.py`) and nothing model-specific is stored — but rerun the MAS-32 set
+after a switch. Every answer must carry `[n]` citations; uncited answers are
+returned with `grounded: false`, never silently accepted.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error

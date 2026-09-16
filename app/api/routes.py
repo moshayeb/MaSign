@@ -8,7 +8,9 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
 from app.actions.workflow import build_follow_up_actions
-from app.api.dependencies import get_db, get_embedder, get_vector_store
+from app.answering.grounding import Answer, answer_question
+from app.answering.llm import ChatModel
+from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract
 from app.ingestion.parsing import DocumentTextError, extract_text
@@ -58,8 +60,17 @@ class RetrievedChunk(BaseModel):
         )
 
 
+class CitedChunk(RetrievedChunk):
+    # The [n] the answer text uses for this passage (MAS-13).
+    label: int
+
+
 class QueryResponse(BaseModel):
     answer: str
+    # False when the answer is "Not found in contract." or carries no citation.
+    grounded: bool
+    citations: list[CitedChunk]
+    answer_model: str | None
     retrieved_context: list[RetrievedChunk]
     risks: list[str]
     recommended_actions: list[str]
@@ -203,24 +214,43 @@ async def query_contract(
     db: psycopg.Connection = Depends(get_db),
     embedder: Embedder = Depends(get_embedder),
     store: VectorStore = Depends(get_vector_store),
+    chat_model: ChatModel = Depends(get_chat_model),
 ) -> QueryResponse:
-    # Embedding the question is CPU work and the lookups are synchronous, so
-    # the whole retrieval runs off the event loop like the upload path.
-    hits = await run_in_threadpool(_retrieve, request, db, embedder, store)
+    # Embedding the question is CPU work, the lookups are synchronous and the
+    # model call blocks, so all of it runs off the event loop like the upload path.
+    hits, answer = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
     context = [hit.text for hit in hits]
     risks = analyze_contract_risks(context)
     actions = build_follow_up_actions(risks)
 
     return QueryResponse(
-        answer=(
-            f"Found {len(hits)} relevant passage(s); answer generation arrives with MAS-13."
-            if hits
-            else "No relevant passages found; upload a contract or rephrase the question."
-        ),
+        answer=answer.text,
+        grounded=answer.grounded,
+        citations=[
+            CitedChunk(label=citation.label, **RetrievedChunk.from_hit(citation.hit).model_dump())
+            for citation in answer.citations
+        ],
+        answer_model=answer.model,
         retrieved_context=[RetrievedChunk.from_hit(hit) for hit in hits],
         risks=risks,
         recommended_actions=actions,
     )
+
+
+def _retrieve_and_answer(
+    request: QueryRequest,
+    db: psycopg.Connection,
+    embedder: Embedder,
+    store: VectorStore,
+    chat_model: ChatModel,
+) -> tuple[list[ChunkHit], Answer]:
+    hits = _retrieve(request, db, embedder, store)
+    filenames = {}
+    for contract_id in {hit.contract_id for hit in hits}:
+        contract = repository.get_contract(db, contract_id)
+        if contract is not None:
+            filenames[contract_id] = contract.filename
+    return hits, answer_question(request.question, hits, chat_model, filenames=filenames)
 
 
 def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore) -> list[ChunkHit]:

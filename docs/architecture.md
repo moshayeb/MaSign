@@ -65,4 +65,23 @@ format) with the configured embedder. Any difference — or a missing collection
 collection and re-embeds every chunk from Postgres, so switching models is a
 config change with no re-upload.
 
+## Answer generation
+
+`app/answering/llm.py` defines the `ChatModel` protocol (`complete(system,
+user, max_tokens)`) with two providers, Anthropic (default, `claude-sonnet-5`)
+and OpenAI, chosen by `CHAT_PROVIDER`/`CHAT_MODEL`; switching is configuration
+because nothing about the model is stored and the prompt is ours. With no API
+key the app still starts (`UnconfiguredChatModel`) and `/api/query` answers
+503 naming the variable to set; provider errors become `ChatModelError`, also
+a 503 with the reason.
+
+`app/answering/grounding.py` is the rule the tool rests on (MAS-13/14): the
+passages are numbered `[1]..[n]` with their source file and position, the
+system prompt allows only those passages and demands a `[n]` after every
+factual sentence, and the model must answer `NOT_FOUND` when they do not
+cover the question — which the API returns as the fixed "Not found in
+contract." An empty retrieval never reaches the model. Citations in the reply
+are parsed and resolved to the chunks; an answer that cites nothing is still
+returned but `grounded: false`, so the UI can flag it and MAS-32 can count it.
+
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

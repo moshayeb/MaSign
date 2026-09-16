@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.answering.llm import ChatModelError, get_chat_model
 from app.api.routes import router as api_router
 from app.database.migrations import run_migrations
 from app.database.session import get_connection
@@ -53,6 +54,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         with get_connection() as db:
             ensure_index_current(db, embedder, get_vector_store())
         logger.info("Embeddings ready: %s (%d dims)", embedder.model_name, embedder.dimension)
+        # Only reads the configuration (and warns if no API key is set); the
+        # first real call to the model happens on the first question.
+        get_chat_model()
     yield
 
 
@@ -115,6 +119,17 @@ async def embedding_service_unavailable(_: Request, error: EmbeddingServiceError
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"detail": "Embedding service unavailable. Check that the server behind EMBEDDING_API_URL is running."},
+    )
+
+
+@app.exception_handler(ChatModelError)
+async def chat_model_unavailable(_: Request, error: ChatModelError) -> JSONResponse:
+    # The reason varies (no key, rate limit, provider down) and is what the
+    # user needs to see, so unlike the other 503s the message is passed on.
+    logger.error("Answer generation unavailable: %s", error)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": f"Answer generation unavailable: {error}"},
     )
 
 
