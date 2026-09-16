@@ -29,8 +29,9 @@ with `EMBEDDING_DEVICE=auto|cuda` and a CUDA torch build, the GPU;
 `openai-compatible` calls a `/v1/embeddings` endpoint at `EMBEDDING_API_URL`
 (the `quality` profile's `llama-server` hosting Qwen3-Embedding-4B, see
 `docker-compose.quality.yml`), learns the dimension from the first vector and
-counts tokens through llama-server's `/tokenize` — or, for a server without
-it, estimates 0.5 tokens per character, which is conservative. Either way the
+counts tokens exactly through llama-server's `/tokenize` — or, for a server
+without it, through the Hugging Face tokenizer named by `EMBEDDING_TOKENIZER`;
+with neither it refuses to start rather than estimate (MAS-63). Either way the
 embedder owns the model's input format: the ModernBERT/nomic family expects
 `search_document: ` / `search_query: ` prefixes and Qwen3-Embedding a query-side
 instruction, which it adds itself so no caller has to know. It also exposes

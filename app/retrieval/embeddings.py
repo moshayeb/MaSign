@@ -12,6 +12,7 @@ config.
 import logging
 import math
 import os
+from collections.abc import Callable
 from functools import lru_cache
 from typing import Protocol
 
@@ -204,16 +205,16 @@ class OpenAICompatibleEmbedder:
     """Embeddings from an OpenAI-style `/v1/embeddings` endpoint (MAS-61).
 
     Built for llama-server hosting a GGUF on a GPU, but any server speaking
-    the OpenAI embeddings API works. Token counts come from llama-server's
-    `/tokenize`; a server without it gets a conservative estimate
-    (0.5 tokens per character, above the ~0.45 measured on number-dense
-    clauses) so the chunker still never produces an oversized chunk. The
-    dimension is learned from the first vector the service returns.
+    the OpenAI embeddings API works. Token counts must be exact — an estimate
+    let 661-token text pass as 495 (MAS-63) — so they come from llama-server's
+    `/tokenize`, or from the matching Hugging Face tokenizer named by
+    EMBEDDING_TOKENIZER for a server without that endpoint; with neither, the
+    embedder refuses to start. The dimension is learned from the first vector
+    the service returns.
     """
 
     backend = "openai-compatible"
     _BATCH_SIZE = 8
-    _ESTIMATED_TOKENS_PER_CHAR = 0.5
 
     def __init__(
         self,
@@ -222,6 +223,7 @@ class OpenAICompatibleEmbedder:
         *,
         api_key: str | None = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        tokenizer: str | None = None,
         timeout: float = 600.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
@@ -230,10 +232,12 @@ class OpenAICompatibleEmbedder:
         self.max_tokens = max_tokens
         self.prompt_format = prompt_format_for(model_name)
         self._prefixes = PROMPT_FORMATS[self.prompt_format]
+        self._tokenizer_name = tokenizer
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = httpx.Client(base_url=self.base_url, headers=headers, timeout=timeout, transport=transport)
         self._dimension: int | None = None
-        self._tokenize_available: bool | None = None
+        # Set by warm_up(): counts a text exactly, via the server or locally.
+        self._count: Callable[[str], int] | None = None
 
     @property
     def dimension(self) -> int:
@@ -243,31 +247,63 @@ class OpenAICompatibleEmbedder:
         return self._dimension
 
     def warm_up(self) -> None:
-        """Contact the service once: proves it is up and learns the vector size."""
+        """Contact the service once: proves it is up, learns the vector size, picks the token counter."""
         if self._dimension is None:
             self._dimension = len(self._request_vectors(["MaSign embedding probe"])[0])
+        if self._count is None:
+            self._count = self._choose_token_counter()
             logger.info(
                 "Embedding service %s ready: %s, %d dims, %d-token limit (prompt format: %s)",
                 self.base_url, self.model_name, self._dimension, self.max_tokens, self.prompt_format,
             )
 
+    def _choose_token_counter(self) -> Callable[[str], int]:
+        # Decided once, here: whether /tokenize exists is a property of the
+        # server, while a failure during a request is a passing outage and
+        # must never flip the counting mode (MAS-64).
+        response = self._post_tokenize("probe")
+        if response.status_code == 200:
+            return self._count_via_server
+        if response.status_code not in (404, 405):
+            raise EmbeddingServiceError(
+                f"Embedding service at {self.base_url} answered HTTP {response.status_code} to /tokenize."
+            )
+        if not self._tokenizer_name:
+            raise EmbeddingServiceError(
+                f"Embedding service at {self.base_url} has no /tokenize endpoint, so token counts cannot "
+                f"be exact; set EMBEDDING_TOKENIZER to the model's Hugging Face tokenizer "
+                f"(e.g. Qwen/Qwen3-Embedding-4B)."
+            )
+        from transformers import AutoTokenizer
+
+        logger.info("Embedding service %s has no /tokenize; counting with tokenizer %s", self.base_url, self._tokenizer_name)
+        tokenizer = AutoTokenizer.from_pretrained(self._tokenizer_name)
+        return lambda text: len(tokenizer(text, add_special_tokens=True)["input_ids"])
+
+    def _post_tokenize(self, text: str) -> httpx.Response:
+        try:
+            return self._client.post("/tokenize", json={"content": text, "add_special": True})
+        except httpx.HTTPError as error:
+            raise EmbeddingServiceError(f"Embedding service at {self.base_url} is unreachable: {error}") from error
+
+    def _count_via_server(self, text: str) -> int:
+        response = self._post_tokenize(text)
+        if response.status_code != 200:
+            raise EmbeddingServiceError(
+                f"Embedding service at {self.base_url} answered HTTP {response.status_code} to /tokenize."
+            )
+        try:
+            return len(response.json()["tokens"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise EmbeddingServiceError(
+                f"Embedding service at {self.base_url} returned an unusable /tokenize response: {error!r}"
+            ) from error
+
     def count_tokens(self, text: str) -> int:
-        text = self._prefixes.get("document", "") + text
-        if self._tokenize_available is not False:
-            try:
-                response = self._client.post("/tokenize", json={"content": text, "add_special": True})
-            except httpx.HTTPError as error:
-                raise EmbeddingServiceError(f"Embedding service at {self.base_url} is unreachable: {error}") from error
-            if response.status_code == 200:
-                self._tokenize_available = True
-                return len(response.json()["tokens"])
-            if self._tokenize_available is None:
-                logger.warning(
-                    "Embedding service %s has no /tokenize endpoint (HTTP %d); estimating %.1f tokens per character",
-                    self.base_url, response.status_code, self._ESTIMATED_TOKENS_PER_CHAR,
-                )
-            self._tokenize_available = False
-        return math.ceil(len(text) * self._ESTIMATED_TOKENS_PER_CHAR)
+        if self._count is None:
+            self.warm_up()
+        assert self._count is not None
+        return self._count(self._prefixes.get("document", "") + text)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not texts:
@@ -293,14 +329,45 @@ class OpenAICompatibleEmbedder:
                 f"Embedding service at {self.base_url} answered HTTP {error.response.status_code}: "
                 f"{error.response.text[:200]}"
             ) from error
-        except (httpx.HTTPError, KeyError, ValueError) as error:
+        except httpx.HTTPError as error:
             raise EmbeddingServiceError(f"Embedding service at {self.base_url} is unreachable: {error}") from error
-        if len(data) != len(inputs):
+        except (KeyError, TypeError, ValueError) as error:
             raise EmbeddingServiceError(
-                f"Embedding service at {self.base_url} returned {len(data)} vectors for {len(inputs)} inputs."
+                f"Embedding service at {self.base_url} returned an unusable response: {error!r}"
+            ) from error
+        try:
+            vectors = _vectors_in_order(data, len(inputs))
+        except ValueError as error:
+            raise EmbeddingServiceError(
+                f"Embedding service at {self.base_url} returned an unusable response: {error}"
+            ) from error
+        if self._dimension is not None and any(len(vector) != self._dimension for vector in vectors):
+            raise EmbeddingServiceError(
+                f"Embedding service at {self.base_url} returned vectors of a different size than the "
+                f"{self._dimension} dims the index was built with."
             )
         # Unit-length, like the sentence-transformers backend, so scores mean the same.
-        return [_normalised(item["embedding"]) for item in sorted(data, key=lambda item: item["index"])]
+        return [_normalised(vector) for vector in vectors]
+
+
+def _vectors_in_order(data: object, expected: int) -> list[list[float]]:
+    """The vectors of an OpenAI-style `data` list, by `index` — or ValueError on any malformed item (MAS-65)."""
+    if not isinstance(data, list) or len(data) != expected:
+        raise ValueError(f"expected {expected} vectors, got {len(data) if isinstance(data, list) else data!r}")
+    by_index: dict[int, list[float]] = {}
+    for item in data:
+        if not isinstance(item, dict) or not isinstance(item.get("index"), int):
+            raise ValueError(f"item without an integer index: {str(item)[:80]}")
+        vector = item.get("embedding")
+        if not isinstance(vector, list) or not vector or not all(isinstance(v, (int, float)) for v in vector):
+            raise ValueError(f"item {item['index']} has no numeric embedding list")
+        by_index[item["index"]] = [float(v) for v in vector]
+    if sorted(by_index) != list(range(expected)):
+        raise ValueError(f"indices {sorted(by_index)} do not cover 0..{expected - 1}")
+    vectors = [by_index[i] for i in range(expected)]
+    if len({len(v) for v in vectors}) != 1:
+        raise ValueError("vectors of differing lengths")
+    return vectors
 
 
 def _normalised(vector: list[float]) -> list[float]:
@@ -328,5 +395,6 @@ def get_embedder() -> Embedder:
             base_url=base_url,
             api_key=os.getenv("EMBEDDING_API_KEY") or None,
             max_tokens=max_tokens,
+            tokenizer=os.getenv("EMBEDDING_TOKENIZER") or None,
         )
     raise ValueError(f"EMBEDDING_BACKEND={backend!r} is not one of {BACKENDS}.")
