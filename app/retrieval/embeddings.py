@@ -263,6 +263,9 @@ class OpenAICompatibleEmbedder:
         # must never flip the counting mode (MAS-64).
         response = self._post_tokenize("probe")
         if response.status_code == 200:
+            # Count the probe for real, so a server whose /tokenize answers
+            # 200 with an unusable body is refused here, not trusted later (MAS-67).
+            self._tokens_in(response)
             return self._count_via_server
         if response.status_code not in (404, 405):
             raise EmbeddingServiceError(
@@ -292,12 +295,24 @@ class OpenAICompatibleEmbedder:
             raise EmbeddingServiceError(
                 f"Embedding service at {self.base_url} answered HTTP {response.status_code} to /tokenize."
             )
+        return self._tokens_in(response)
+
+    def _tokens_in(self, response: httpx.Response) -> int:
+        # llama-server answers {"tokens": [int, ...]}; anything else (a string,
+        # which len() would happily count, a missing key, non-JSON) is unusable
+        # rather than a number to trust with the size limit (MAS-67).
         try:
-            return len(response.json()["tokens"])
+            tokens = response.json()["tokens"]
         except (KeyError, TypeError, ValueError) as error:
             raise EmbeddingServiceError(
                 f"Embedding service at {self.base_url} returned an unusable /tokenize response: {error!r}"
             ) from error
+        if not isinstance(tokens, list) or not all(isinstance(token, int) for token in tokens):
+            raise EmbeddingServiceError(
+                f"Embedding service at {self.base_url} returned an unusable /tokenize response: "
+                f"'tokens' is not a list of integers ({str(tokens)[:60]!r})."
+            )
+        return len(tokens)
 
     def count_tokens(self, text: str) -> int:
         if self._count is None:
