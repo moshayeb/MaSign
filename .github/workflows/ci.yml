@@ -58,4 +58,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t masign-api:ci .
+      # Docker Hub's token service occasionally resets the connection while
+      # the base images are resolved (CI run #52); that is not a build error,
+      # so try up to three times before failing the job.
+      - name: docker build (3 attempts)
+        run: |
+          for attempt in 1 2 3; do
+            if docker build -t masign-api:ci .; then exit 0; fi
+            echo "::warning::docker build attempt $attempt failed; retrying in 20s"
+            sleep 20
+          done
+          echo "::error::docker build failed three times"
+          exit 1
