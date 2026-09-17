@@ -3,9 +3,9 @@ import { Toaster, toast } from 'sonner'
 import { listContracts, type Contract } from './api'
 import { AnswerView } from './components/AnswerView'
 import { ContractList } from './components/ContractList'
-import { Logo } from './components/Logo'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
 import { UploadForm } from './components/UploadForm'
+import { Wordmark } from './components/Wordmark'
 
 const EXAMPLES = ['What is the termination fee?', 'Is there a cap on liability?', 'When are invoices due, and what happens if we pay late?']
 
@@ -95,10 +95,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/" aria-label="MaSign home">
-            <Logo size={40} />
-            <span className="wordmark">
-              MA<span className="accent">SIGN</span>
-            </span>
+            <Wordmark height={36} />
           </a>
           <nav className="topnav">
             <span className="tagline">Answers from the contract itself — with the clause to prove it.</span>

@@ -2,7 +2,7 @@
    Round 2 (MAS-79): landing-style main column, quiet glass panels, no
    decorative tiles around the logo. */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Michroma&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
   color-scheme: dark;
@@ -145,16 +145,10 @@ a {
   filter: drop-shadow(0 0 14px rgba(0, 159, 227, 0.35));
 }
 
-.wordmark {
-  font-family: 'Michroma', 'Inter', sans-serif;
-  font-size: 1.3rem;
-  letter-spacing: 0.08em;
-  color: var(--ink);
-  line-height: 1;
-}
-
-.wordmark .accent {
-  color: var(--accent);
+.wordmark-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .topnav {

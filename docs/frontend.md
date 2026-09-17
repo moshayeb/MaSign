@@ -61,10 +61,12 @@ Build output (`frontend/dist`) is served by FastAPI from `/` when present
 Deep navy theme (Inter, `#070c16` ground with a cyan glow and a faint grid
 that fades out, translucent "glass" panels) with the logo's cyan `#009fe3` as
 the single accent — inspired by a Gemini-generated landing page the owner
-liked. The logo icon is inlined (`components/Logo.tsx`) so its ink paths
-follow the theme; the wordmark SVGs depend on the Azonix font and are not
-used in the browser — the header types "MASIGN" in Michroma next to the icon
-(to be replaced by the outlined wordmark once the owner exports it).
+liked. The header shows the full logo inlined (`components/Wordmark.tsx`,
+generated from `logo/MaSign_logo_BB.svg`) so the ink paths follow the theme
+and no font is needed: every letter is an outline — the owner exported the
+wordmark from Illustrator in Anurati, and the one letter Illustrator left as
+live text (the S) was outlined with fontTools. `frontend/public/brand/` holds
+the font-free colour and white versions for documents.
 Two-column layout: a sticky sidebar (upload drop zone, compact contract rows
 with a file-type tag) and the main column, stacking under 960 px. Before the
 first answer the main column is a landing: headline, the question composer
