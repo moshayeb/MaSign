@@ -20,8 +20,10 @@ from app.risk_analysis.rubric import CATEGORY_BY_ID, SEVERITIES, rubric_text
 
 logger = logging.getLogger(__name__)
 
-MAX_RISK_TOKENS = 1024
-MAX_QUOTE_CHARS = 400
+# 4096: a passage set can carry a dozen findings with 300-character quotes;
+# 1024 cut real replies off (MAS-80).
+MAX_RISK_TOKENS = 4096
+MAX_QUOTE_CHARS = 300
 
 SYSTEM_PROMPT = f"""You are MaSign's contract risk reviewer. You read numbered contract passages and flag clauses that carry risk according to the rubric below. You only report what the passages state; you never infer terms that are not written.
 
@@ -76,17 +78,23 @@ def analyze_risks(
         max_tokens=MAX_RISK_TOKENS,
     )
     if completion.truncated:
-        logger.warning("Risk analysis reply from %s was cut off; treating as unavailable", model.model_name)
-        return RiskReport([], checked=False)
-
-    items = _parse_findings(completion.text)
-    if items is None:
-        logger.warning("Risk analysis reply from %s was not a JSON array: %.200r", model.model_name, completion.text)
-        return RiskReport([], checked=False)
+        # The findings that arrived whole are still verifiable; keep them and
+        # say the analysis is incomplete rather than discard everything (MAS-80).
+        items = _salvage_findings(completion.text)
+        logger.warning(
+            "Risk analysis reply from %s was cut off; %d complete finding(s) salvaged", model.model_name, len(items)
+        )
+        if not items:
+            return RiskReport([], checked=False)
+    else:
+        items = _parse_findings(completion.text)
+        if items is None:
+            logger.warning("Risk analysis reply from %s was not a JSON array: %.200r", model.model_name, completion.text)
+            return RiskReport([], checked=False)
 
     findings: list[RiskFinding] = []
     seen: set[tuple[str, int]] = set()
-    dropped = 0
+    dropped = 1 if completion.truncated else 0  # the cut-off finding counts as lost
     for item in items:
         finding = _validate(item, hits)
         if finding is None:
@@ -115,6 +123,27 @@ def _parse_findings(text: str) -> list | None:
     except ValueError:
         return None
     return data if isinstance(data, list) else None
+
+
+def _salvage_findings(text: str) -> list:
+    """The complete top-level JSON objects at the start of a cut-off array reply."""
+    text = _FENCE.sub("", text.strip())
+    start = text.find("[")
+    if start < 0:
+        return []
+    decoder = json.JSONDecoder()
+    items: list = []
+    pos = start + 1
+    while True:
+        while pos < len(text) and (text[pos].isspace() or text[pos] == ","):
+            pos += 1
+        if pos >= len(text) or text[pos] != "{":
+            return items
+        try:
+            item, pos = decoder.raw_decode(text, pos)
+        except ValueError:
+            return items
+        items.append(item)
 
 
 def _validate(item: object, hits: list[ChunkHit]) -> RiskFinding | None:

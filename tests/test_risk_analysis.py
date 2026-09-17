@@ -182,13 +182,47 @@ def test_fenced_json_and_empty_arrays_are_fine() -> None:
     assert analyze_risks([], _model("never called")).checked is True
 
 
-def test_a_cut_off_reply_is_unavailable_rather_than_partial() -> None:
-    model = _model('[{"category": "liability", "severity": "High", "reason": "r", "passage": 1, "quote": "unlim')
+def test_a_cut_off_reply_keeps_the_complete_findings_and_is_marked_incomplete(caplog: pytest.LogCaptureFixture) -> None:
+    # MAS-80: two findings arrived whole, the third was cut mid-quote.
+    model = _model(
+        '[{"category": "liability", "severity": "High", "reason": "r", "passage": 2, "quote": "unlimited"},'
+        ' {"category": "payment_terms", "severity": "Medium", "reason": "r", "passage": 1, "quote": "1.5% per month"},'
+        ' {"category": "termination", "severity": "Low", "reason": "r", "passage": 1, "quote": "the Cust'
+    )
+    model.truncated = True
+
+    with caplog.at_level("WARNING"):
+        report = analyze_risks(_hits(FEES, UNLIMITED), model)
+
+    assert report.checked is True
+    assert report.complete is False
+    assert [(f.category, f.label) for f in report.findings] == [("liability", 2), ("payment_terms", 1)]
+    assert "2 complete finding(s) salvaged" in caplog.text
+
+
+@pytest.mark.parametrize("reply", ['[{"category": "liability", "severity": "High", "reason": "r", "passage": 1, "quote": "unlim', "[", "", "```json[{"])
+def test_a_cut_off_reply_with_no_complete_finding_is_unavailable(reply: str) -> None:
+    model = _model(reply)
     model.truncated = True
 
     report = analyze_risks(_hits(UNLIMITED), model)
 
-    assert report.checked is False
+    assert (report.checked, report.findings) == (False, [])
+
+
+def test_salvaged_findings_are_validated_like_any_other() -> None:
+    # A complete but invented finding before the cut is still dropped; nothing left -> unavailable.
+    model = _model('[{"category": "liability", "severity": "High", "reason": "r", "passage": 1, "quote": "not in the text"}, {"cat')
+    model.truncated = True
+
+    assert analyze_risks(_hits(UNLIMITED), model).checked is False
+
+
+def test_the_risk_budget_fits_a_dozen_findings() -> None:
+    from app.risk_analysis.analyzer import MAX_QUOTE_CHARS, MAX_RISK_TOKENS
+
+    # ~120 tokens per finding with a full-length quote; 1024 held about six (MAS-80).
+    assert MAX_RISK_TOKENS >= 4096 and MAX_QUOTE_CHARS <= 300
 
 
 def test_follow_up_actions_follow_the_highest_severity() -> None:
