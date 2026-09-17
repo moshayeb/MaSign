@@ -4,6 +4,7 @@ import { listContracts, type Contract } from './api'
 import { AnswerView } from './components/AnswerView'
 import { ContractList } from './components/ContractList'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
+import { RiskReviewPanel } from './components/RiskReviewPanel'
 import { UploadForm } from './components/UploadForm'
 import { Wordmark } from './components/Wordmark'
 
@@ -131,9 +132,22 @@ export default function App() {
 
           <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={setAsked} />
 
-          {asked ? (
-            <AnswerView asked={asked} contracts={contracts ?? []} />
-          ) : (
+          {!asked && selected && (
+            <div className="examples">
+              <span className="muted">Try:</span>
+              {EXAMPLES.map((example) => (
+                <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
+                  {example}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
+
+          {selected && <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} />}
+
+          {!asked && !selected && (
             <>
               <div className="examples">
                 <span className="muted">Try:</span>

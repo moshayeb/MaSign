@@ -118,9 +118,11 @@ Interactive docs at `http://localhost:8000/docs`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it. Returns the `contract_id`. |
+| `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. |
 | `GET`  | `/api/contracts` | List stored contracts, newest first. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
+| `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage) and the seven `categories` with their worst severity. Runs automatically after upload. |
+| `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review (202; 409 while one is running). |
 | `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness check. |
 

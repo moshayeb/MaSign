@@ -12,6 +12,9 @@ export interface Contract {
   chunk_count: number
   status: string
   created_at: string
+  // The whole-contract risk review (MAS-81); null for contracts uploaded before it existed.
+  risk_status?: 'pending' | 'running' | 'done' | 'failed' | null
+  risk_worst_severity?: 'Low' | 'Medium' | 'High' | null
 }
 
 export interface UploadResult extends Contract {
@@ -106,4 +109,46 @@ export function askQuestion(question: string, contractId: string | null, limit =
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ question, contract_id: contractId, limit }),
   })
+}
+
+// --- whole-contract risk review (MAS-81) -----------------------------------
+
+export type ReviewStatus = 'pending' | 'running' | 'done' | 'failed'
+
+export interface ReviewFinding {
+  category: string
+  category_name: string
+  severity: Severity
+  reason: string
+  quote: string
+  chunk_id: string
+  chunk_index: number
+}
+
+export interface ReviewCategory {
+  id: string
+  name: string
+  worst_severity: Severity | null // null = reviewed, nothing found
+  findings: number
+}
+
+export interface RiskReview {
+  contract_id: string
+  status: ReviewStatus
+  model: string | null
+  chunks_total: number
+  chunks_checked: number
+  complete: boolean
+  error: string | null
+  updated_at: string
+  findings: ReviewFinding[]
+  categories: ReviewCategory[]
+}
+
+export function getContractRisks(contractId: string): Promise<RiskReview> {
+  return request<RiskReview>(`/api/contracts/${contractId}/risks`)
+}
+
+export function reviewContract(contractId: string): Promise<RiskReview> {
+  return request<RiskReview>(`/api/contracts/${contractId}/review`, { method: 'POST' })
 }

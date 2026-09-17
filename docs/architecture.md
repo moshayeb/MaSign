@@ -93,8 +93,20 @@ assignment) with High/Medium/Low criteria from the Customer's perspective;
 per query over the same numbered passages the answer used and asks for JSON
 findings; each is kept only if its category and severity are in the rubric,
 its passage exists and its quote appears verbatim in that passage. The call
-runs in parallel with the answer. An unreadable or cut-off reply yields
-`risks_checked: false` rather than a reassuring empty list;
-`app/actions/workflow.py` turns the findings into suggested next steps.
+runs in parallel with the answer. An unreadable reply yields
+`risks_checked: false` rather than a reassuring empty list; a cut-off reply
+keeps the findings that arrived whole and reports `risks_complete: false`
+(MAS-80). `app/actions/workflow.py` turns the findings into suggested next
+steps.
+
+`review.py` is the whole-contract review (MAS-81): after every upload a
+background task sends all of the contract's chunks through the same
+`analyze_risks` in batches of 8 and stores the verified findings in
+`risk_findings` with a status row in `risk_reviews` (pending → running → done
+| failed, model, passages checked, `complete`). It opens its own connection
+because the request's one is closed by the time it runs. `GET
+/api/contracts/{id}/risks` returns the findings grouped by the seven
+categories; `POST .../review` re-runs it (409 while one is running); the
+contract list carries `risk_status` and `risk_worst_severity`.
 
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

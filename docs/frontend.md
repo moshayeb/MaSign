@@ -80,6 +80,20 @@ Verified with headless-Edge screenshots at 1280 px and inside a 400 px
 iframe (headless Edge clamps its own viewport to 492 px, so narrow widths
 must be checked through an iframe).
 
+## Risk review (MAS-81)
+
+Selecting a contract mounts `RiskReviewPanel` (keyed by contract id) which
+reads `GET /api/contracts/{id}/risks` and, while the status is pending or
+running, re-reads it every 2 s (`pollMs`, shortened in tests). It shows a
+status pill (Reviewing… n/m passages · Reviewed · Partly reviewed · Review
+failed · Not reviewed), the seven categories with their worst severity or
+"Nothing found", the findings with reason and quoted clause, and a
+Review risks / Review again button that posts to `.../review` inside
+`toast.promise` (rule 1). A failed review shows the API's `error` verbatim.
+When a review settles after being seen running, the panel calls `onSettled`
+so the contract list refreshes its coloured dot (worst severity, pulsing
+while running, green when reviewed clean).
+
 ## Query results
 
 `POST /api/query` returns (MAS-12/13):

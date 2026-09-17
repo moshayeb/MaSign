@@ -34,7 +34,16 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
               >
                 <span className={`filetype ${contract.file_type.toLowerCase()}`}>{contract.file_type.toUpperCase()}</span>
                 <span className="contract-text">
-                  <span className="contract-name">{contract.filename}</span>
+                  <span className="contract-name">
+                    {contract.risk_status === 'pending' || contract.risk_status === 'running' ? (
+                      <span className="risk-dot running" title="Risk review running" />
+                    ) : contract.risk_worst_severity ? (
+                      <span className={`risk-dot severity-${contract.risk_worst_severity.toLowerCase()}`} title={`Highest risk: ${contract.risk_worst_severity}`} />
+                    ) : contract.risk_status === 'done' ? (
+                      <span className="risk-dot clean" title="Reviewed, nothing flagged" />
+                    ) : null}
+                    {contract.filename}
+                  </span>
                   <span className="contract-meta">
                     {contract.chunk_count} passage{contract.chunk_count === 1 ? '' : 's'} · {formatSize(contract.size_bytes)} ·{' '}
                     {formatDate(contract.created_at)}

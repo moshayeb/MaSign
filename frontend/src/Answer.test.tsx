@@ -95,9 +95,23 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+// Routes by URL: the contract list, the selected contract's risk review
+// (MAS-81; "never reviewed" here) and the query replies in the order given.
+function mockApi(queryReplies: Response[], risks: Response = json(404, { detail: 'This contract has not been reviewed for risks yet.' })) {
+  const replies = [...queryReplies]
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input)
+    if (url.endsWith('/risks')) return risks.clone()
+    if (url === '/api/contracts') return json(200, [northwind])
+    if (url === '/api/query') return replies.shift() ?? json(500, { detail: 'no reply scripted' })
+    return json(404, { detail: `unexpected ${url}` })
+  })
+}
+
+const queryCall = (fetchMock: ReturnType<typeof mockApi>) => fetchMock.mock.calls.find(([url]) => String(url) === '/api/query')!
+
 async function renderWithContractAndAsk(question: string, ...responses: Response[]) {
-  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, [northwind]))
-  for (const response of responses) fetchMock.mockResolvedValueOnce(response)
+  const fetchMock = mockApi(responses)
   render(<App />)
   await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
   await userEvent.type(screen.getByLabelText('Ask about the contract'), question)
@@ -110,7 +124,7 @@ describe('asking a question', () => {
     const fetchMock = await renderWithContractAndAsk('What is the monthly fee?', json(200, answered))
 
     expect(await screen.findByText(/The monthly fee is EUR 18,500 per month/)).toBeInTheDocument()
-    const [, init] = fetchMock.mock.calls[1]
+    const [, init] = queryCall(fetchMock)
     expect(JSON.parse(String(init?.body))).toEqual({ question: 'What is the monthly fee?', contract_id: 'nw', limit: 5 })
 
     // The [n] markers are buttons that highlight the cited passage.
@@ -193,7 +207,7 @@ describe('asking a question', () => {
   })
 
   it('asks across all contracts when that scope is chosen', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, [northwind])).mockResolvedValueOnce(json(200, answered))
+    const fetchMock = mockApi([json(200, answered)])
     render(<App />)
     await screen.findByRole('button', { name: /northwind\.txt/ })
     await userEvent.click(screen.getByLabelText('All contracts'))
@@ -201,7 +215,7 @@ describe('asking a question', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
     await screen.findByText(/The monthly fee is EUR 18,500/)
-    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).contract_id).toBeNull()
+    expect(JSON.parse(String(queryCall(fetchMock)[1]?.body)).contract_id).toBeNull()
     expect(screen.getByText(/all contracts · claude-sonnet-5/)).toBeInTheDocument()
   })
 
