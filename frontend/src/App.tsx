@@ -95,7 +95,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/" aria-label="MaSign home">
-            <Wordmark height={36} />
+            <Wordmark height={22} />
           </a>
           <nav className="topnav">
             <span className="tagline">Answers from the contract itself — with the clause to prove it.</span>
