@@ -50,7 +50,7 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Pr
         void submit()
       }}
     >
-      <label htmlFor="question-text" className="card-title">
+      <label htmlFor="question-text" className="visually-hidden">
         Ask about the contract
       </label>
       <textarea
@@ -64,12 +64,15 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Pr
             void submit()
           }
         }}
-        placeholder="e.g. What is the termination fee?"
+        placeholder="Ask about the contract — e.g. What is the termination fee?"
         disabled={busy}
       />
       <div className="question-row">
         <fieldset className="scope">
           <legend className="visually-hidden">Search in</legend>
+          <span className="scope-label" aria-hidden="true">
+            Search in
+          </span>
           <label className={scope === 'selected' && selected ? 'pill active' : 'pill'}>
             <input type="radio" name="scope" checked={scope === 'selected'} onChange={() => setScope('selected')} disabled={!selected} />
             {selected ? selected.filename : 'Selected contract'}
@@ -79,8 +82,13 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Pr
             All contracts
           </label>
         </fieldset>
-        <button type="submit" className="primary" disabled={busy || !draft.trim()}>
+        <button type="submit" className="primary ask" disabled={busy || !draft.trim()}>
           {busy ? 'Asking…' : 'Ask'}
+          {!busy && (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          )}
         </button>
       </div>
     </form>

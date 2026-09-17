@@ -44,7 +44,18 @@ export function AnswerView({ asked, contracts }: Props) {
   return (
     <section className="card answer" aria-live="polite">
       <div className="answer-header">
-        <h2>Answer</h2>
+        <h2>
+          Answer
+          {notFound ? (
+            <span className="status none">Not in the text</span>
+          ) : response.grounded ? (
+            <span className="status ok">
+              Grounded · {response.citations.length} passage{response.citations.length === 1 ? '' : 's'}
+            </span>
+          ) : (
+            <span className="status warn">Unverified</span>
+          )}
+        </h2>
         <span className="muted answer-scope">
           {contract ? contract.filename : 'all contracts'}
           {response.answer_model ? ` · ${response.answer_model}` : ''}
@@ -77,7 +88,7 @@ export function AnswerView({ asked, contracts }: Props) {
                 className={highlighted === citation.label ? 'citation highlighted' : 'citation'}
               >
                 <div className="citation-head">
-                  <span className="cite-label">[{citation.label}]</span>
+                  <span className="cite-label">{citation.label}</span>
                   <span className="muted">
                     {filename(citation.contract_id)}, passage {citation.chunk_index + 1} · relevance {Math.round(citation.score * 100)}%
                   </span>
@@ -148,7 +159,7 @@ export function AnswerView({ asked, contracts }: Props) {
         </ul>
         </>
       )}
-      <p className="muted small">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
+      <p className="muted disclaimer">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
       {response.recommended_actions.length > 0 && (
         <>
           <h3>Suggested next steps</h3>
