@@ -3,6 +3,7 @@ import { Toaster, toast } from 'sonner'
 import { listContracts, type Contract } from './api'
 import { AnswerView } from './components/AnswerView'
 import { ContractList } from './components/ContractList'
+import { Logo } from './components/Logo'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
 import { UploadForm } from './components/UploadForm'
 
@@ -57,15 +58,20 @@ export default function App() {
 
   return (
     <>
-      <Toaster position="top-right" richColors closeButton />
+      <Toaster position="top-right" theme="dark" richColors closeButton />
       <header className="topbar">
         <a className="brand" href="/" aria-label="MaSign home">
-          <img src="/brand/MaSign_logo_icon.svg" alt="" width="40" height="27" />
-          <span className="wordmark">
-            MA<span className="accent">SIGN</span>
+          <span className="brand-mark">
+            <Logo size={30} />
+          </span>
+          <span className="brand-text">
+            <span className="wordmark">
+              MA<span className="accent">SIGN</span>
+            </span>
+            <span className="brand-sub">Contract intelligence</span>
           </span>
         </a>
-        <p className="tagline">Contract questions, answered from the contract — with the clause to prove it.</p>
+        <p className="tagline">Answers from the contract itself — with the clause to prove it.</p>
       </header>
 
       <div className="layout">
@@ -85,7 +91,7 @@ export default function App() {
             <AnswerView asked={asked} contracts={contracts ?? []} />
           ) : (
             <section className="card empty-state">
-              <img src="/brand/MaSign_logo_icon.svg" alt="" width="64" height="44" />
+              <Logo size={72} className="empty-logo" />
               <h2>{selected ? `Ask about ${selected.filename}` : 'Upload a contract, or pick one on the left'}</h2>
               <p className="muted">
                 Answers quote the passages they come from, say “Not found in contract.” when the text does not cover the question, and flag

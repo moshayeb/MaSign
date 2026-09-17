@@ -58,10 +58,12 @@ Build output (`frontend/dist`) is served by FastAPI from `/` when present
 
 ## Look and feel (MAS-73)
 
-Palette from the logo (`frontend/public/brand/MaSign_logo_icon.svg`, copied
-from `logo/`): ink `#1d1d1b`, accent `#009fe3`; the wordmark SVGs depend on
-the Azonix font and are not used in the browser — the header types "MASIGN"
-in Michroma next to the icon. Two-column layout (contracts left, ask/answer
+Dark slate theme (Inter, `#0b1220` background, `#111a2c` cards) with the
+logo's cyan `#009fe3` as the accent — inspired by a Gemini-generated landing
+page the owner liked. The logo icon is inlined (`components/Logo.tsx`) so its
+ink paths follow the theme; the wordmark SVGs depend on the Azonix font and
+are not used in the browser — the header types "MASIGN" in Michroma next to
+the icon. Two-column layout (contracts left, ask/answer
 right) stacking under 900 px. Cards are `.card` (never bare `section`, so the
 toast container stays invisible). Upload is a drop zone with a hidden native
 input; contract rows carry a file-type badge and a clear selected state; the
