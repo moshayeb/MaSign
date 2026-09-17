@@ -84,9 +84,11 @@ curl http://localhost:8000/health
 ```
 
 Then open **http://localhost:8000** — the web UI (built into the image from
-`frontend/`) lets you upload a contract and pick one from the list; every
-action reports its outcome in a toast, errors with the API's own message.
-The interactive API docs stay at `/docs`.
+`frontend/`) lets you upload a contract, pick it, and ask questions: the
+answer cites the passages it came from (click a `[n]` to see the quote) and
+is marked *Unverified* when it is not fully backed by them. Every action
+reports its outcome in a toast, errors with the API's own message. The
+interactive API docs stay at `/docs`.
 
 ### Embedding profiles
 

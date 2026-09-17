@@ -61,3 +61,33 @@ export function uploadContract(file: File): Promise<UploadResult> {
 export function listContracts(): Promise<Contract[]> {
   return request<Contract[]>('/api/contracts')
 }
+
+export interface RetrievedChunk {
+  chunk_id: string
+  contract_id: string
+  chunk_index: number
+  text: string
+  score: number
+}
+
+export interface CitedChunk extends RetrievedChunk {
+  label: number // the [n] used in the answer text
+}
+
+export interface QueryResponse {
+  answer: string
+  grounded: boolean
+  citations: CitedChunk[]
+  answer_model: string | null
+  retrieved_context: RetrievedChunk[]
+  risks: string[]
+  recommended_actions: string[]
+}
+
+export function askQuestion(question: string, contractId: string | null, limit = 5): Promise<QueryResponse> {
+  return request<QueryResponse>('/api/query', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ question, contract_id: contractId, limit }),
+  })
+}
