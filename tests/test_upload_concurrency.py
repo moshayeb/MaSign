@@ -41,9 +41,16 @@ def slow_database(monkeypatch: pytest.MonkeyPatch):
             created_at=datetime.now(timezone.utc),
         )
 
+    class FakeConnection:
+        def commit(self) -> None:
+            pass
+
     monkeypatch.setattr(routes.repository, "create_contract", slow_create)
     monkeypatch.setattr(routes, "index_contract", lambda *args, **kwargs: 0)
-    app.dependency_overrides[get_db] = lambda: None  # no real connection needed
+    # The whole-contract review (MAS-81) is not what is measured here.
+    monkeypatch.setattr(routes.repository, "start_risk_review", lambda *args, **kwargs: None)
+    monkeypatch.setattr(routes, "run_review_in_background", lambda *args, **kwargs: None)
+    app.dependency_overrides[get_db] = lambda: FakeConnection()  # no real connection needed
     yield
     app.dependency_overrides.pop(get_db, None)
 

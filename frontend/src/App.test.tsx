@@ -153,11 +153,19 @@ describe('refresh', () => {
 
 describe('upload', () => {
   it('reports success with the filename and chunk count, then refreshes and selects it', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(json(200, []))
-      .mockResolvedValueOnce(json(200, contract({ contract_id: 'new', filename: 'northwind.txt', chunk_count: 12 })))
-      .mockResolvedValueOnce(json(200, [contract({ contract_id: 'new', filename: 'northwind.txt', chunk_count: 12 })]))
+    const uploaded = contract({ contract_id: 'new', filename: 'northwind.txt', chunk_count: 12 })
+    let listed: unknown[] = []
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url === '/api/contracts/upload') {
+        listed = [uploaded]
+        return json(200, uploaded)
+      }
+      if (url === '/api/contracts') return json(200, listed)
+      // The selected contract's whole-contract review (MAS-81) is polled separately.
+      if (url.endsWith('/risks')) return json(200, { status: 'pending', findings: [], categories: [], chunks_total: 12, chunks_checked: 0, complete: false, error: null, model: null })
+      return json(404, { detail: `unexpected ${url}` })
+    })
 
     render(<App />)
     await screen.findByText(/No contracts yet/)
@@ -167,7 +175,8 @@ describe('upload', () => {
 
     await waitFor(() => expect(shown).toEqual([['success', 'northwind.txt uploaded — 12 chunks']]))
     expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
+    const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => !url.endsWith('/risks'))
+    expect(calls).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
   })
 
   it('shows the API detail verbatim when the upload is rejected', async () => {

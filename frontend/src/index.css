@@ -734,6 +734,31 @@ fieldset.scope {
   border: 1px solid var(--line);
 }
 
+.status.running {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+
+.status.running::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .answer-question {
   margin: 6px 0 16px;
   font-size: 0.92rem;
@@ -847,6 +872,99 @@ details.others summary {
 .disclaimer {
   margin-top: 10px;
   font-size: 0.8rem;
+}
+
+/* --- whole-contract risk review (MAS-81) -------------------------------- */
+
+.review-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-grid {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.review-cat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border-top-width: 3px;
+}
+
+.review-cat.clean {
+  border-top-color: rgba(52, 211, 153, 0.45);
+}
+
+.review-cat.severity-high {
+  border-top-color: var(--high);
+}
+
+.review-cat.severity-medium {
+  border-top-color: var(--medium);
+}
+
+.review-cat.severity-low {
+  border-top-color: var(--low);
+}
+
+.review-cat-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.review-cat .severity {
+  align-self: flex-start;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 5px;
+  color: #06111f;
+}
+
+.risk-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: 1px;
+  background: var(--muted);
+}
+
+.risk-dot.severity-high {
+  background: var(--high);
+}
+
+.risk-dot.severity-medium {
+  background: var(--medium);
+}
+
+.risk-dot.severity-low {
+  background: var(--low);
+}
+
+.risk-dot.clean {
+  background: rgba(52, 211, 153, 0.5);
+}
+
+.risk-dot.running {
+  background: var(--accent-bright);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 /* --- risk flags --------------------------------------------------------- */

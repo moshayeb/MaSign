@@ -48,8 +48,12 @@ list; when only some findings failed, the verified ones are returned with
 
 ## Known limits
 
-- Per-query scope: only the retrieved passages are graded. A whole-contract
-  scan is a natural follow-up (one call over all chunks).
+- Two scopes (MAS-81): the **whole-contract review** runs after every upload
+  over all passages, in batches of 8 per model call, and is stored per
+  contract (`GET /api/contracts/{id}/risks`, `POST .../review` to re-run);
+  the per-query flags grade only the passages a question retrieved. A
+  passage whose reply was unreadable makes the review *incomplete*, a model
+  failure makes it *failed* — never silently empty.
 - Thresholds (12 months of fees, 1.5 %/month, 90 days' notice, 50 % fee) are
   common SaaS/services norms, not legal advice; they are easy to change here.
 - MAS-32 measures precision on a labelled set; until then treat flags as a

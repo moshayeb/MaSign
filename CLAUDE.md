@@ -91,8 +91,11 @@ Seven categories, Customer perspective, High/Medium/Low thresholds live in
 `app/risk_analysis/rubric.py` and are the single source for the prompt and
 `docs/risk-rubric.md` (regenerate the doc when the rubric changes). A finding
 must quote its passage verbatim or it is dropped; an unreadable model reply is
-`risks_checked: false`, never an empty "no risks". Scope is the retrieved
-passages of one query, not the whole contract.
+`risks_checked: false`, never an empty "no risks". Two scopes since MAS-81
+(owner feedback 2026-09-17: "it doesn't analyse anything"): every upload gets a
+whole-contract review (all passages, batches of 8, stored per contract, shown
+in the Risk review panel), and each question still flags its own retrieved
+passages. The review costs about one model call per 8 passages.
 
 ## Frontend Decision
 
