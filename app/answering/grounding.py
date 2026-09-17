@@ -46,6 +46,8 @@ class Answer:
     grounded: bool
     citations: list[Citation] = field(default_factory=list)
     model: str | None = None
+    # Passage numbers the prompt-injection guardrail withheld from the model (MAS-90).
+    blocked: tuple[int, ...] = ()
 
 
 def answer_question(
@@ -61,12 +63,15 @@ def answer_question(
         return Answer(NOT_FOUND_ANSWER, grounded=False)
 
     completion = model.complete(
-        SYSTEM_PROMPT, build_user_prompt(question, hits, filenames or {}), max_tokens=MAX_ANSWER_TOKENS
+        SYSTEM_PROMPT,
+        build_user_prompt(question, hits, filenames or {}),
+        max_tokens=MAX_ANSWER_TOKENS,
+        metadata=passage_metadata(hits),
     )
     reply = completion.text
 
     if not completion.truncated and _says_not_found(reply):
-        return Answer(NOT_FOUND_ANSWER, grounded=False, model=model.model_name)
+        return Answer(NOT_FOUND_ANSWER, grounded=False, model=model.model_name, blocked=completion.blocked)
 
     labels, invalid = _cited_labels(reply, len(hits))
     # The answer is shown either way; it is only *trusted* (grounded) when it
@@ -84,7 +89,18 @@ def answer_question(
         grounded=grounded,
         citations=[Citation(label, hits[label - 1]) for label in labels],
         model=model.model_name,
+        blocked=completion.blocked,
     )
+
+
+def passage_metadata(hits: list[ChunkHit]) -> dict:
+    """Which passage number is which chunk, for the guardrail's log lines (MAS-90)."""
+    return {
+        "passages": [
+            {"label": number, "contract_id": str(hit.contract_id), "chunk_index": hit.chunk_index}
+            for number, hit in enumerate(hits, start=1)
+        ]
+    }
 
 
 def build_user_prompt(question: str, hits: list[ChunkHit], filenames: dict[UUID, str]) -> str:

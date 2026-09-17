@@ -63,6 +63,7 @@ const answered: QueryResponse = {
   ],
   risks_checked: true,
   risks_complete: true,
+  blocked_passages: [],
   recommended_actions: ['Escalate to legal review before signing: Termination.', 'Raise in negotiation: Payment terms.'],
 }
 
@@ -241,6 +242,16 @@ describe('asking a question', () => {
     await userEvent.click(screen.getByRole('button', { name: /nda\.pdf/ }))
     expect(screen.queryByText(/The monthly fee is EUR 18,500/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Ask about the contract')).toHaveValue('fee?')
+  })
+
+  it('says which passages the prompt-injection guardrail withheld (MAS-90)', async () => {
+    await renderWithContractAndAsk('fee?', json(200, { ...answered, blocked_passages: [3] }))
+    await screen.findByText(/The monthly fee is EUR 18,500/)
+
+    expect(screen.getByText(/One passage was withheld from the model/)).toBeInTheDocument()
+    expect(screen.getByText(/passage 3 below/)).toBeInTheDocument()
+    await userEvent.click(screen.getByText(/Other passages considered/))
+    expect(screen.getByText('Withheld from the model')).toBeInTheDocument()
   })
 
   it('copies a citation with its source and confirms in a toast', async () => {

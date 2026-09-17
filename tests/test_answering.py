@@ -15,12 +15,8 @@ from app.answering.grounding import (
     answer_question,
     build_user_prompt,
 )
-from app.answering.llm import (
-    AnthropicChatModel,
-    ChatModelError,
-    OpenAIChatModel,
-    UnconfiguredChatModel,
-)
+from app.answering.llm import ChatModelError, LiteLLMChatModel, UnconfiguredChatModel
+from app.guardrails.prompt_injection import GuardedChatModel
 from app.api import dependencies
 from app.main import app
 from app.retrieval.vector_store import ChunkHit
@@ -150,97 +146,7 @@ def test_uncited_answer_is_returned_but_marked_ungrounded(caplog: pytest.LogCapt
     assert "Unverified answer" in caplog.text and "cited=[]" in caplog.text
 
 
-# --- providers (SDK clients faked) ------------------------------------------------------
-
-
-class _AnthropicClient:
-    def __init__(self, outcome, stop_reason: str = "end_turn") -> None:
-        self.outcome, self.calls, self.stop_reason = outcome, [], stop_reason
-        self.messages = self
-
-    def create(self, **kwargs):
-        self.calls.append(kwargs)
-        if isinstance(self.outcome, Exception):
-            raise self.outcome
-        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self.outcome)], stop_reason=self.stop_reason)
-
-
-class _OpenAIClient:
-    def __init__(self, outcome, finish_reason: str = "stop") -> None:
-        self.outcome, self.calls, self.finish_reason = outcome, [], finish_reason
-        self.chat = SimpleNamespace(completions=self)
-
-    def create(self, **kwargs):
-        self.calls.append(kwargs)
-        if isinstance(self.outcome, Exception):
-            raise self.outcome
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=self.outcome), finish_reason=self.finish_reason)]
-        )
-
-
-def test_anthropic_adapter_sends_system_and_user_and_returns_the_text() -> None:
-    client = _AnthropicClient("  Fee is X [1].  ")
-    model = AnthropicChatModel("claude-sonnet-5", "key", client=client)
-
-    completion = model.complete("SYS", "USER", max_tokens=42)
-
-    assert (completion.text, completion.truncated) == ("Fee is X [1].", False)
-    assert client.calls == [
-        {
-            "model": "claude-sonnet-5",
-            "max_tokens": 42,
-            "system": "SYS",
-            "messages": [{"role": "user", "content": "USER"}],
-            "thinking": {"type": "disabled"},  # MAS-70: the budget is the answer's alone
-        }
-    ]
-
-
-def test_openai_adapter_sends_system_and_user_and_returns_the_text() -> None:
-    client = _OpenAIClient("Fee is X [1].")
-    model = OpenAIChatModel("gpt-4.1-mini", "key", client=client)
-
-    completion = model.complete("SYS", "USER", max_tokens=42)
-
-    assert (completion.text, completion.truncated) == ("Fee is X [1].", False)
-    assert client.calls[0]["messages"] == [{"role": "system", "content": "SYS"}, {"role": "user", "content": "USER"}]
-    assert client.calls[0]["max_completion_tokens"] == 42
-
-
-def test_adapters_report_cut_off_replies_and_refuse_empty_ones() -> None:
-    # MAS-70
-    cut = AnthropicChatModel("m", "k", client=_AnthropicClient("The fee is EUR 18,500 [1] and", stop_reason="max_tokens"))
-    assert cut.complete("s", "u", max_tokens=5).truncated is True
-
-    cut = OpenAIChatModel("m", "k", client=_OpenAIClient("The fee is", finish_reason="length"))
-    assert cut.complete("s", "u", max_tokens=5).truncated is True
-
-    with pytest.raises(ChatModelError, match="returned an empty answer"):
-        AnthropicChatModel("m", "k", client=_AnthropicClient("   ", stop_reason="max_tokens")).complete("s", "u", max_tokens=1)
-    with pytest.raises(ChatModelError, match="returned an empty answer"):
-        OpenAIChatModel("m", "k", client=_OpenAIClient(None)).complete("s", "u", max_tokens=1)
-
-
-def test_provider_errors_become_readable_chat_model_errors() -> None:
-    import anthropic
-    import httpx
-    import openai
-
-    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    refused = anthropic.APIStatusError(
-        "rate limited", response=httpx.Response(429, request=request), body=None
-    )
-    with pytest.raises(ChatModelError, match=r"Anthropic API refused the request \(HTTP 429\): rate limited"):
-        AnthropicChatModel("m", "key", client=_AnthropicClient(refused)).complete("s", "u", max_tokens=1)
-
-    down = anthropic.APIConnectionError(request=request)
-    with pytest.raises(ChatModelError, match="Anthropic API is unreachable"):
-        AnthropicChatModel("m", "key", client=_AnthropicClient(down)).complete("s", "u", max_tokens=1)
-
-    bad_key = openai.APIStatusError("invalid key", response=httpx.Response(401, request=request), body=None)
-    with pytest.raises(ChatModelError, match=r"OpenAI API refused the request \(HTTP 401\)"):
-        OpenAIChatModel("m", "key", client=_OpenAIClient(bad_key)).complete("s", "u", max_tokens=1)
+# --- provider selection (the adapters themselves are tested in test_guardrails.py, MAS-90) ---
 
 
 def test_chat_model_is_chosen_by_environment(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
@@ -258,16 +164,16 @@ def test_chat_model_is_chosen_by_environment(monkeypatch: pytest.MonkeyPatch, ca
     llm.get_chat_model.cache_clear()
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     model = llm.get_chat_model()
-    assert isinstance(model, AnthropicChatModel)
-    assert model.model_name == "claude-sonnet-5"
+    assert isinstance(model, GuardedChatModel) and isinstance(model.inner, LiteLLMChatModel)  # MAS-90
+    assert (model.provider, model.model_name) == ("anthropic", "claude-sonnet-5")
 
     llm.get_chat_model.cache_clear()
     monkeypatch.setenv("CHAT_PROVIDER", "openai")
     monkeypatch.setenv("CHAT_MODEL", "gpt-4.1-mini")
     monkeypatch.setenv("OPENAI_API_KEY", "k")
     model = llm.get_chat_model()
-    assert isinstance(model, OpenAIChatModel)
-    assert model.model_name == "gpt-4.1-mini"
+    assert isinstance(model, GuardedChatModel) and isinstance(model.inner, LiteLLMChatModel)
+    assert (model.provider, model.model_name) == ("openai", "gpt-4.1-mini")
 
     llm.get_chat_model.cache_clear()
     monkeypatch.setenv("CHAT_PROVIDER", "gemini")

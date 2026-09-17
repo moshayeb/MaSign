@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.answering.grounding import build_user_prompt
+from app.answering.grounding import build_user_prompt, passage_metadata
 from app.answering.llm import ChatModel
 from app.retrieval.vector_store import ChunkHit
 from app.risk_analysis.rubric import CATEGORY_BY_ID, SEVERITIES, rubric_text
@@ -76,6 +76,7 @@ def analyze_risks(
         SYSTEM_PROMPT,
         build_user_prompt("Which clauses in these passages are risky for the Customer?", hits, filenames or {}),
         max_tokens=MAX_RISK_TOKENS,
+        metadata=passage_metadata(hits),
     )
     if completion.truncated:
         # The findings that arrived whole are still verifiable; keep them and

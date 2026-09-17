@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.answering.llm import ChatModelError, get_chat_model
+from app.guardrails.prompt_injection import PromptInjectionError
 from app.api.routes import router as api_router
 from app.database.migrations import run_migrations
 from app.database.session import get_connection
@@ -120,6 +121,14 @@ async def embedding_service_unavailable(_: Request, error: EmbeddingServiceError
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"detail": "Embedding service unavailable. Check that the server behind EMBEDDING_API_URL is running."},
     )
+
+
+@app.exception_handler(PromptInjectionError)
+async def prompt_injection_refused(_: Request, error: PromptInjectionError) -> JSONResponse:
+    # The guardrail refused to forward the user's own message (MAS-90); the
+    # reason names the pattern so the message can be reworded.
+    logger.warning("Prompt injection refused: %s", error)
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(error)})
 
 
 @app.exception_handler(ChatModelError)

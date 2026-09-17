@@ -14,6 +14,7 @@ from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract, RiskFindingRow, RiskReview
+from app.guardrails.prompt_injection import refuse_injected_question
 from app.ingestion.parsing import DocumentTextError, extract_text
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
@@ -95,6 +96,10 @@ class QueryResponse(BaseModel):
     # dropped; the ones shown are verified, but the list may be short.
     risks_complete: bool
     recommended_actions: list[str]
+    # Passage numbers (1-based, among retrieved_context) that the prompt-
+    # injection guardrail withheld from the model (MAS-90). They are still
+    # listed in retrieved_context so the user can read what was refused.
+    blocked_passages: list[int] = []
 
 
 class ContractSummary(BaseModel):
@@ -358,6 +363,10 @@ async def query_contract(
     store: VectorStore = Depends(get_vector_store),
     chat_model: ChatModel = Depends(get_chat_model),
 ) -> QueryResponse:
+    # A question that is itself an injection is refused before retrieval and
+    # before either model call (MAS-90); the guardrail would catch it in the
+    # answer call, but the risk call runs alongside and would still be spent.
+    refuse_injected_question(request.question)
     # Embedding the question is CPU work, the lookups are synchronous and the
     # model call blocks, so all of it runs off the event loop like the upload path.
     hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
@@ -388,6 +397,7 @@ async def query_contract(
         risks_checked=risks.checked,
         risks_complete=risks.complete,
         recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked),
+        blocked_passages=sorted(set(answer.blocked)),
     )
 
 

@@ -96,6 +96,11 @@ while running, green when reviewed clean).
 
 ## Query results
 
+`blocked_passages` (MAS-90) names passages the prompt-injection guardrail
+withheld from the model; the answer view shows an amber notice and tags those
+passages "Withheld from the model" in the passage lists.
+
+
 `POST /api/query` returns (MAS-12/13):
 
 - `answer` — one to four sentences written only from the passages, with `[n]`

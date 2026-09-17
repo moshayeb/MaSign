@@ -101,6 +101,9 @@ export interface QueryResponse {
   risks_checked: boolean
   risks_complete: boolean
   recommended_actions: string[]
+  // Passage numbers (1-based, among retrieved_context) the prompt-injection
+  // guardrail withheld from the model (MAS-90).
+  blocked_passages: number[]
 }
 
 export function askQuestion(question: string, contractId: string | null, limit = 5): Promise<QueryResponse> {
