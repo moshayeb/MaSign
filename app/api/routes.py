@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
@@ -13,7 +13,7 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Contract
+from app.database.models import Contract, RiskFindingRow, RiskReview
 from app.ingestion.parsing import DocumentTextError, extract_text
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
@@ -22,6 +22,8 @@ from app.retrieval.indexing import index_contract
 from app.retrieval.retriever import DEFAULT_LIMIT, retrieve_contract_context
 from app.retrieval.vector_store import ChunkHit, VectorStore, VectorStoreError
 from app.risk_analysis.analyzer import RiskReport, analyze_risks
+from app.risk_analysis.review import run_review_in_background
+from app.risk_analysis.rubric import CATEGORY_BY_ID, RISK_CATEGORIES, SEVERITIES
 
 
 logger = logging.getLogger(__name__)
@@ -104,9 +106,13 @@ class ContractSummary(BaseModel):
     chunk_count: int
     status: str
     created_at: datetime
+    # The whole-contract risk review (MAS-81): pending | running | done |
+    # failed, or None for a contract uploaded before reviews existed.
+    risk_status: str | None = None
+    risk_worst_severity: str | None = None
 
     @classmethod
-    def from_model(cls, contract: Contract) -> "ContractSummary":
+    def from_model(cls, contract: Contract, review: tuple[str, str | None] | None = None) -> "ContractSummary":
         return cls(
             contract_id=contract.id,
             filename=contract.filename,
@@ -116,6 +122,73 @@ class ContractSummary(BaseModel):
             chunk_count=contract.chunk_count,
             status=contract.status,
             created_at=contract.created_at,
+            risk_status=review[0] if review else None,
+            risk_worst_severity=review[1] if review else None,
+        )
+
+
+class ReviewFinding(BaseModel):
+    category: str
+    category_name: str
+    severity: str
+    reason: str
+    quote: str
+    chunk_id: UUID
+    chunk_index: int
+
+
+class ReviewCategory(BaseModel):
+    id: str
+    name: str
+    # None when the review found nothing in this category.
+    worst_severity: str | None
+    findings: int
+
+
+class RiskReviewResponse(BaseModel):
+    contract_id: UUID
+    status: str  # pending | running | done | failed
+    model: str | None
+    chunks_total: int
+    chunks_checked: int
+    # False while running, or when some passages could not be graded.
+    complete: bool
+    error: str | None
+    updated_at: datetime
+    findings: list[ReviewFinding]
+    categories: list[ReviewCategory]
+
+    @classmethod
+    def from_models(cls, review: RiskReview, rows: list[RiskFindingRow], chunk_index: dict[UUID, int]) -> "RiskReviewResponse":
+        findings = [
+            ReviewFinding(
+                category=row.category,
+                category_name=CATEGORY_BY_ID[row.category].name if row.category in CATEGORY_BY_ID else row.category,
+                severity=row.severity,
+                reason=row.reason,
+                quote=row.quote,
+                chunk_id=row.chunk_id,
+                chunk_index=chunk_index.get(row.chunk_id, 0),
+            )
+            for row in rows
+        ]
+        findings.sort(key=lambda f: (-SEVERITIES.index(f.severity) if f.severity in SEVERITIES else 0, f.chunk_index))
+        categories = []
+        for category in RISK_CATEGORIES:
+            mine = [f for f in findings if f.category == category.id]
+            worst = max((f.severity for f in mine), key=SEVERITIES.index, default=None)
+            categories.append(ReviewCategory(id=category.id, name=category.name, worst_severity=worst, findings=len(mine)))
+        return cls(
+            contract_id=review.contract_id,
+            status=review.status,
+            model=review.model,
+            chunks_total=review.chunks_total,
+            chunks_checked=review.chunks_checked,
+            complete=review.complete,
+            error=review.error,
+            updated_at=review.updated_at,
+            findings=findings,
+            categories=categories,
         )
 
 
@@ -126,10 +199,12 @@ class UploadContractResponse(ContractSummary):
 
 @router.post("/contracts/upload", response_model=UploadContractResponse)
 async def upload_contract(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: psycopg.Connection = Depends(get_db),
     embedder: Embedder = Depends(get_embedder),
     store: VectorStore = Depends(get_vector_store),
+    chat_model: ChatModel = Depends(get_chat_model),
 ) -> UploadContractResponse:
     upload = await validate_contract_upload(file)
 
@@ -158,8 +233,16 @@ async def upload_contract(
         await run_in_threadpool(_discard_failed_upload, db, store, contract.id)
         raise
 
+    # The whole-contract risk review (MAS-81) takes one model call per batch
+    # of passages; it runs after the response, and the UI polls its status.
+    await run_in_threadpool(repository.start_risk_review, db, contract.id)
+    # The task opens its own connection, so what it must see is committed now
+    # rather than when this request's connection closes.
+    await run_in_threadpool(db.commit)
+    background_tasks.add_task(run_review_in_background, contract.id, chat_model)
+
     return UploadContractResponse(
-        **ContractSummary.from_model(contract).model_dump(),
+        **ContractSummary.from_model(contract, ("pending", None)).model_dump(),
         content_type=upload.content_type,
         max_size_bytes=MAX_UPLOAD_BYTES,
     )
@@ -187,7 +270,8 @@ def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_
 
 @router.get("/contracts", response_model=list[ContractSummary])
 def list_contracts(db: psycopg.Connection = Depends(get_db)) -> list[ContractSummary]:
-    return [ContractSummary.from_model(c) for c in repository.list_contracts(db)]
+    reviews = repository.list_risk_summaries(db)
+    return [ContractSummary.from_model(c, reviews.get(c.id)) for c in repository.list_contracts(db)]
 
 
 @router.get("/contracts/{contract_id}", response_model=ContractSummary)
@@ -198,7 +282,46 @@ def get_contract(
     contract = repository.get_contract(db, contract_id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    return ContractSummary.from_model(contract)
+    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id))
+
+
+@router.get("/contracts/{contract_id}/risks", response_model=RiskReviewResponse)
+def get_contract_risks(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> RiskReviewResponse:
+    """The whole-contract risk review: its status and the verified findings (MAS-81)."""
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    review = repository.get_risk_review(db, contract_id)
+    if review is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This contract has not been reviewed for risks yet. Start a review to grade it.",
+        )
+    return _review_response(db, review)
+
+
+@router.post("/contracts/{contract_id}/review", response_model=RiskReviewResponse, status_code=status.HTTP_202_ACCEPTED)
+def review_contract_risks(
+    contract_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: psycopg.Connection = Depends(get_db),
+    chat_model: ChatModel = Depends(get_chat_model),
+) -> RiskReviewResponse:
+    """(Re)run the whole-contract risk review; poll GET .../risks for the result."""
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    current = repository.get_risk_review(db, contract_id)
+    if current is not None and current.status in ("pending", "running"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A risk review of this contract is already running.")
+    review = repository.start_risk_review(db, contract_id)
+    db.commit()  # the task's own connection must see the pending row
+    background_tasks.add_task(run_review_in_background, contract_id, chat_model)
+    return _review_response(db, review)
+
+
+def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewResponse:
+    rows = repository.list_risk_findings(db, review.contract_id)
+    chunk_index = {chunk.id: chunk.chunk_index for chunk in repository.list_chunks(db, review.contract_id)}
+    return RiskReviewResponse.from_models(review, rows, chunk_index)
 
 
 def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[str, list[str]]:
