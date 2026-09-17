@@ -101,6 +101,19 @@ whole-contract review (all passages, batches of 8, stored per contract, shown
 in the Risk review panel), and each question still flags its own retrieved
 passages. The review costs about one model call per 8 passages.
 
+## Agent skills (MAS-72)
+
+The five skills from Homework 03 live in `.claude/skills/` and load in every
+session here: `spec-from-brainstorm` (vague idea → confirmed spec before code),
+`ticket-git-workflow` (testable acceptance criteria, ticket ↔ branch ↔ commit
+↔ PR links), `definition-of-done` (tests, self-review, PR, ticket update
+before saying "done"), `dual-pass-thinking` (confirmational → adversarial →
+concluding for costly decisions), `session-handoff` (one tree summary per
+session in `docs/handoffs/<date>-<topic>.md`; a new session reads the latest
+first). Two places they yield to this file: branches stay `MAS-<n>-slug` (no
+`feature/` prefix), and since the owner opens PRs, Claude hands over the PR
+title and a description ending in `Closes MAS-<n>`.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error
