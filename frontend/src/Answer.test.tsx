@@ -219,6 +219,30 @@ describe('asking a question', () => {
     expect(screen.getByText(/all contracts · claude-sonnet-5/)).toBeInTheDocument()
   })
 
+  it('clears the answer when a different contract is selected, keeping the draft (MAS-86)', async () => {
+    const other: Contract = { ...northwind, contract_id: 'nda', filename: 'nda.pdf', file_type: 'pdf' }
+    const replies = [json(200, answered)]
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/risks')) return json(404, { detail: 'not reviewed' })
+      if (url === '/api/contracts') return json(200, [northwind, other])
+      if (url === '/api/query') return replies.shift() ?? json(500, { detail: 'no reply scripted' })
+      return json(404, { detail: `unexpected ${url}` })
+    })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.type(screen.getByLabelText('Ask about the contract'), 'fee?')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await screen.findByText(/The monthly fee is EUR 18,500/)
+
+    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ })) // same contract: answer stays
+    expect(screen.getByText(/The monthly fee is EUR 18,500/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /nda\.pdf/ }))
+    expect(screen.queryByText(/The monthly fee is EUR 18,500/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Ask about the contract')).toHaveValue('fee?')
+  })
+
   it('copies a citation with its source and confirms in a toast', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })

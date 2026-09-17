@@ -90,6 +90,14 @@ export default function App() {
     void reload()
   }, [reload])
 
+  // An answer belongs to the contract it was asked about: a different
+  // selection clears it so contract A's answer never sits under contract B's
+  // review (MAS-86). The draft question stays.
+  const select = useCallback((contract: Contract) => {
+    setSelected(contract)
+    setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
+  }, [])
+
   return (
     <>
       <Toaster position="top-right" theme="dark" richColors closeButton />
@@ -109,11 +117,11 @@ export default function App() {
         <aside className="sidebar">
           <UploadForm
             onUploaded={(contract) => {
-              setSelected(contract)
+              select(contract)
               void reload()
             }}
           />
-          <ContractList contracts={contracts} selectedId={selected?.contract_id ?? null} onSelect={setSelected} onReload={refresh} />
+          <ContractList contracts={contracts} selectedId={selected?.contract_id ?? null} onSelect={select} onReload={refresh} />
         </aside>
 
         <main className="content">
