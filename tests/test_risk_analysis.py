@@ -101,8 +101,60 @@ def test_a_finding_whose_quote_is_not_in_the_passage_is_dropped(caplog: pytest.L
 def test_malformed_findings_are_dropped_not_crashed(item: object) -> None:
     report = analyze_risks(_hits(UNLIMITED), _model([item]))
 
-    assert report.checked is True
+    # The only finding was unusable: that is an unavailable analysis, not "no risk" (MAS-74).
+    assert report.checked is False
     assert report.findings == []
+
+
+@pytest.mark.parametrize("category", [[], {}, None, 7, True, ["liability"], {"id": "liability"}])
+def test_a_category_of_the_wrong_type_is_dropped_not_a_crash(category: object) -> None:
+    # MAS-75: a list or object where a string belongs used to raise inside the lookup -> HTTP 500.
+    item = {"category": category, "severity": "High", "reason": "r", "passage": 1, "quote": "unlimited"}
+
+    report = analyze_risks(_hits(UNLIMITED), _model([item]))
+
+    assert report.findings == []
+
+
+def test_a_missing_category_is_dropped_not_a_crash() -> None:
+    item = {"severity": "High", "reason": "r", "passage": 1, "quote": "unlimited"}
+
+    assert analyze_risks(_hits(UNLIMITED), _model([item])).findings == []
+
+
+@pytest.mark.parametrize("field, value", [("severity", ["High"]), ("reason", {"text": "r"}), ("passage", "1"), ("passage", True), ("quote", ["unlimited"])])
+def test_other_fields_of_the_wrong_type_are_dropped_not_a_crash(field: str, value: object) -> None:
+    item = {"category": "liability", "severity": "High", "reason": "r", "passage": 1, "quote": "unlimited", field: value}
+
+    assert analyze_risks(_hits(UNLIMITED), _model([item])).findings == []
+
+
+# The three outcomes of validation (MAS-74).
+
+VALID = {"category": "liability", "severity": "High", "reason": "Uncapped.", "passage": 1, "quote": "shall be unlimited"}
+INVALID = {"category": "liability", "severity": "High", "reason": "Invented.", "passage": 1, "quote": "Vendor's liability is unlimited"}
+
+
+def test_an_empty_reply_is_a_completed_analysis_with_no_findings() -> None:
+    report = analyze_risks(_hits(UNLIMITED), _model([]))
+
+    assert (report.checked, report.complete, report.findings) == (True, True, [])
+
+
+def test_all_findings_rejected_means_the_analysis_is_unavailable(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING"):
+        report = analyze_risks(_hits(UNLIMITED), _model([INVALID, dict(INVALID, severity="Low")]))
+
+    assert (report.checked, report.findings) == (False, [])
+    assert "all 2 finding(s) rejected" in caplog.text
+
+
+def test_some_findings_rejected_keeps_the_verified_ones_and_marks_the_analysis_incomplete() -> None:
+    report = analyze_risks(_hits(UNLIMITED, FEES), _model([INVALID, VALID]))
+
+    assert report.checked is True
+    assert report.complete is False
+    assert [f.reason for f in report.findings] == ["Uncapped."]
 
 
 def test_duplicate_category_per_passage_is_reported_once() -> None:
@@ -183,6 +235,48 @@ def test_query_carries_risk_flags_that_quote_the_retrieved_passage(db, fake_chat
     assert body["grounded"] is True
 
 
+def test_query_keeps_the_answer_when_only_the_risk_call_fails(db, fake_chat_model: FakeChatModel) -> None:
+    # MAS-76: the model refused the second call (rate limit); the answer must still arrive.
+    from app.answering.llm import ChatModelError
+
+    upload = client.post("/api/contracts/upload", files={"file": ("risky.txt", UNLIMITED.encode(), "text/plain")})
+    fake_chat_model.risk_error = ChatModelError("Anthropic API refused the request (HTTP 429): rate limited")
+
+    response = client.post("/api/query", json={"question": "liability?", "contract_id": upload.json()["contract_id"]})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["answer"] == "The passage states it [1]." and body["grounded"] is True
+    assert body["risks"] == [] and body["risks_checked"] is False
+    assert body["recommended_actions"][0].startswith("Risk analysis was unavailable")
+
+
+def test_query_fails_when_the_answer_call_fails_even_if_risks_succeed(db, fake_chat_model: FakeChatModel) -> None:
+    from app.answering.llm import ChatModelError
+
+    upload = client.post("/api/contracts/upload", files={"file": ("risky.txt", UNLIMITED.encode(), "text/plain")})
+
+    def refuse(_: str) -> str:
+        raise ChatModelError("Anthropic API is unreachable: connection refused")
+
+    fake_chat_model.reply = refuse
+
+    response = client.post("/api/query", json={"question": "liability?", "contract_id": upload.json()["contract_id"]})
+
+    assert response.status_code == 503
+    assert "Anthropic API is unreachable" in response.json()["detail"]
+
+
+def test_query_reports_an_incomplete_analysis_with_its_verified_flags(db, fake_chat_model: FakeChatModel) -> None:
+    upload = client.post("/api/contracts/upload", files={"file": ("risky.txt", UNLIMITED.encode(), "text/plain")})
+    fake_chat_model.risk_reply = json.dumps([INVALID, VALID])
+
+    body = client.post("/api/query", json={"question": "liability?", "contract_id": upload.json()["contract_id"]}).json()
+
+    assert body["risks_checked"] is True and body["risks_complete"] is False
+    assert [f["reason"] for f in body["risks"]] == ["Uncapped."]
+
+
 def test_query_says_when_risk_analysis_was_unavailable(db, fake_chat_model: FakeChatModel) -> None:
     upload = client.post("/api/contracts/upload", files={"file": ("risky.txt", UNLIMITED.encode(), "text/plain")})
     fake_chat_model.risk_reply = "Sorry, I cannot produce JSON today."
@@ -192,6 +286,14 @@ def test_query_says_when_risk_analysis_was_unavailable(db, fake_chat_model: Fake
     assert body["risks"] == [] and body["risks_checked"] is False
     assert body["recommended_actions"][0].startswith("Risk analysis was unavailable")
     assert body["answer"]  # the answer still arrived
+
+
+def test_query_with_no_findings_is_complete(db, fake_chat_model: FakeChatModel) -> None:
+    upload = client.post("/api/contracts/upload", files={"file": ("risky.txt", UNLIMITED.encode(), "text/plain")})
+
+    body = client.post("/api/query", json={"question": "liability?", "contract_id": upload.json()["contract_id"]}).json()
+
+    assert (body["risks_checked"], body["risks_complete"], body["risks"]) == (True, True, [])
 
 
 # --- real model (opt-in) -------------------------------------------------------------

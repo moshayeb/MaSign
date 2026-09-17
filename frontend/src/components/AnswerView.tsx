@@ -124,6 +124,13 @@ export function AnswerView({ asked, contracts }: Props) {
       ) : response.risks.length === 0 ? (
         <p className="muted small">No risk flagged in the retrieved passages. Other parts of the contract were not checked.</p>
       ) : (
+        <>
+          {!response.risks_complete && (
+            <p className="badge unverified" role="status">
+              Incomplete analysis — some of the model's findings could not be verified against the passages and were left out. The flags
+              below are verified.
+            </p>
+          )}
         <ul className="risks">
           {response.risks.map((risk) => (
             <li key={`${risk.category}-${risk.chunk_id}`} className={`risk severity-${risk.severity.toLowerCase()}`}>
@@ -139,6 +146,7 @@ export function AnswerView({ asked, contracts }: Props) {
             </li>
           ))}
         </ul>
+        </>
       )}
       <p className="muted small">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
       {response.recommended_actions.length > 0 && (

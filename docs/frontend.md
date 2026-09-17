@@ -83,7 +83,10 @@ empty state offers example questions that fill the question box.
 - `risks` — rubric findings `{category, category_name, severity, reason,
   quote, label, chunk_id, contract_id, chunk_index}`, High first; `label` is
   the passage's `[n]` so the flag can link to it. `risks_checked` is false
-  when the analysis could not run — say so, never show an empty "no risks".
+  when the analysis could not run or none of its findings could be verified
+  — say so, never show an empty "no risks". `risks_complete` is false when
+  some findings were dropped: show the verified ones with an "incomplete
+  analysis" warning.
 - `recommended_actions` — next steps derived from the findings.
 - `retrieved_context` — every passage considered, best first, same shape
   minus `label`; `chunk_index` gives its position in the contract and `score`

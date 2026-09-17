@@ -343,6 +343,35 @@ def test_query_is_a_503_with_the_reason_when_the_model_is_unavailable(northwind:
     )
 
 
+# --- expected values for the live test (MAS-71 / MAS-77) ----------------------------------
+
+# Each pattern is the complete value with its unit, anchored so that a larger
+# number containing the digits ("11.5% per month") or another unit ("per
+# year") cannot pass. `(?<![\d.,])` = not preceded by a digit or separator.
+EXPECTED_VALUES = {
+    "What is the monthly fee?": r"(?<![\d.,])EUR 18,500 per month",
+    "What interest applies to late payment?": r"(?<![\d.,])1\.5% per month",
+    "How long is the initial term?": r"(?<![\d.,])thirty-six \(36\) months",
+    "What is the termination fee?": r"(?<![\d.,])fifty percent \(50%\) of the Subscription Fees",
+}
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [
+        ("Interest accrues at 1.5% per month [1].", True),
+        ("Interest accrues at 11.5% per month [1].", False),
+        ("Interest accrues at 21.5% per month [1].", False),
+        ("Interest accrues at 1.5% per year [1].", False),
+        ("Interest accrues at 1.5% per month (18% per annum) [1].", True),
+    ],
+)
+def test_the_interest_pattern_rejects_wrong_magnitudes_and_units(answer: str, expected: bool) -> None:
+    import re
+
+    assert bool(re.search(EXPECTED_VALUES["What interest applies to late payment?"], answer)) is expected
+
+
 # --- real model (opt-in) ------------------------------------------------------------------
 
 
@@ -369,15 +398,9 @@ def test_real_model_answers_northwind_questions_with_citations(db) -> None:
     northwind = client.post("/api/contracts/upload", files={"file": ("northwind.txt", path.read_bytes(), "text/plain")}).json()["contract_id"]
     import re
 
-    # MAS-71: the complete value with its unit, in the answer AND in a cited
-    # passage — "136 days" or "EUR 18,500 termination fee" must not pass.
-    checks = [
-        ("What is the monthly fee?", r"EUR 18,500 per month"),
-        ("What interest applies to late payment?", r"1\.5% per month"),
-        ("How long is the initial term?", r"thirty-six \(36\) months"),
-        ("What is the termination fee?", r"fifty percent \(50%\) of the Subscription Fees"),
-    ]
-    for question, value in checks:
+    # MAS-71 / MAS-77: the complete value with its unit, in the answer AND in
+    # a cited passage — "136 days", "11.5% per month" or "1.5% per year" must not pass.
+    for question, value in EXPECTED_VALUES.items():
         body = client.post("/api/query", json={"question": question, "contract_id": northwind, "limit": 5}).json()
         assert body["grounded"] is True, body
         assert re.search(value, body["answer"]), (question, body["answer"])

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.actions.workflow import build_follow_up_actions
 from app.answering.grounding import Answer, answer_question
-from app.answering.llm import ChatModel
+from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract
@@ -89,6 +89,9 @@ class QueryResponse(BaseModel):
     risks: list[RiskFlag]
     # False when the risk analysis could not be run or read for this answer.
     risks_checked: bool
+    # False when some of the model's findings failed validation and were
+    # dropped; the ones shown are verified, but the list may be short.
+    risks_complete: bool
     recommended_actions: list[str]
 
 
@@ -260,6 +263,7 @@ async def query_contract(
             for f in risks.findings
         ],
         risks_checked=risks.checked,
+        risks_complete=risks.complete,
         recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked),
     )
 
@@ -278,11 +282,20 @@ def _retrieve_and_answer(
         if contract is not None:
             filenames[contract_id] = contract.filename
     # Two independent model calls over the same passages; run them side by
-    # side so the user waits for the slower one, not for both.
+    # side so the user waits for the slower one, not for both. A failure of
+    # the risk call must not throw away a good answer: it is reported as
+    # "analysis unavailable" (MAS-76). A failure of the answer call is still
+    # the request's error.
     with ThreadPoolExecutor(max_workers=2) as pool:
         answer = pool.submit(answer_question, request.question, hits, chat_model, filenames=filenames)
         risks = pool.submit(analyze_risks, hits, chat_model, filenames=filenames)
-        return hits, answer.result(), risks.result()
+        resolved = answer.result()
+        try:
+            report = risks.result()
+        except ChatModelError as error:
+            logger.warning("Risk analysis unavailable for %r: %s", request.question, error)
+            report = RiskReport([], checked=False)
+        return hits, resolved, report
 
 
 def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore) -> list[ChunkHit]:
