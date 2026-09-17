@@ -101,6 +101,22 @@ whole-contract review (all passages, batches of 8, stored per contract, shown
 in the Risk review panel), and each question still flags its own retrieved
 passages. The review costs about one model call per 8 passages.
 
+## Agent skills (MAS-72)
+
+`.claude/skills/` holds seven MaSign-specific skills that load in every
+session here; `.claude/skills/README.md` is the index and
+`docs/agent-skills-hw03/` keeps the five generic Homework-03 originals they
+grew from. Their `description` fields are the triggers, written as this
+project's concrete situations: `masign-ticket-flow` (Jira/git procedure,
+owner's files never staged, connector timeouts → read before retry),
+`masign-done` (the exact commands and docs map before "done"),
+`api-spend-guard` (ask before any paid call, with the cost table),
+`honest-outcomes` (unavailable ≠ empty; verify quotes or drop),
+`ui-preview` (canned-API screenshots, zero spend), `masign-handoff`
+(`docs/handoffs/`, read the latest at session start) and `decide-carefully`
+(spec into the ticket before code; confirm → attack → conclude for costly
+decisions). When a skill and this file disagree, this file wins; fix the skill.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error

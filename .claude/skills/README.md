@@ -1,0 +1,22 @@
+# MaSign agent skills
+
+Project-specific skills for Claude Code, derived from the five generic
+Homework-03 skills (kept for provenance in `docs/agent-skills-hw03/`) and from
+what Sprint 1 of MaSign actually taught. Each `SKILL.md` `description` is the
+trigger: it names the concrete situations in this project that should make
+the skill fire, so it is picked up by situation, not only by name.
+
+| Skill | Fires when… | Replaces / adds |
+|---|---|---|
+| `masign-ticket-flow` | starting work, reviewer findings pasted, any Jira create/close, branching, committing, PR handover, connector timeouts | evolves `ticket-git-workflow` + the owner-files rule + connector quirks |
+| `masign-done` | about to say "done", push, or write an evidence comment | evolves `definition-of-done` with the exact commands and the docs map |
+| `api-spend-guard` | anything that could reach Anthropic/OpenAI | new — the owner's standing rule, with a cost table |
+| `honest-outcomes` | designing/reviewing anything model-facing or any result state | new — the product principle behind MAS-74/76/80/87/90 |
+| `ui-preview` | any frontend change or visual check | new — canned-API harness, headless Edge, toast rules |
+| `masign-handoff` | session start, wrap up, /compact, before a demo | evolves `session-handoff` with the start-of-session routine |
+| `decide-carefully` | vague feature ideas; costly or trust-affecting decisions | merges `spec-from-brainstorm` + `dual-pass-thinking` with MaSign precedents |
+
+How they chain: `masign-handoff` (read) → `decide-carefully` (spec into the
+ticket) → `masign-ticket-flow` (branch, findings as tickets) → build with
+`honest-outcomes` and `ui-preview`, spending nothing without `api-spend-guard`
+→ `masign-done` (verify, document, evidence) → `masign-handoff` (write).
