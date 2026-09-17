@@ -56,6 +56,19 @@ collapsed passage list) and the suggested actions (MAS-15/16).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
+## Look and feel (MAS-73)
+
+Dark slate theme (Inter, `#0b1220` background, `#111a2c` cards) with the
+logo's cyan `#009fe3` as the accent — inspired by a Gemini-generated landing
+page the owner liked. The logo icon is inlined (`components/Logo.tsx`) so its
+ink paths follow the theme; the wordmark SVGs depend on the Azonix font and
+are not used in the browser — the header types "MASIGN" in Michroma next to
+the icon. Two-column layout (contracts left, ask/answer
+right) stacking under 900 px. Cards are `.card` (never bare `section`, so the
+toast container stays invisible). Upload is a drop zone with a hidden native
+input; contract rows carry a file-type badge and a clear selected state; the
+empty state offers example questions that fill the question box.
+
 ## Query results
 
 `POST /api/query` returns (MAS-12/13):

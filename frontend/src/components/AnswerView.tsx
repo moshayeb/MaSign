@@ -42,7 +42,7 @@ export function AnswerView({ asked, contracts }: Props) {
   }
 
   return (
-    <section className="answer" aria-live="polite">
+    <section className="card answer" aria-live="polite">
       <div className="answer-header">
         <h2>Answer</h2>
         <span className="muted answer-scope">
