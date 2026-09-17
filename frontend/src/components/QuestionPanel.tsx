@@ -10,17 +10,18 @@ export interface Asked {
 
 interface Props {
   selected: Contract | null
+  draft: string
+  onDraftChange: (text: string) => void
   onAnswered: (asked: Asked) => void
 }
 
-export function QuestionPanel({ selected, onAnswered }: Props) {
-  const [question, setQuestion] = useState('')
+export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Props) {
   const [scope, setScope] = useState<'selected' | 'all'>('selected')
   const [busy, setBusy] = useState(false)
   const contract = scope === 'selected' ? selected : null
 
   async function submit() {
-    const text = question.trim()
+    const text = draft.trim()
     if (!text || busy) return
     setBusy(true)
     try {
@@ -43,18 +44,20 @@ export function QuestionPanel({ selected, onAnswered }: Props) {
 
   return (
     <form
-      className="question"
+      className="card question"
       onSubmit={(event) => {
         event.preventDefault()
         void submit()
       }}
     >
-      <label htmlFor="question-text">Ask about the contract</label>
+      <label htmlFor="question-text" className="card-title">
+        Ask about the contract
+      </label>
       <textarea
         id="question-text"
         rows={2}
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault()
@@ -67,16 +70,16 @@ export function QuestionPanel({ selected, onAnswered }: Props) {
       <div className="question-row">
         <fieldset className="scope">
           <legend className="visually-hidden">Search in</legend>
-          <label>
+          <label className={scope === 'selected' && selected ? 'pill active' : 'pill'}>
             <input type="radio" name="scope" checked={scope === 'selected'} onChange={() => setScope('selected')} disabled={!selected} />
-            {selected ? selected.filename : 'Selected contract (pick one below)'}
+            {selected ? selected.filename : 'Selected contract'}
           </label>
-          <label>
+          <label className={scope === 'all' || !selected ? 'pill active' : 'pill'}>
             <input type="radio" name="scope" checked={scope === 'all' || !selected} onChange={() => setScope('all')} />
             All contracts
           </label>
         </fieldset>
-        <button type="submit" disabled={busy || !question.trim()}>
+        <button type="submit" className="primary" disabled={busy || !draft.trim()}>
           {busy ? 'Asking…' : 'Ask'}
         </button>
       </div>

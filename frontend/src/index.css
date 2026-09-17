@@ -1,10 +1,28 @@
+/* MaSign UI — palette from the logo: ink #1d1d1b, accent #009fe3. */
+
+@import url('https://fonts.googleapis.com/css2?family=Michroma&display=swap');
+
 :root {
   color-scheme: light;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ink: #1d1d1b;
+  --text: #24303c;
+  --muted: #667382;
+  --accent: #009fe3;
+  --accent-dark: #0284bd;
+  --accent-soft: #e6f5fc;
+  --line: #e1e6ec;
+  --bg: #f3f5f8;
+  --card: #ffffff;
+  --high: #c62828;
+  --medium: #e08a00;
+  --low: #2e7d32;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(20, 30, 40, 0.05), 0 4px 14px rgba(20, 30, 40, 0.05);
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
   font-size: 15px;
   line-height: 1.5;
-  color: #1c2430;
-  background: #f5f6f8;
+  color: var(--text);
+  background: var(--bg);
 }
 
 * {
@@ -15,133 +33,336 @@ body {
   margin: 0;
 }
 
-#root {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 24px 16px 48px;
-}
-
-h1 {
-  margin: 0 0 4px;
-  font-size: 1.7rem;
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--ink);
 }
 
 h2 {
+  font-size: 1.05rem;
+}
+
+h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 18px 0 8px;
+}
+
+p {
   margin: 0;
-  font-size: 1.1rem;
 }
 
 .muted {
-  color: #5b6675;
-  margin: 0;
+  color: var(--muted);
 }
 
-.app-header {
-  margin-bottom: 24px;
+.small {
+  font-size: 0.85rem;
 }
 
-section,
-form.upload {
-  background: #fff;
-  border: 1px solid #dfe3e8;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
+/* --- header ------------------------------------------------------------- */
 
-form.upload label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.upload-row {
+.topbar {
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 24px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
-.upload-row input[type='file'] {
-  flex: 1 1 260px;
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
 }
 
-button {
-  font: inherit;
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: 1px solid #2a5bd7;
-  background: #2a5bd7;
-  color: #fff;
-  cursor: pointer;
+.wordmark {
+  font-family: 'Michroma', 'Segoe UI', system-ui, sans-serif;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  color: var(--ink);
 }
 
-button:disabled {
-  opacity: 0.55;
-  cursor: default;
+.wordmark .accent {
+  color: var(--accent);
 }
 
-.contracts-header {
+.tagline {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* --- layout ------------------------------------------------------------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 20px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+
+.sidebar,
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+}
+
+/* --- cards -------------------------------------------------------------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+}
+
+.card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
-.contracts-header button {
-  background: #fff;
-  color: #2a5bd7;
+.card-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 10px;
 }
 
-.contracts ul {
+.card-header .card-title {
+  margin: 0;
+}
+
+.count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.75rem;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+
+/* --- buttons ------------------------------------------------------------ */
+
+button {
+  font: inherit;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+button:hover:not(:disabled) {
+  border-color: #c8d0d9;
+  background: #f8fafc;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+button.block {
+  width: 100%;
+  margin-top: 10px;
+}
+
+button.ghost {
+  border-color: transparent;
+  color: var(--accent-dark);
+  padding: 4px 8px;
+}
+
+button.link {
+  background: none;
+  border: 0;
+  color: var(--accent-dark);
+  padding: 0;
+  margin-left: auto;
+  text-decoration: underline;
+}
+
+button.chip {
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-dark);
+  font-size: 0.9rem;
+}
+
+button.chip:hover:not(:disabled) {
+  background: #d3edf9;
+  border-color: transparent;
+}
+
+/* --- upload ------------------------------------------------------------- */
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 22px 12px;
+  border: 1.5px dashed #c3ccd6;
+  border-radius: 8px;
+  background: #fafbfc;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.dropzone:hover,
+.upload.dragging .dropzone {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.dropzone input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.dropzone-text strong {
+  color: var(--accent-dark);
+}
+
+/* --- contract list ------------------------------------------------------ */
+
+.contract-rows {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 button.contract {
   width: 100%;
-  text-align: left;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: #f8f9fb;
-  color: inherit;
-  border: 1px solid #dfe3e8;
-  padding: 10px 12px;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 8px;
+}
+
+button.contract:hover:not(:disabled) {
+  background: #f4f6f9;
+  border-color: transparent;
 }
 
 button.contract.selected {
-  border-color: #2a5bd7;
-  background: #eaf0fd;
+  background: var(--accent-soft);
+  border-color: #b9e2f6;
+}
+
+.contract-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .contract-name {
   font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contract-meta {
-  font-size: 0.85rem;
-  color: #5b6675;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
-/* --- question and answer (MAS-18) --- */
-
-form.question label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 8px;
+.filetype {
+  flex: none;
+  width: 42px;
+  padding: 3px 0;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: #fff;
+  background: #7a8794;
 }
+
+.filetype.pdf {
+  background: #d1453b;
+}
+
+.filetype.docx {
+  background: #2b6cb0;
+}
+
+.filetype.txt {
+  background: #5b6675;
+}
+
+/* --- question ----------------------------------------------------------- */
 
 form.question textarea {
   width: 100%;
   font: inherit;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid #c9d0d8;
-  border-radius: 6px;
+  border-radius: 8px;
   resize: vertical;
+  min-height: 64px;
+}
+
+form.question textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
 }
 
 .question-row {
@@ -150,7 +371,7 @@ form.question textarea {
   gap: 12px;
   align-items: center;
   justify-content: space-between;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 fieldset.scope {
@@ -159,16 +380,39 @@ fieldset.scope {
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  font-size: 0.9rem;
+  gap: 6px;
 }
 
-fieldset.scope label {
+.pill {
   display: inline-flex;
-  gap: 6px;
   align-items: center;
-  font-weight: 400;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+  cursor: pointer;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill.active {
+  background: var(--accent-soft);
+  border-color: #b9e2f6;
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.pill input {
   margin: 0;
+  accent-color: var(--accent);
+}
+
+.pill:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .visually-hidden {
@@ -179,6 +423,36 @@ fieldset.scope label {
   clip: rect(0 0 0 0);
 }
 
+/* --- empty state -------------------------------------------------------- */
+
+.empty-state {
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.empty-state img {
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
+
+.empty-state h2 {
+  margin-bottom: 6px;
+}
+
+.empty-state p {
+  max-width: 520px;
+  margin: 0 auto 16px;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* --- answer ------------------------------------------------------------- */
+
 .answer-header {
   display: flex;
   justify-content: space-between;
@@ -187,13 +461,18 @@ fieldset.scope label {
   flex-wrap: wrap;
 }
 
+.answer-scope {
+  font-size: 0.85rem;
+}
+
 .answer-question {
-  margin: 2px 0 10px;
+  margin: 2px 0 12px;
   font-style: italic;
 }
 
 .answer-text {
-  font-size: 1.05rem;
+  font-size: 1.08rem;
+  line-height: 1.6;
   margin: 0 0 8px;
 }
 
@@ -203,29 +482,25 @@ fieldset.scope label {
 
 button.cite-marker {
   font: inherit;
-  font-size: 0.8em;
-  padding: 0 4px;
+  font-size: 0.75em;
+  font-weight: 700;
+  padding: 0 5px;
   margin: 0 1px;
   vertical-align: super;
-  background: #eaf0fd;
-  color: #2a5bd7;
-  border: 1px solid #c6d4f7;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  border: 1px solid #b9e2f6;
   border-radius: 4px;
 }
 
 .badge.unverified {
   margin: 8px 0;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff4e0;
   border: 1px solid #f0c36d;
   color: #6b4a00;
   font-size: 0.9rem;
-}
-
-h3 {
-  font-size: 0.95rem;
-  margin: 16px 0 6px;
 }
 
 .citations,
@@ -238,15 +513,15 @@ h3 {
 }
 
 li.citation {
-  border: 1px solid #dfe3e8;
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: #f8f9fb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fafbfc;
 }
 
 li.citation.highlighted {
-  border-color: #2a5bd7;
-  background: #eaf0fd;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .citation-head {
@@ -258,8 +533,8 @@ li.citation.highlighted {
 }
 
 .cite-label {
-  font-weight: 700;
-  color: #2a5bd7;
+  font-weight: 800;
+  color: var(--accent-dark);
 }
 
 .citation blockquote {
@@ -268,32 +543,19 @@ li.citation.highlighted {
   font-size: 0.92rem;
 }
 
-button.link {
-  background: none;
-  border: 0;
-  color: #2a5bd7;
-  padding: 0;
-  margin-left: auto;
-  text-decoration: underline;
-}
-
 details.others summary {
   cursor: pointer;
   margin: 12px 0 6px;
   font-size: 0.9rem;
+  color: var(--accent-dark);
 }
 
-.small {
-  font-size: 0.85rem;
-}
-
-.risks,
 .actions {
   margin: 4px 0 0;
   padding-left: 20px;
 }
 
-/* --- risk flags (MAS-15/16) --- */
+/* --- risk flags --------------------------------------------------------- */
 
 .risks {
   list-style: none;
@@ -304,23 +566,23 @@ details.others summary {
 }
 
 li.risk {
-  border: 1px solid #dfe3e8;
+  border: 1px solid var(--line);
   border-left-width: 5px;
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  padding: 8px 12px;
   background: #fff;
 }
 
 li.risk.severity-high {
-  border-left-color: #c62828;
+  border-left-color: var(--high);
 }
 
 li.risk.severity-medium {
-  border-left-color: #ef8f00;
+  border-left-color: var(--medium);
 }
 
 li.risk.severity-low {
-  border-left-color: #2e7d32;
+  border-left-color: var(--low);
 }
 
 .risk-head {
@@ -331,26 +593,26 @@ li.risk.severity-low {
 }
 
 .risk-head .severity {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
   color: #fff;
   background: #5b6675;
 }
 
 .severity-high .severity {
-  background: #c62828;
+  background: var(--high);
 }
 
 .severity-medium .severity {
-  background: #ef8f00;
+  background: var(--medium);
 }
 
 .severity-low .severity {
-  background: #2e7d32;
+  background: var(--low);
 }
 
 .risk-reason {

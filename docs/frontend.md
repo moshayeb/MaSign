@@ -56,6 +56,17 @@ collapsed passage list) and the suggested actions (MAS-15/16).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
+## Look and feel (MAS-73)
+
+Palette from the logo (`frontend/public/brand/MaSign_logo_icon.svg`, copied
+from `logo/`): ink `#1d1d1b`, accent `#009fe3`; the wordmark SVGs depend on
+the Azonix font and are not used in the browser — the header types "MASIGN"
+in Michroma next to the icon. Two-column layout (contracts left, ask/answer
+right) stacking under 900 px. Cards are `.card` (never bare `section`, so the
+toast container stays invisible). Upload is a drop zone with a hidden native
+input; contract rows carry a file-type badge and a clear selected state; the
+empty state offers example questions that fill the question box.
+
 ## Query results
 
 `POST /api/query` returns (MAS-12/13):
