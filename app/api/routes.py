@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from uuid import UUID
 
@@ -20,7 +21,7 @@ from app.retrieval.embeddings import Embedder
 from app.retrieval.indexing import index_contract
 from app.retrieval.retriever import DEFAULT_LIMIT, retrieve_contract_context
 from app.retrieval.vector_store import ChunkHit, VectorStore, VectorStoreError
-from app.risk_analysis.analyzer import analyze_contract_risks
+from app.risk_analysis.analyzer import RiskReport, analyze_risks
 
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,19 @@ class CitedChunk(RetrievedChunk):
     label: int
 
 
+class RiskFlag(BaseModel):
+    # One rubric finding (MAS-15/16), quoting the passage it was found in.
+    category: str
+    category_name: str
+    severity: str
+    reason: str
+    quote: str
+    label: int  # the [n] of the passage among retrieved_context, 1-based
+    chunk_id: UUID
+    contract_id: UUID
+    chunk_index: int
+
+
 class QueryResponse(BaseModel):
     answer: str
     # False when the answer is "Not found in contract." or carries no citation.
@@ -72,7 +86,9 @@ class QueryResponse(BaseModel):
     citations: list[CitedChunk]
     answer_model: str | None
     retrieved_context: list[RetrievedChunk]
-    risks: list[str]
+    risks: list[RiskFlag]
+    # False when the risk analysis could not be run or read for this answer.
+    risks_checked: bool
     recommended_actions: list[str]
 
 
@@ -218,10 +234,7 @@ async def query_contract(
 ) -> QueryResponse:
     # Embedding the question is CPU work, the lookups are synchronous and the
     # model call blocks, so all of it runs off the event loop like the upload path.
-    hits, answer = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
-    context = [hit.text for hit in hits]
-    risks = analyze_contract_risks(context)
-    actions = build_follow_up_actions(risks)
+    hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
 
     return QueryResponse(
         answer=answer.text,
@@ -232,8 +245,22 @@ async def query_contract(
         ],
         answer_model=answer.model,
         retrieved_context=[RetrievedChunk.from_hit(hit) for hit in hits],
-        risks=risks,
-        recommended_actions=actions,
+        risks=[
+            RiskFlag(
+                category=f.category,
+                category_name=f.category_name,
+                severity=f.severity,
+                reason=f.reason,
+                quote=f.quote,
+                label=f.label,
+                chunk_id=f.hit.chunk_id,
+                contract_id=f.hit.contract_id,
+                chunk_index=f.hit.chunk_index,
+            )
+            for f in risks.findings
+        ],
+        risks_checked=risks.checked,
+        recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked),
     )
 
 
@@ -243,14 +270,19 @@ def _retrieve_and_answer(
     embedder: Embedder,
     store: VectorStore,
     chat_model: ChatModel,
-) -> tuple[list[ChunkHit], Answer]:
+) -> tuple[list[ChunkHit], Answer, RiskReport]:
     hits = _retrieve(request, db, embedder, store)
     filenames = {}
     for contract_id in {hit.contract_id for hit in hits}:
         contract = repository.get_contract(db, contract_id)
         if contract is not None:
             filenames[contract_id] = contract.filename
-    return hits, answer_question(request.question, hits, chat_model, filenames=filenames)
+    # Two independent model calls over the same passages; run them side by
+    # side so the user waits for the slower one, not for both.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        answer = pool.submit(answer_question, request.question, hits, chat_model, filenames=filenames)
+        risks = pool.submit(analyze_risks, hits, chat_model, filenames=filenames)
+        return hits, answer.result(), risks.result()
 
 
 def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore) -> list[ChunkHit]:

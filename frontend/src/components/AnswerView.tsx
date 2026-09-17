@@ -14,6 +14,7 @@ const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]/g
 export function AnswerView({ asked, contracts }: Props) {
   const { question, contract, response } = asked
   const [highlighted, setHighlighted] = useState<number | null>(null)
+  const [othersOpen, setOthersOpen] = useState(false)
   const filename = (contractId: string) => contracts.find((c) => c.contract_id === contractId)?.filename ?? 'contract'
   const cited = new Set(response.citations.map((c) => c.chunk_id))
   const others = response.retrieved_context.filter((chunk) => !cited.has(chunk.chunk_id))
@@ -21,7 +22,13 @@ export function AnswerView({ asked, contracts }: Props) {
 
   function jumpTo(label: number) {
     setHighlighted(label)
-    document.getElementById(`citation-${label}`)?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+    // A risk flag may point at a passage that was considered but not cited,
+    // which lives in the collapsed list: open it first, scroll once it shows.
+    const isCited = response.citations.some((c) => c.label === label)
+    if (!isCited) setOthersOpen(true)
+    requestAnimationFrame(() =>
+      document.getElementById(`citation-${label}`)?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }),
+    )
   }
 
   async function copy(citation: CitedChunk) {
@@ -86,13 +93,17 @@ export function AnswerView({ asked, contracts }: Props) {
       )}
 
       {others.length > 0 && (
-        <details className="others">
+        <details className="others" open={othersOpen} onToggle={(event) => setOthersOpen(event.currentTarget.open)}>
           <summary>
             {response.citations.length ? 'Other passages considered' : 'Passages considered'} ({others.length})
           </summary>
           <ol>
             {others.map((chunk: RetrievedChunk) => (
-              <li key={chunk.chunk_id} className="citation">
+              <li
+                key={chunk.chunk_id}
+                id={`citation-${response.retrieved_context.indexOf(chunk) + 1}`}
+                className={highlighted === response.retrieved_context.indexOf(chunk) + 1 ? 'citation highlighted' : 'citation'}
+              >
                 <div className="citation-head">
                   <span className="muted">
                     {filename(chunk.contract_id)}, passage {chunk.chunk_index + 1} · relevance {Math.round(chunk.score * 100)}%
@@ -106,12 +117,30 @@ export function AnswerView({ asked, contracts }: Props) {
       )}
 
       <h3>Risk flags</h3>
-      <p className="muted small">Rule-based placeholder until MAS-15/16; not yet a legal assessment.</p>
-      <ul className="risks">
-        {response.risks.map((risk) => (
-          <li key={risk}>{risk}</li>
-        ))}
-      </ul>
+      {!response.risks_checked ? (
+        <p className="badge unverified" role="status">
+          Risk analysis was unavailable for this answer. Ask again, or read the passages above.
+        </p>
+      ) : response.risks.length === 0 ? (
+        <p className="muted small">No risk flagged in the retrieved passages. Other parts of the contract were not checked.</p>
+      ) : (
+        <ul className="risks">
+          {response.risks.map((risk) => (
+            <li key={`${risk.category}-${risk.chunk_id}`} className={`risk severity-${risk.severity.toLowerCase()}`}>
+              <div className="risk-head">
+                <span className="severity">{risk.severity}</span>
+                <strong>{risk.category_name}</strong>
+                <button type="button" className="cite-marker" onClick={() => jumpTo(risk.label)} aria-label={`Show passage ${risk.label}`}>
+                  [{risk.label}]
+                </button>
+              </div>
+              <p className="risk-reason">{risk.reason}</p>
+              <blockquote>“{risk.quote}”</blockquote>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="muted small">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
       {response.recommended_actions.length > 0 && (
         <>
           <h3>Suggested next steps</h3>

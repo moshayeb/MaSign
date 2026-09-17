@@ -50,8 +50,9 @@ the answer renders (rule 3), failures show the `detail`. `AnswerView` turns
 each `[n]` in the answer into a button that highlights the cited passage,
 shows an **Unverified** badge when `grounded` is false, renders "Not found in
 contract." distinctly with the considered passages still listed, offers Copy
-per citation ("Citation [n] copied"), and lists the risk flags and suggested
-actions (placeholders until MAS-15/16).
+per citation ("Citation [n] copied"), and lists the risk flags (severity
+colour, category, reason, quoted clause, `[n]` link that also opens the
+collapsed passage list) and the suggested actions (MAS-15/16).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
@@ -66,6 +67,11 @@ Build output (`frontend/dist`) is served by FastAPI from `/` when present
 - `citations` — `{label, chunk_id, contract_id, chunk_index, text, score}` for
   each `[n]` actually used, so the markers can link to the quoted passage.
 - `answer_model` — which model wrote it (handy for the demo comparison).
+- `risks` — rubric findings `{category, category_name, severity, reason,
+  quote, label, chunk_id, contract_id, chunk_index}`, High first; `label` is
+  the passage's `[n]` so the flag can link to it. `risks_checked` is false
+  when the analysis could not run — say so, never show an empty "no risks".
+- `recommended_actions` — next steps derived from the findings.
 - `retrieved_context` — every passage considered, best first, same shape
   minus `label`; `chunk_index` gives its position in the contract and `score`
   (cosine, 0–1) can drive a relevance hint.

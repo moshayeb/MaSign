@@ -37,8 +37,32 @@ const answered: QueryResponse = {
   ],
   answer_model: 'claude-sonnet-5',
   retrieved_context: [chunk(1, '2. Fees. The Subscription Fee is EUR 18,500 per month.', 0.61), chunk(2, '2.3 Late payment shall accrue interest at 1.5% per month.', 0.55), chunk(9, '10. Insurance. …', 0.3)],
-  risks: ['No scaffolded risk rule matched; human review still required.'],
-  recommended_actions: ['Archive analysis result.'],
+  risks: [
+    {
+      category: 'payment_terms',
+      category_name: 'Payment terms',
+      severity: 'Medium',
+      reason: 'Late interest is at the top of the usual range.',
+      quote: 'Late payment shall accrue interest at 1.5% per month.',
+      label: 2,
+      chunk_id: 'c2',
+      contract_id: 'nw',
+      chunk_index: 2,
+    },
+    {
+      category: 'termination',
+      category_name: 'Termination',
+      severity: 'High',
+      reason: 'Termination fee of 50% of the remaining fees.',
+      quote: '10. Insurance. …',
+      label: 3,
+      chunk_id: 'c9',
+      contract_id: 'nw',
+      chunk_index: 9,
+    },
+  ],
+  risks_checked: true,
+  recommended_actions: ['Escalate to legal review before signing: Termination.', 'Raise in negotiation: Payment terms.'],
 }
 
 function json(status: number, body: unknown) {
@@ -99,9 +123,38 @@ describe('asking a question', () => {
     // No success toast: the answer is on screen (rule 3); the loading toast is just dismissed.
     expect(shown).toEqual([['dismissed', 'Reading the contract…']])
     expect(screen.queryByText(/Unverified/)).not.toBeInTheDocument()
-    // Uncited passages are still reachable, and the risk placeholder is shown.
+    // Uncited passages are still reachable.
     expect(screen.getByText(/Other passages considered \(1\)/)).toBeInTheDocument()
-    expect(screen.getByText(/human review still required/)).toBeInTheDocument()
+  })
+
+  it('renders each risk flag with severity, reason and the quoted clause, linked to its passage (MAS-16)', async () => {
+    await renderWithContractAndAsk('fee?', json(200, answered))
+    await screen.findByText(/The monthly fee is EUR 18,500/)
+
+    const flags = screen.getAllByRole('listitem').filter((li) => li.classList.contains('risk'))
+    expect(flags).toHaveLength(2)
+    expect(flags[0]).toHaveClass('severity-medium')
+    expect(within(flags[0]).getByText('Payment terms')).toBeInTheDocument()
+    expect(within(flags[0]).getByText(/Late interest is at the top/)).toBeInTheDocument()
+    expect(within(flags[0]).getByText(/“Late payment shall accrue interest at 1.5% per month.”/)).toBeInTheDocument()
+    expect(flags[1]).toHaveClass('severity-high')
+    expect(screen.getByText('Escalate to legal review before signing: Termination.')).toBeInTheDocument()
+
+    // The High flag points at an uncited passage: the collapsed list opens and the passage is highlighted.
+    await userEvent.click(within(flags[1]).getByRole('button', { name: 'Show passage 3' }))
+    const details = screen.getByText(/Other passages considered/).closest('details') as HTMLDetailsElement
+    expect(details.open).toBe(true)
+    await waitFor(() => expect(screen.getByText('10. Insurance. …').closest('li')).toHaveClass('highlighted'))
+  })
+
+  it('says so when the risk analysis was unavailable, and when nothing was flagged', async () => {
+    await renderWithContractAndAsk('fee?', json(200, { ...answered, risks: [], risks_checked: false }))
+    expect(await screen.findByText(/Risk analysis was unavailable/)).toBeInTheDocument()
+  })
+
+  it('shows a calm message when no risk was flagged', async () => {
+    await renderWithContractAndAsk('fee?', json(200, { ...answered, risks: [], risks_checked: true }))
+    expect(await screen.findByText(/No risk flagged in the retrieved passages/)).toBeInTheDocument()
   })
 
   it('shows an Unverified badge when the API says the answer is not grounded', async () => {
