@@ -152,6 +152,30 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(screen.getByText(/uploaded before whole-contract reviews existed/)).toBeInTheDocument()
   })
 
+  it('does not call empty categories clean when the review failed or was partial (MAS-87)', async () => {
+    const partial = review({ status: 'done', complete: false, chunks_checked: 9, findings: done.findings })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, partial))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    expect(await screen.findByText(/Partly reviewed · 9\/12 passages/)).toBeInTheDocument()
+    expect(screen.queryByText('Nothing found')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Unable to determine')).toHaveLength(5)
+    expect(screen.getAllByText('High').length).toBeGreaterThan(0) // verified findings still graded
+    const cells = screen.getAllByRole('listitem').filter((li) => li.classList.contains('review-cat'))
+    expect(cells.filter((li) => li.classList.contains('clean'))).toHaveLength(0)
+  })
+
+  it('shows "Unable to determine" for every category of a failed review', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'failed', complete: false, chunks_checked: 0, error: 'rate limited' })))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    expect(await screen.findByText('Review failed')).toBeInTheDocument()
+    expect(screen.getAllByText('Unable to determine')).toHaveLength(7)
+    expect(screen.queryByText('Nothing found')).not.toBeInTheDocument()
+  })
+
   it('says plainly when everything was read and nothing was flagged', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({})))
 

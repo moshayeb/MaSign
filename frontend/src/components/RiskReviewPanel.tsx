@@ -77,6 +77,11 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
     }
   }
 
+  // "Nothing found" is a claim about the whole contract; it is only true
+  // when every passage was graded. Otherwise an empty category is
+  // "Unable to determine" (MAS-87).
+  const settledClean = review !== null && review.status === 'done' && review.complete
+
   const findings = review ? [...review.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.chunk_index - b.chunk_index) : []
 
   return (
@@ -129,14 +134,21 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
       {review && (
         <ul className="review-grid" aria-label="Risk categories">
           {review.categories.map((category) => (
-            <li key={category.id} className={category.worst_severity ? `review-cat severity-${category.worst_severity.toLowerCase()}` : running ? 'review-cat' : 'review-cat clean'}>
+            <li
+              key={category.id}
+              className={
+                category.worst_severity ? `review-cat severity-${category.worst_severity.toLowerCase()}` : settledClean ? 'review-cat clean' : 'review-cat'
+              }
+            >
               <span className="review-cat-name">{category.name}</span>
               {category.worst_severity ? (
                 <span className="severity">{category.worst_severity}</span>
               ) : running ? (
                 <span className="muted small">…</span>
-              ) : (
+              ) : settledClean ? (
                 <span className="muted small">Nothing found</span>
+              ) : (
+                <span className="muted small">Unable to determine</span>
               )}
             </li>
           ))}
