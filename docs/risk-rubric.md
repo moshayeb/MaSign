@@ -41,8 +41,10 @@ Derived deterministically from the findings (`app/actions/workflow.py`): any
 High → "Escalate to legal review before signing: <categories>"; any Medium →
 "Raise in negotiation: <categories>"; Low only → note for the contract owner;
 always a reminder to confirm against the full contract. When the analysis
-could not be run or read, the response says so (`risks_checked: false`)
-instead of showing an empty list.
+could not be run or read — or every finding it returned failed validation —
+the response says so (`risks_checked: false`) instead of showing an empty
+list; when only some findings failed, the verified ones are returned with
+`risks_complete: false`. A failed risk call never discards a good answer.
 
 ## Known limits
 

@@ -51,9 +51,13 @@ class RiskFinding:
 @dataclass(frozen=True)
 class RiskReport:
     findings: list[RiskFinding]
-    # False when the model's reply could not be read as findings: the UI says
-    # so instead of showing an empty, reassuring list.
+    # False when the model's reply could not be read as findings — or every
+    # finding in it failed validation: the UI says so instead of showing an
+    # empty, reassuring list (MAS-74).
     checked: bool
+    # False when some findings failed validation and were dropped: the ones
+    # that passed are shown, with a warning that the analysis is incomplete.
+    complete: bool = True
 
 
 def analyze_risks(
@@ -82,17 +86,24 @@ def analyze_risks(
 
     findings: list[RiskFinding] = []
     seen: set[tuple[str, int]] = set()
+    dropped = 0
     for item in items:
         finding = _validate(item, hits)
         if finding is None:
             logger.warning("Dropped risk finding from %s: %.200r", model.model_name, item)
+            dropped += 1
             continue
         if (finding.category, finding.label) in seen:
             continue
         seen.add((finding.category, finding.label))
         findings.append(finding)
     findings.sort(key=lambda f: (-SEVERITIES.index(f.severity), f.label))
-    return RiskReport(findings, checked=True)
+    if dropped and not findings:
+        # The model reported risks but none could be verified: that is an
+        # unusable analysis, not a clean bill of health (MAS-74).
+        logger.warning("Risk analysis from %s: all %d finding(s) rejected; treating as unavailable", model.model_name, dropped)
+        return RiskReport([], checked=False)
+    return RiskReport(findings, checked=True, complete=dropped == 0)
 
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")
@@ -107,18 +118,24 @@ def _parse_findings(text: str) -> list | None:
 
 
 def _validate(item: object, hits: list[ChunkHit]) -> RiskFinding | None:
+    # Every field is type-checked before use: the model may answer with the
+    # wrong shape (a list or object where a string belongs), and a finding
+    # is dropped for that, never a request failed (MAS-75).
     if not isinstance(item, dict):
         return None
-    category = CATEGORY_BY_ID.get(item.get("category"))
+    category_id = item.get("category")
     severity = item.get("severity")
     reason = item.get("reason")
     label = item.get("passage")
     quote = item.get("quote")
-    if category is None or severity not in SEVERITIES:
+    if not isinstance(category_id, str) or category_id not in CATEGORY_BY_ID:
+        return None
+    category = CATEGORY_BY_ID[category_id]
+    if not isinstance(severity, str) or severity not in SEVERITIES:
         return None
     if not isinstance(reason, str) or not reason.strip():
         return None
-    if not isinstance(label, int) or not 1 <= label <= len(hits):
+    if not isinstance(label, int) or isinstance(label, bool) or not 1 <= label <= len(hits):
         return None
     if not isinstance(quote, str) or not quote.strip():
         return None

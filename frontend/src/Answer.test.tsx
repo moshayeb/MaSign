@@ -62,6 +62,7 @@ const answered: QueryResponse = {
     },
   ],
   risks_checked: true,
+  risks_complete: true,
   recommended_actions: ['Escalate to legal review before signing: Termination.', 'Raise in negotiation: Payment terms.'],
 }
 
@@ -150,6 +151,14 @@ describe('asking a question', () => {
   it('says so when the risk analysis was unavailable, and when nothing was flagged', async () => {
     await renderWithContractAndAsk('fee?', json(200, { ...answered, risks: [], risks_checked: false }))
     expect(await screen.findByText(/Risk analysis was unavailable/)).toBeInTheDocument()
+  })
+
+  it('warns that the analysis is incomplete without hiding the verified flags (MAS-74)', async () => {
+    await renderWithContractAndAsk('fee?', json(200, { ...answered, risks_complete: false }))
+    await screen.findByText(/The monthly fee is EUR 18,500/)
+
+    expect(screen.getByText(/Incomplete analysis/)).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem').filter((li) => li.classList.contains('risk'))).toHaveLength(2)
   })
 
   it('shows a calm message when no risk was flagged', async () => {

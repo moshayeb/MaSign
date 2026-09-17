@@ -90,13 +90,18 @@ class FakeChatModel:
         # prompt; by default it finds nothing.
         self.risk_reply: str | Callable[[str], str] = "[]"
         self.truncated = False
+        # Set to an exception to make only the risk call fail (MAS-76).
+        self.risk_error: Exception | None = None
 
     def complete(self, system: str, user: str, *, max_tokens: int):
         from app.answering.llm import Completion
         from app.risk_analysis.analyzer import SYSTEM_PROMPT as RISK_PROMPT
 
         self.calls.append((system, user))
-        reply = self.risk_reply if system == RISK_PROMPT else self.reply
+        is_risk = system == RISK_PROMPT
+        if is_risk and self.risk_error is not None:
+            raise self.risk_error
+        reply = self.risk_reply if is_risk else self.reply
         return Completion(reply(user) if callable(reply) else reply, truncated=self.truncated)
 
 

@@ -96,6 +96,7 @@ export interface QueryResponse {
   retrieved_context: RetrievedChunk[]
   risks: RiskFlag[]
   risks_checked: boolean
+  risks_complete: boolean
   recommended_actions: string[]
 }
 
