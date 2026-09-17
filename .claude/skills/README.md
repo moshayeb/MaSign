@@ -1,23 +1,22 @@
-# Agent Skills — Homework 03
+# MaSign agent skills
 
-Ett litet, cherry-pickat urval av Skills för att stödja ett bra agent-workflow i våra projekt (t.ex. ARC-Assistant, MassQL), snarare än att implementera hela listan från uppgiften.
+Project-specific skills for Claude Code, derived from the five generic
+Homework-03 skills (kept for provenance in `docs/agent-skills-hw03/`) and from
+what Sprint 1 of MaSign actually taught. Each `SKILL.md` `description` is the
+trigger: it names the concrete situations in this project that should make
+the skill fire, so it is picked up by situation, not only by name.
 
-## Urval och motivering
-
-| Skill | Från uppgiftens lista | Varför just denna |
+| Skill | Fires when… | Replaces / adds |
 |---|---|---|
-| `spec-from-brainstorm` | Brainstorming → samsyn → spec ("grill-me") | Störst hävstång tidigt i flödet: billigast att fixa missförstånd innan kod skrivits. |
-| `ticket-git-workflow` | Tickets ↔ git/Jira, tydliga testbara mål | Vi har redan ett riktigt Jira-projekt (AA) och git-workflow med Konrad — direkt applicerbart, inte hypotetiskt. |
-| `definition-of-done` | Agentbeteende vid "klar" (review, test, coverage, PR, ticket-uppdatering) | Gör "jag tror det är klart" till en verifierbar checklista istället för en gissning. |
-| `dual-pass-thinking` | Skills för tankesätt (confirmational→adversarial→concluding) | Billig att använda selektivt på dyra/svårreverserade beslut, t.ex. schema-design. |
-| `session-handoff` | Handover/compaction + strukturerad trädsammanfattning | Kombinerar två relaterade punkter i listan till en skill; särskilt relevant givet vårt fokus på context engineering. |
+| `masign-ticket-flow` | starting work, reviewer findings pasted, any Jira create/close, branching, committing, PR handover, connector timeouts | evolves `ticket-git-workflow` + the owner-files rule + connector quirks |
+| `masign-done` | about to say "done", push, or write an evidence comment | evolves `definition-of-done` with the exact commands and the docs map |
+| `api-spend-guard` | anything that could reach Anthropic/OpenAI | new — the owner's standing rule, with a cost table |
+| `honest-outcomes` | designing/reviewing anything model-facing or any result state | new — the product principle behind MAS-74/76/80/87/90 |
+| `ui-preview` | any frontend change or visual check | new — canned-API harness, headless Edge, toast rules |
+| `masign-handoff` | session start, wrap up, /compact, before a demo | evolves `session-handoff` with the start-of-session routine |
+| `decide-carefully` | vague feature ideas; costly or trust-affecting decisions | merges `spec-from-brainstorm` + `dual-pass-thinking` with MaSign precedents |
 
-## Medvetet bortvalt (cherry-picking)
-
-- **Kommunikation mellan parallella agenter** — märkt som överkurs i uppgiften; vårt setup är ännu inte tillräckligt parallellt för att motivera komplexiteten just nu.
-- **Skills för specialområden (GUI-design etc.)** och **infrastruktur-skills (test-miljöer, k8s etc.)** — för projektspecifika för att vara en generell, återanvändbar del av ett "litet" urval; bättre som separata skills per projekt om/när behovet uppstår.
-- **Lokal knowledge-base-skill** — viktig på sikt (att äga sin domänkunskap även i agent-skriven form), men kräver en beslutad struktur för kunskapsbasen först; naturlig uppföljare till `session-handoff`.
-
-## Hur de hänger ihop
-
-`spec-from-brainstorm` → skriver ticket enligt `ticket-git-workflow` → arbete verifieras mot `definition-of-done` → beslut som är dyra att ändra körs genom `dual-pass-thinking` → sessionen avslutas med `session-handoff`, som nästa session läser innan den gör något annat.
+How they chain: `masign-handoff` (read) → `decide-carefully` (spec into the
+ticket) → `masign-ticket-flow` (branch, findings as tickets) → build with
+`honest-outcomes` and `ui-preview`, spending nothing without `api-spend-guard`
+→ `masign-done` (verify, document, evidence) → `masign-handoff` (write).

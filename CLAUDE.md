@@ -103,16 +103,19 @@ passages. The review costs about one model call per 8 passages.
 
 ## Agent skills (MAS-72)
 
-The five skills from Homework 03 live in `.claude/skills/` and load in every
-session here: `spec-from-brainstorm` (vague idea → confirmed spec before code),
-`ticket-git-workflow` (testable acceptance criteria, ticket ↔ branch ↔ commit
-↔ PR links), `definition-of-done` (tests, self-review, PR, ticket update
-before saying "done"), `dual-pass-thinking` (confirmational → adversarial →
-concluding for costly decisions), `session-handoff` (one tree summary per
-session in `docs/handoffs/<date>-<topic>.md`; a new session reads the latest
-first). Two places they yield to this file: branches stay `MAS-<n>-slug` (no
-`feature/` prefix), and since the owner opens PRs, Claude hands over the PR
-title and a description ending in `Closes MAS-<n>`.
+`.claude/skills/` holds seven MaSign-specific skills that load in every
+session here; `.claude/skills/README.md` is the index and
+`docs/agent-skills-hw03/` keeps the five generic Homework-03 originals they
+grew from. Their `description` fields are the triggers, written as this
+project's concrete situations: `masign-ticket-flow` (Jira/git procedure,
+owner's files never staged, connector timeouts → read before retry),
+`masign-done` (the exact commands and docs map before "done"),
+`api-spend-guard` (ask before any paid call, with the cost table),
+`honest-outcomes` (unavailable ≠ empty; verify quotes or drop),
+`ui-preview` (canned-API screenshots, zero spend), `masign-handoff`
+(`docs/handoffs/`, read the latest at session start) and `decide-carefully`
+(spec into the ticket before code; confirm → attack → conclude for costly
+decisions). When a skill and this file disagree, this file wins; fix the skill.
 
 ## Frontend Decision
 
