@@ -13,7 +13,6 @@ qdrant-client>=1.10.0
 torch>=2.4.0
 sentence-transformers>=3.0.0
 # Answer generation (MAS-13): one of the two is used, chosen by CHAT_PROVIDER.
-anthropic>=1.0.0
-openai>=1.50.0
+litellm>=1.70.0
 pytest>=8.3.0
 httpx>=0.27.0

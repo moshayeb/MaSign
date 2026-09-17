@@ -82,7 +82,11 @@ detection) and MAS-14/32 (grounding discipline) need legal reading
 comprehension more than raw Q&A does, and per-query cost is cents either way.
 Switching providers is config only: the prompt is ours (`app/answering/
 grounding.py`) and nothing model-specific is stored — but rerun the MAS-32 set
-after a switch. Every answer must carry `[n]` citations; uncited answers are
+after a switch. Since MAS-90 every call goes through `litellm.completion()`
+and the model is wrapped in the prompt-injection guardrail
+(`app/guardrails/prompt_injection.py`, a LiteLLM `CustomGuardrail`): contract
+passages carrying instructions to the AI are withheld before the call, never
+silently forwarded. Tests wrap the fake model in the same guardrail. Every answer must carry `[n]` citations; uncited answers are
 returned with `grounded: false`, never silently accepted.
 
 ## Risk rubric (MAS-15/16)

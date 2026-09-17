@@ -1,16 +1,18 @@
-"""The chat model that writes answers (MAS-13).
+"""The chat model that writes answers (MAS-13), called through LiteLLM (MAS-90).
 
-One small interface, two providers. CHAT_PROVIDER picks Anthropic (default)
-or OpenAI, CHAT_MODEL the model; switching is a config change because the
-prompt lives in `grounding.py` and nothing about the model is stored. Tests
-use a fake, so no key is needed there.
+One small interface. CHAT_PROVIDER picks Anthropic (default) or OpenAI,
+CHAT_MODEL the model; switching is a config change because the prompt lives
+in `grounding.py` and nothing about the model is stored. Every call goes
+through `litellm.completion()`, and every production model is wrapped in the
+prompt-injection guardrail (`app/guardrails/prompt_injection.py`). Tests use
+a fake, so no key is needed there.
 """
 
 import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ PROVIDERS = ("anthropic", "openai")
 DEFAULT_PROVIDER = "anthropic"
 DEFAULT_MODELS = {"anthropic": "claude-sonnet-5", "openai": "gpt-4.1-mini"}
 KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
+PROVIDER_LABELS = {"anthropic": "Anthropic", "openai": "OpenAI"}
 
 
 class ChatModelError(RuntimeError):
@@ -33,15 +36,19 @@ class Completion:
     # Generation stopped at max_tokens: the text is incomplete and must not be
     # trusted as a finished answer (MAS-70).
     truncated: bool = False
+    # Passage numbers the guardrail withheld from the prompt (MAS-90).
+    blocked: tuple[int, ...] = ()
 
 
 class ChatModel(Protocol):
     provider: str
     model_name: str
 
-    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
+    def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None) -> Completion:
         """One system prompt, one user message, the model's reply.
 
+        `metadata` describes the passages in the user message for the
+        guardrail's log lines; it is never sent to the provider.
         Raises ChatModelError when the model cannot be used or returns no text.
         """
         ...
@@ -54,71 +61,50 @@ def _completion(text: str, truncated: bool, model_name: str) -> Completion:
     return Completion(text, truncated=truncated)
 
 
-class AnthropicChatModel:
-    provider = "anthropic"
+class LiteLLMChatModel:
+    """Any provider LiteLLM speaks, addressed as `<provider>/<model>`."""
 
-    def __init__(self, model_name: str, api_key: str, client: Any = None) -> None:
+    def __init__(
+        self,
+        provider: str,
+        model_name: str,
+        api_key: str,
+        completion_fn: Callable[..., Any] | None = None,
+    ) -> None:
+        self.provider = provider
         self.model_name = model_name
         self._api_key = api_key
-        self._client = client
+        # Injected in tests; `litellm.completion` otherwise.
+        self._completion_fn = completion_fn
 
-    def _sdk(self):
-        if self._client is None:
-            import anthropic
-
-            self._client = anthropic.Anthropic(api_key=self._api_key)
-        return self._client
-
-    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
-        import anthropic
-
-        try:
-            response = self._sdk().messages.create(
-                model=self.model_name,
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-                # Sonnet 5 thinks adaptively by default and that would share
-                # max_tokens with the answer; extractive Q&A over a handful
-                # of passages does not need it (MAS-70).
-                thinking={"type": "disabled"},
-            )
-        except anthropic.APIStatusError as error:
-            raise ChatModelError(f"Anthropic API refused the request (HTTP {error.status_code}): {error.message}") from error
-        except anthropic.APIConnectionError as error:
-            raise ChatModelError(f"Anthropic API is unreachable: {error}") from error
-        text = "".join(block.text for block in response.content if getattr(block, "type", "") == "text")
-        return _completion(text, response.stop_reason == "max_tokens", self.model_name)
-
-
-class OpenAIChatModel:
-    provider = "openai"
-
-    def __init__(self, model_name: str, api_key: str, client: Any = None) -> None:
-        self.model_name = model_name
-        self._api_key = api_key
-        self._client = client
-
-    def _sdk(self):
-        if self._client is None:
-            import openai
-
-            self._client = openai.OpenAI(api_key=self._api_key)
-        return self._client
-
-    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
+    def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None) -> Completion:
+        import litellm
         import openai
 
+        litellm.suppress_debug_info = True
+        call = self._completion_fn or litellm.completion
+        label = PROVIDER_LABELS[self.provider]
+        extra: dict[str, Any] = {}
+        if self.provider == "anthropic":
+            # Sonnet 5 thinks adaptively by default and that would share
+            # max_tokens with the answer; extractive Q&A over a handful of
+            # passages does not need it (MAS-70).
+            extra["thinking"] = {"type": "disabled"}
         try:
-            response = self._sdk().chat.completions.create(
-                model=self.model_name,
-                max_completion_tokens=max_tokens,
+            response = call(
+                model=f"{self.provider}/{self.model_name}",
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                max_tokens=max_tokens,
+                api_key=self._api_key,
+                drop_params=True,  # a provider that lacks a parameter gets the call without it
+                **extra,
             )
-        except openai.APIStatusError as error:
-            raise ChatModelError(f"OpenAI API refused the request (HTTP {error.status_code}): {error.message}") from error
-        except openai.APIConnectionError as error:
-            raise ChatModelError(f"OpenAI API is unreachable: {error}") from error
+        except litellm.APIConnectionError as error:
+            raise ChatModelError(f"{label} API is unreachable: {error}") from error
+        except openai.APIError as error:  # every LiteLLM provider error derives from these
+            status = getattr(error, "status_code", None)
+            reason = f"HTTP {status}" if status else type(error).__name__
+            raise ChatModelError(f"{label} API refused the request ({reason}): {getattr(error, 'message', error)}") from error
         choice = response.choices[0]
         return _completion(choice.message.content or "", choice.finish_reason == "length", self.model_name)
 
@@ -131,7 +117,7 @@ class UnconfiguredChatModel:
         self.model_name = "unconfigured"
         self.key_variable = KEY_VARIABLES[provider]
 
-    def complete(self, system: str, user: str, *, max_tokens: int) -> Completion:
+    def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None) -> Completion:
         raise ChatModelError(
             f"Answer generation is not configured: set {self.key_variable} (CHAT_PROVIDER={self.provider})."
         )
@@ -147,7 +133,7 @@ def get_chat_model() -> ChatModel:
     if not api_key:
         logger.warning("%s is not set: /api/query will not generate answers until it is", KEY_VARIABLES[provider])
         return UnconfiguredChatModel(provider)
-    logger.info("Chat model: %s %s", provider, model_name)
-    if provider == "anthropic":
-        return AnthropicChatModel(model_name, api_key)
-    return OpenAIChatModel(model_name, api_key)
+    logger.info("Chat model: %s %s via LiteLLM, prompt-injection guardrail on", provider, model_name)
+    from app.guardrails.prompt_injection import GuardedChatModel  # avoids an import cycle
+
+    return GuardedChatModel(LiteLLMChatModel(provider, model_name, api_key))

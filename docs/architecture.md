@@ -84,6 +84,23 @@ contract." An empty retrieval never reaches the model. Citations in the reply
 are parsed and resolved to the chunks; an answer that cites nothing is still
 returned but `grounded: false`, so the UI can flag it and MAS-32 can count it.
 
+## Model calls and the prompt-injection guardrail (MAS-90)
+
+`app/answering/llm.py` has one adapter, `LiteLLMChatModel`, which calls
+`litellm.completion()` with `<provider>/<model>` (Anthropic by default,
+OpenAI by config) and maps LiteLLM's exceptions to a readable
+`ChatModelError`. `get_chat_model()` wraps it in `GuardedChatModel`
+(`app/guardrails/prompt_injection.py`): every `complete()` builds the
+LiteLLM request (`messages` + `metadata.passages`), runs the guardrail's
+`async_pre_call_hook` on it — the same hook the LiteLLM proxy would run for a
+registered guardrail — and sends what comes back. The hook withholds
+contract passages that carry instructions addressed to the AI (numbering
+kept, text replaced, warning with contract_id / chunk_index), refuses an
+injected question outright, and reports the withheld passage numbers, which
+`Completion.blocked` carries to the answer and to `/api/query`'s
+`blocked_passages`. Tests wrap the fake model in the same guardrail, so the
+API tests exercise it without a key.
+
 ## Risk analysis
 
 `app/risk_analysis/rubric.py` defines seven categories (liability cap,

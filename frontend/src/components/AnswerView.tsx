@@ -71,6 +71,14 @@ export function AnswerView({ asked, contracts }: Props) {
         <p className="answer-text">{renderWithMarkers(response.answer, jumpTo)}</p>
       )}
 
+      {response.blocked_passages.length > 0 && (
+        <p className="badge unverified" role="status">
+          {response.blocked_passages.length === 1 ? 'One passage was' : `${response.blocked_passages.length} passages were`} withheld from the
+          model: {response.blocked_passages.length === 1 ? 'it' : 'they'} contained instructions addressed to the AI rather than contract terms
+          (passage {response.blocked_passages.join(', ')} below). Treat that part of the contract with suspicion.
+        </p>
+      )}
+
       {!notFound && !response.grounded && (
         <p className="badge unverified" role="status">
           Unverified — this answer is incomplete or not fully backed by the cited passages. Read the passages before relying on it.
@@ -89,6 +97,7 @@ export function AnswerView({ asked, contracts }: Props) {
               >
                 <div className="citation-head">
                   <span className="cite-label">{citation.label}</span>
+                  {response.blocked_passages.includes(citation.label) && <span className="status warn">Withheld from the model</span>}
                   <span className="muted">
                     {filename(citation.contract_id)}, passage {citation.chunk_index + 1} · relevance {Math.round(citation.score * 100)}%
                   </span>
@@ -119,6 +128,9 @@ export function AnswerView({ asked, contracts }: Props) {
                   <span className="muted">
                     {filename(chunk.contract_id)}, passage {chunk.chunk_index + 1} · relevance {Math.round(chunk.score * 100)}%
                   </span>
+                  {response.blocked_passages.includes(response.retrieved_context.indexOf(chunk) + 1) && (
+                    <span className="status warn">Withheld from the model</span>
+                  )}
                 </div>
                 <blockquote>{chunk.text}</blockquote>
               </li>
