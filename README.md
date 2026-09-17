@@ -141,6 +141,36 @@ automatically from `DATABASE_URL` and emptied after each test — your dev data
 is never touched. Without a reachable Postgres they are skipped; set
 `MASIGN_REQUIRE_DB=1` (as CI does) to make that a failure instead.
 
+## Security and secrets
+
+Checked on 2026-09-17 (MAS-33) and to be repeated before the v1.0.0 tag:
+
+- **No secrets in the repository or its history.** `git log --all -p` grepped
+  for Anthropic / OpenAI / Atlassian / AWS / GitHub / Slack key shapes and
+  private-key headers: 0 hits over all 68 commits. `.env` has never been
+  committed; it is git-ignored together with `.claude/`, and `.env.example`
+  contains placeholders only (`ANTHROPIC_API_KEY=`, `OPENAI_API_KEY=`).
+- **Database credentials are dev-only.** `rag_user` / `rag_password` in
+  `docker-compose.yml` exist for the local stack and CI; the API reads
+  `DATABASE_URL`, so a deployment sets its own.
+- **Upload limits are enforced server-side** (`app/ingestion/uploads.py`):
+  10 MB read cap, file type detected from the bytes (not the filename or
+  the client's content type), TXT/PDF/DOCX only; oversize, empty and
+  unsupported uploads get a 400 / 413 / 415 with a readable `detail`; a PDF
+  with no text layer is a 422.
+- **No user input reaches SQL as text.** Every query in
+  `app/database/repository.py` uses psycopg parameters; there is no
+  f-string, `%` or `+` building of SQL anywhere in `app/`.
+- **Model calls carry only contract text and the question.** No user
+  identity or filename beyond what is needed for the citation label is sent
+  to the provider; keys are read from the environment at startup.
+
+To repeat the history scan:
+
+```bash
+git log --all -p | grep -cE "sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|ATATT[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY"
+```
+
 ## Development Workflow
 
 Work is tracked in Jira project [MAS](https://moshayeb.atlassian.net/jira/software/projects/MAS/boards/100/backlog),
