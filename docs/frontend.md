@@ -56,18 +56,27 @@ collapsed passage list) and the suggested actions (MAS-15/16).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
-## Look and feel (MAS-73)
+## Look and feel (MAS-73, MAS-79)
 
-Dark slate theme (Inter, `#0b1220` background, `#111a2c` cards) with the
-logo's cyan `#009fe3` as the accent — inspired by a Gemini-generated landing
-page the owner liked. The logo icon is inlined (`components/Logo.tsx`) so its
-ink paths follow the theme; the wordmark SVGs depend on the Azonix font and
-are not used in the browser — the header types "MASIGN" in Michroma next to
-the icon. Two-column layout (contracts left, ask/answer
-right) stacking under 900 px. Cards are `.card` (never bare `section`, so the
-toast container stays invisible). Upload is a drop zone with a hidden native
-input; contract rows carry a file-type badge and a clear selected state; the
-empty state offers example questions that fill the question box.
+Deep navy theme (Inter, `#070c16` ground with a cyan glow and a faint grid
+that fades out, translucent "glass" panels) with the logo's cyan `#009fe3` as
+the single accent — inspired by a Gemini-generated landing page the owner
+liked. The logo icon is inlined (`components/Logo.tsx`) so its ink paths
+follow the theme; the wordmark SVGs depend on the Azonix font and are not
+used in the browser — the header types "MASIGN" in Michroma next to the icon
+(to be replaced by the outlined wordmark once the owner exports it).
+Two-column layout: a sticky sidebar (upload drop zone, compact contract rows
+with a file-type tag) and the main column, stacking under 960 px. Before the
+first answer the main column is a landing: headline, the question composer
+(scope pills and Ask inside one bordered box), example questions as chips
+and three feature tiles; after it, the composer and the answer card.
+Cards are `.card` (never bare `section`, so the toast container stays
+invisible); section titles are small uppercase labels. The answer card
+carries a status pill — green "Grounded · n passages", amber "Unverified",
+grey "Not in the text" — and citation cards with a numbered bubble.
+Verified with headless-Edge screenshots at 1280 px and inside a 400 px
+iframe (headless Edge clamps its own viewport to 492 px, so narrow widths
+must be checked through an iframe).
 
 ## Query results
 
