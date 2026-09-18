@@ -14,11 +14,19 @@ const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]/g
 export function AnswerView({ asked, contracts }: Props) {
   const { question, contract, response } = asked
   const [highlighted, setHighlighted] = useState<number | null>(null)
-  const [othersOpen, setOthersOpen] = useState(false)
+  // A withheld answer's whole point is the passage the user must read: open it.
+  const [othersOpen, setOthersOpen] = useState(asked.response.answer_status === 'withheld')
   const filename = (contractId: string) => contracts.find((c) => c.contract_id === contractId)?.filename ?? 'contract'
   const cited = new Set(response.citations.map((c) => c.chunk_id))
   const others = response.retrieved_context.filter((chunk) => !cited.has(chunk.chunk_id))
-  const notFound = response.answer === NOT_FOUND
+  // Three outcomes, never two: answered, not found in what the model could
+  // read, or withheld — the model was never asked (MAS-93).
+  const withheld = response.answer_status === 'withheld'
+  const notFound = !withheld && (response.answer_status === 'not_found' || response.answer === NOT_FOUND)
+  const blockedCount = (response.blocked_passages ?? []).length
+  const passageCount = response.retrieved_context.length
+  const readable = passageCount - blockedCount
+  const allWithheld = withheld || (passageCount > 0 && blockedCount === passageCount)
 
   function jumpTo(label: number) {
     setHighlighted(label)
@@ -46,7 +54,9 @@ export function AnswerView({ asked, contracts }: Props) {
       <div className="answer-header">
         <h2>
           Answer
-          {notFound ? (
+          {withheld ? (
+            <span className="status warn">Withheld</span>
+          ) : notFound ? (
             <span className="status none">Not in the text</span>
           ) : response.grounded ? (
             <span className="status ok">
@@ -63,15 +73,29 @@ export function AnswerView({ asked, contracts }: Props) {
       </div>
       <p className="answer-question muted">“{question}”</p>
 
-      {notFound ? (
+      {withheld ? (
         <p className="answer-text not-found">
-          {NOT_FOUND} <span className="muted">The retrieved passages do not cover this question; they are listed below so you can check.</span>
+          Could not answer.{' '}
+          <span className="muted">
+            {passageCount === 1 ? 'The only passage' : `All ${passageCount} passages`} matching this question{' '}
+            {passageCount === 1 ? 'was' : 'were'} withheld from the model because {passageCount === 1 ? 'it contains' : 'they contain'}{' '}
+            instructions addressed to the AI. The model was not asked. Read {passageCount === 1 ? 'it' : 'them'} below yourself.
+          </span>
+        </p>
+      ) : notFound ? (
+        <p className="answer-text not-found">
+          {NOT_FOUND}{' '}
+          <span className="muted">
+            {blockedCount > 0
+              ? `Not in the ${readable} passage${readable === 1 ? '' : 's'} the model was allowed to read (${blockedCount} of ${passageCount} withheld); they are listed below so you can check.`
+              : 'The retrieved passages do not cover this question; they are listed below so you can check.'}
+          </span>
         </p>
       ) : (
         <p className="answer-text">{renderWithMarkers(response.answer, jumpTo)}</p>
       )}
 
-      {response.blocked_passages.length > 0 && (
+      {blockedCount > 0 && !withheld && (
         <p className="badge unverified" role="status">
           {response.blocked_passages.length === 1 ? 'One passage was' : `${response.blocked_passages.length} passages were`} withheld from the
           model: {response.blocked_passages.length === 1 ? 'it' : 'they'} contained instructions addressed to the AI rather than contract terms
@@ -79,7 +103,7 @@ export function AnswerView({ asked, contracts }: Props) {
         </p>
       )}
 
-      {!notFound && !response.grounded && (
+      {!notFound && !withheld && !response.grounded && (
         <p className="badge unverified" role="status">
           Unverified — this answer is incomplete or not fully backed by the cited passages. Read the passages before relying on it.
         </p>
@@ -140,15 +164,30 @@ export function AnswerView({ asked, contracts }: Props) {
       )}
 
       <h3>Risk flags</h3>
-      {!response.risks_checked ? (
+      {allWithheld ? (
+        <p className="badge unverified" role="status">
+          Risk check not run: the retrieved {passageCount === 1 ? 'passage was' : 'passages were'} withheld from the model. Nothing here
+          was graded — this is not a clean result.
+        </p>
+      ) : !response.risks_checked ? (
         <p className="badge unverified" role="status">
           Risk analysis was unavailable for this answer. Ask again, or read the passages above.
         </p>
       ) : response.risks.length === 0 ? (
-        <p className="muted small">No risk flagged in the retrieved passages. Other parts of the contract were not checked.</p>
+        <p className="muted small">
+          {blockedCount > 0
+            ? `No risk flagged in the ${readable} of ${passageCount} passages the model could read; ${blockedCount} withheld and not graded.`
+            : 'No risk flagged in the retrieved passages.'}{' '}
+          Other parts of the contract were not checked.
+        </p>
       ) : (
         <>
-          {!response.risks_complete && (
+          {blockedCount > 0 && (
+            <p className="badge unverified" role="status">
+              {readable} of {passageCount} passages checked; {blockedCount} withheld from the model and not graded.
+            </p>
+          )}
+          {!response.risks_complete && blockedCount === 0 && (
             <p className="badge unverified" role="status">
               Incomplete analysis — some of the model's findings could not be verified against the passages and were left out. The flags
               below are verified.

@@ -84,6 +84,10 @@ class RiskFlag(BaseModel):
 
 class QueryResponse(BaseModel):
     answer: str
+    # answered | not_found | withheld. "withheld" means every retrieved
+    # passage was withheld by the guardrail and the model was never asked;
+    # it is a different fact from "not found" and the UI shows it as such (MAS-93).
+    answer_status: str
     # False when the answer is "Not found in contract." or carries no citation.
     grounded: bool
     citations: list[CitedChunk]
@@ -156,6 +160,9 @@ class RiskReviewResponse(BaseModel):
     model: str | None
     chunks_total: int
     chunks_checked: int
+    # Passages the guardrail withheld from the model: never graded, and not
+    # counted in chunks_checked (MAS-94).
+    chunks_withheld: int
     # False while running, or when some passages could not be graded.
     complete: bool
     error: str | None
@@ -189,6 +196,7 @@ class RiskReviewResponse(BaseModel):
             model=review.model,
             chunks_total=review.chunks_total,
             chunks_checked=review.chunks_checked,
+            chunks_withheld=review.chunks_withheld,
             complete=review.complete,
             error=review.error,
             updated_at=review.updated_at,
@@ -373,6 +381,7 @@ async def query_contract(
 
     return QueryResponse(
         answer=answer.text,
+        answer_status=answer.status,
         grounded=answer.grounded,
         citations=[
             CitedChunk(label=citation.label, **RetrievedChunk.from_hit(citation.hit).model_dump())
@@ -396,8 +405,8 @@ async def query_contract(
         ],
         risks_checked=risks.checked,
         risks_complete=risks.complete,
-        recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked),
-        blocked_passages=sorted(set(answer.blocked)),
+        recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked, withheld=len(risks.blocked)),
+        blocked_passages=sorted(set(answer.blocked) | set(risks.blocked)),
     )
 
 

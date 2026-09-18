@@ -5,8 +5,9 @@ passages a question happens to retrieve: the chunks are sent to the model in
 batches, each batch graded by `analyze_risks` with the same validation (a
 finding must quote its passage verbatim), and the verified findings are
 stored per contract. Silence in the review means "read, nothing found" —
-a batch the model could not grade makes the review incomplete, and a model
-failure makes it failed, never quietly empty.
+a batch the model could not grade makes the review incomplete, a passage the
+guardrail withheld counts as not graded (MAS-94), and a model failure makes
+it failed, never quietly empty.
 """
 
 import logging
@@ -39,12 +40,19 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         chunks = repository.list_chunks(db, contract_id)
         repository.start_risk_review(db, contract_id, status="running")
         repository.update_risk_review(
-            db, contract_id, status="running", model=model.model_name, chunks_total=len(chunks), chunks_checked=0
+            db,
+            contract_id,
+            status="running",
+            model=model.model_name,
+            chunks_total=len(chunks),
+            chunks_checked=0,
+            chunks_withheld=0,
         )
 
         findings: list[tuple[UUID, str, str, str, str]] = []
         complete = True
         checked = 0
+        withheld = 0
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start : start + batch_size]
             hits = [
@@ -57,25 +65,46 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 logger.warning("Risk review of %s failed at passage %d: %s", contract.filename, start + 1, error)
                 repository.replace_risk_findings(db, contract_id, findings)
                 return repository.update_risk_review(
-                    db, contract_id, status="failed", chunks_checked=checked, complete=False, error=str(error)
+                    db,
+                    contract_id,
+                    status="failed",
+                    chunks_checked=checked,
+                    chunks_withheld=withheld,
+                    complete=False,
+                    error=str(error),
                 )
+            # Passages the guardrail withheld were never graded: they are
+            # neither checked nor clean, and the review says so (MAS-94).
+            withheld += len(report.blocked)
             if not report.checked:
                 # The model's reply for this batch was unusable: these
                 # passages are not reviewed, and the result must say so.
                 complete = False
             else:
                 complete = complete and report.complete
-                checked += len(batch)
+                checked += len(batch) - len(report.blocked)
                 findings.extend((f.hit.chunk_id, f.category, f.severity, f.reason, f.quote) for f in report.findings)
-            repository.update_risk_review(db, contract_id, status="running", chunks_checked=checked)
+            repository.update_risk_review(
+                db, contract_id, status="running", chunks_checked=checked, chunks_withheld=withheld
+            )
 
         repository.replace_risk_findings(db, contract_id, findings)
         review = repository.update_risk_review(
-            db, contract_id, status="done", chunks_checked=checked, complete=complete and checked == len(chunks)
+            db,
+            contract_id,
+            status="done",
+            chunks_checked=checked,
+            chunks_withheld=withheld,
+            complete=complete and checked == len(chunks),
         )
         logger.info(
-            "Risk review of %s: %d finding(s) over %d/%d passages%s",
-            contract.filename, len(findings), checked, len(chunks), "" if review.complete else " (incomplete)",
+            "Risk review of %s: %d finding(s) over %d/%d passages%s%s",
+            contract.filename,
+            len(findings),
+            checked,
+            len(chunks),
+            f", {withheld} withheld" if withheld else "",
+            "" if review.complete else " (incomplete)",
         )
         return review
 

@@ -107,6 +107,15 @@ def find_injection(text: str) -> str | None:
     return None
 
 
+def withheld_labels(texts: list[str]) -> tuple[int, ...]:
+    """The 1-based passage numbers the guardrail will withhold, decided before any call.
+
+    Same detector as the hook, so callers can tell in advance when nothing
+    readable would reach the model and skip the call altogether (MAS-93).
+    """
+    return tuple(number for number, text in enumerate(texts, start=1) if find_injection(text) is not None)
+
+
 class PromptInjectionGuardrail(CustomGuardrail):
     """LiteLLM guardrail: withhold injected passages, refuse injected questions."""
 

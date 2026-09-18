@@ -159,7 +159,7 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
                 VALUES (%s, %s)
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = EXCLUDED.status, error = NULL, chunks_checked = 0,
-                    complete = FALSE, updated_at = now()
+                    chunks_withheld = 0, complete = FALSE, updated_at = now()
                 RETURNING *
                 """,
                 (contract_id, status),
@@ -175,6 +175,7 @@ def update_risk_review(
     model: str | None = None,
     chunks_total: int | None = None,
     chunks_checked: int | None = None,
+    chunks_withheld: int | None = None,
     complete: bool | None = None,
     error: str | None = None,
 ) -> RiskReview:
@@ -187,13 +188,14 @@ def update_risk_review(
                     model = COALESCE(%s, model),
                     chunks_total = COALESCE(%s, chunks_total),
                     chunks_checked = COALESCE(%s, chunks_checked),
+                    chunks_withheld = COALESCE(%s, chunks_withheld),
                     complete = COALESCE(%s, complete),
                     error = %s,
                     updated_at = now()
                 WHERE contract_id = %s
                 RETURNING *
                 """,
-                (status, model, chunks_total, chunks_checked, complete, error, contract_id),
+                (status, model, chunks_total, chunks_checked, chunks_withheld, complete, error, contract_id),
             )
             row = cursor.fetchone()
     if row is None:
