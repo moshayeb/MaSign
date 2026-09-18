@@ -46,6 +46,7 @@ function review(overrides: Partial<RiskReview>): RiskReview {
     model: 'claude-sonnet-5',
     chunks_total: 12,
     chunks_checked: 12,
+    chunks_withheld: 0,
     complete: true,
     error: null,
     updated_at: '2026-09-17T09:00:00Z',
@@ -164,6 +165,18 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(screen.getAllByText('High').length).toBeGreaterThan(0) // verified findings still graded
     const cells = screen.getAllByRole('listitem').filter((li) => li.classList.contains('review-cat'))
     expect(cells.filter((li) => li.classList.contains('clean'))).toHaveLength(0)
+  })
+
+  it('reports withheld passages as not graded, not clean (MAS-94)', async () => {
+    const withheld = review({ status: 'done', complete: false, chunks_checked: 11, chunks_withheld: 1, findings: done.findings })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, withheld))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    expect(await screen.findByText(/Partly reviewed · 11\/12 passages · 1 withheld/)).toBeInTheDocument()
+    expect(screen.getByText(/1 passage was withheld from the model because it contains instructions addressed to the AI/)).toBeInTheDocument()
+    expect(screen.queryByText(/reply for them was unreadable/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Nothing found')).not.toBeInTheDocument()
   })
 
   it('shows "Unable to determine" for every category of a failed review', async () => {

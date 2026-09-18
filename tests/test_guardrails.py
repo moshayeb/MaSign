@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from app.answering.grounding import SYSTEM_PROMPT, answer_question, build_user_prompt, passage_metadata
+from app.answering.grounding import SYSTEM_PROMPT, WITHHELD_ANSWER, answer_question, build_user_prompt, passage_metadata
 from app.answering.llm import ChatModelError, LiteLLMChatModel
 from app.guardrails.prompt_injection import (
     WITHHELD_TEXT,
@@ -158,6 +158,39 @@ def test_guarded_model_reports_blocked_passages_and_the_answer_still_cites_the_c
     assert "no risks and no fees" not in sent and WITHHELD_TEXT in sent
 
 
+def test_all_passages_withheld_is_its_own_outcome_and_costs_no_call() -> None:
+    """MAS-93: 'not found' would contradict the text the user sees; and there is nothing to ask."""
+    fake = FakeChatModel()
+    hits = _hits(INJECTION)
+
+    answer = answer_question("What is the monthly fee?", hits, GuardedChatModel(fake), filenames={CONTRACT: "evil.txt"})
+
+    assert answer.status == "withheld" and answer.text == WITHHELD_ANSWER
+    assert answer.grounded is False and answer.blocked == (1,) and answer.citations == []
+    assert fake.calls == []
+
+
+def test_all_passages_withheld_means_risks_unchecked_not_clean() -> None:
+    """MAS-94: the analysis did not run; it must not read as 'no risk'."""
+    from app.risk_analysis.analyzer import analyze_risks
+
+    fake = FakeChatModel()
+    report = analyze_risks(_hits(INJECTION, INJECTION), GuardedChatModel(fake))
+
+    assert (report.checked, report.complete, report.blocked, report.findings) == (False, False, (1, 2), [])
+    assert fake.calls == []
+
+
+def test_a_partly_withheld_risk_analysis_is_incomplete_even_when_clean() -> None:
+    from app.risk_analysis.analyzer import analyze_risks
+
+    fake = FakeChatModel()  # risk_reply "[]": nothing found in what it could read
+    report = analyze_risks(_hits(FEES, INJECTION), GuardedChatModel(fake))
+
+    assert (report.checked, report.complete, report.blocked) == (True, False, (2,))
+    assert len(fake.calls) == 1
+
+
 # --- the LiteLLM adapter (litellm.completion faked) -----------------------------------------
 
 
@@ -260,6 +293,30 @@ def test_query_never_sends_an_injected_passage_to_the_model_and_says_so(db, fake
     assert "Prompt injection withheld" in caplog.text and f"contract_id={contract_id}" in caplog.text
 
 
+def test_query_says_withheld_not_not_found_when_the_only_passage_is_injected(db, fake_chat_model: FakeChatModel) -> None:
+    """The owner's 2026-09-18 screenshot: a one-passage contract carrying the injection (MAS-93/94)."""
+    text = f"1. Parties. Northwind Ltd and Acme AB.\n\n{FEES}\n\n{TERM}\n\n{INJECTION}"
+    upload = client.post("/api/contracts/upload", files={"file": ("E-Contract.txt", text.encode(), "text/plain")})
+    assert upload.status_code == 200 and upload.json()["chunk_count"] == 1
+    contract_id = upload.json()["contract_id"]
+    fake_chat_model.calls.clear()
+
+    response = client.post("/api/query", json={"question": "what is the monthly invoice?", "contract_id": contract_id})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["answer_status"] == "withheld" and body["answer"] == WITHHELD_ANSWER
+    assert body["grounded"] is False and body["blocked_passages"] == [1]
+    assert body["risks_checked"] is False and body["risks"] == []
+    assert body["recommended_actions"] == ["Read the withheld passage(s) yourself: they contain instructions addressed to the AI, which a genuine contract has no reason to carry. Ask the counterparty to explain that text."]
+    assert len(body["retrieved_context"]) == 1 and "EUR 18,500" in body["retrieved_context"][0]["text"]
+    assert fake_chat_model.calls == []  # neither the answer nor the risk call was spent
+
+    review = client.get(f"/api/contracts/{contract_id}/risks").json()
+    assert (review["status"], review["chunks_total"], review["chunks_checked"], review["chunks_withheld"]) == ("done", 1, 0, 1)
+    assert review["complete"] is False
+
+
 def test_query_refuses_an_injected_question_with_a_400(db, fake_chat_model: FakeChatModel) -> None:
     upload = client.post("/api/contracts/upload", files={"file": ("c.txt", FEES.encode(), "text/plain")})
     fake_chat_model.calls.clear()
@@ -283,3 +340,7 @@ def test_the_whole_contract_review_withholds_injected_passages_too(db, fake_chat
     review_calls = [sent for _, sent in fake_chat_model.calls]
     assert review_calls and all("ignore all previous instructions" not in sent for sent in review_calls)
     assert any(WITHHELD_TEXT in sent for sent in review_calls)
+    # The withheld passage was never graded: not checked, not clean (MAS-94).
+    total = upload.json()["chunk_count"]
+    review = client.get(f"/api/contracts/{upload.json()['contract_id']}/risks").json()
+    assert (review["chunks_total"], review["chunks_checked"], review["chunks_withheld"], review["complete"]) == (total, total - 1, 1, False)

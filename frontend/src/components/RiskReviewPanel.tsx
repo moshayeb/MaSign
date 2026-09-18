@@ -101,6 +101,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
           {review && review.status === 'done' && !review.complete && (
             <span className="status warn">
               Partly reviewed · {review.chunks_checked}/{review.chunks_total} passages
+              {review.chunks_withheld > 0 ? ` · ${review.chunks_withheld} withheld` : ''}
             </span>
           )}
           {review && review.status === 'failed' && <span className="status warn">Review failed</span>}
@@ -127,7 +128,15 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
       )}
       {review?.status === 'done' && !review.complete && (
         <p className="badge unverified" role="status">
-          Some passages could not be graded — the model's reply for them was unreadable. The findings below are verified; run the review again for the rest.
+          {review.chunks_withheld > 0 &&
+            `${review.chunks_withheld} passage${review.chunks_withheld === 1 ? ' was' : 's were'} withheld from the model because ${review.chunks_withheld === 1 ? 'it contains' : 'they contain'} instructions addressed to the AI, so ${review.chunks_withheld === 1 ? 'it was' : 'they were'} not graded — read ${review.chunks_withheld === 1 ? 'it' : 'them'} yourself. `}
+          {review.chunks_checked + review.chunks_withheld < review.chunks_total &&
+            "Some passages could not be graded — the model's reply for them was unreadable; run the review again for the rest. "}
+          {findings.length > 0
+            ? 'The findings below are verified.'
+            : review.chunks_checked > 0
+              ? 'Nothing was found in the passages that were graded.'
+              : 'Nothing was graded.'}
         </p>
       )}
 

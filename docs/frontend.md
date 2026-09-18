@@ -98,13 +98,21 @@ while running, green when reviewed clean).
 
 `blocked_passages` (MAS-90) names passages the prompt-injection guardrail
 withheld from the model; the answer view shows an amber notice and tags those
-passages "Withheld from the model" in the passage lists.
+passages "Withheld from the model" in the passage lists. `answer_status`
+(MAS-93) is `answered`, `not_found` or `withheld`; the last means every
+retrieved passage was withheld and the model was never asked — the view shows
+an amber **Withheld** pill, "Could not answer" with the reason, opens the
+passage list so the user reads it, and says "Risk check not run" instead of
+"No risk flagged". With some passages withheld, "Not found" and "No risk
+flagged" are qualified with "in the n of m passages the model could read"
+(MAS-94). Withheld ≠ deleted, and withheld ≠ checked.
 
 
 `POST /api/query` returns (MAS-12/13):
 
 - `answer` — one to four sentences written only from the passages, with `[n]`
-  markers, or exactly `Not found in contract.`
+  markers, or exactly `Not found in contract.`, or the fixed withheld text.
+- `answer_status` — `answered` | `not_found` | `withheld` (see above).
 - `grounded` — false for "not found" and for an answer that cites nothing;
   show an "unverified" badge in that case rather than hiding the text.
 - `citations` — `{label, chunk_id, contract_id, chunk_index, text, score}` for
@@ -115,8 +123,8 @@ passages "Withheld from the model" in the passage lists.
   the passage's `[n]` so the flag can link to it. `risks_checked` is false
   when the analysis could not run or none of its findings could be verified
   — say so, never show an empty "no risks". `risks_complete` is false when
-  some findings were dropped: show the verified ones with an "incomplete
-  analysis" warning.
+  some findings were dropped, or when a passage was withheld and so never
+  graded: show the verified ones with an "incomplete analysis" warning.
 - `recommended_actions` — next steps derived from the findings.
 - `retrieved_context` — every passage considered, best first, same shape
   minus `label`; `chunk_index` gives its position in the contract and `score`

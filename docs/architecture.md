@@ -98,8 +98,13 @@ contract passages that carry instructions addressed to the AI (numbering
 kept, text replaced, warning with contract_id / chunk_index), refuses an
 injected question outright, and reports the withheld passage numbers, which
 `Completion.blocked` carries to the answer and to `/api/query`'s
-`blocked_passages`. Tests wrap the fake model in the same guardrail, so the
-API tests exercise it without a key.
+`blocked_passages`. `withheld_labels()` runs the same detector *before* a
+call so the answer and risk paths can see when nothing readable would
+reach the model and skip the call: the answer is then `status: withheld`
+(MAS-93) and the risk report `checked: false`; a withheld passage is never
+counted as checked, so the report is incomplete and the whole-contract
+review records it in `chunks_withheld` (MAS-94). Tests wrap the fake model
+in the same guardrail, so the API tests exercise it without a key.
 
 ## Risk analysis
 

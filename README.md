@@ -163,8 +163,19 @@ LiteLLM `CustomGuardrail` (`app/guardrails/prompt_injection.py`) whose
   `contract_id` and `chunk_index`; the request continues with the clean
   passages, and the response lists them in `blocked_passages` so the UI can
   say so;
-- a **question** that matches is refused with a 400 before any model call.
+- a **question** that matches is refused with a 400 before any model call;
+- when **every** retrieved passage would be withheld, no call is made at all:
+  the answer comes back as `answer_status: "withheld"` with its own wording
+  (never "Not found in contract", which would contradict the text the user
+  can see), `risks_checked` is false, and the suggested next step is to read
+  the withheld passage and ask the counterparty about it (MAS-93). Withheld
+  passages are never counted as checked: a partly withheld risk check is
+  `risks_complete: false`, and the whole-contract review reports them in
+  `chunks_withheld`, outside `chunks_checked`, with `complete: false` (MAS-94).
 
+The redaction is passage-level: a short contract that becomes a single
+passage loses the whole passage, fee clause included, when one sentence in
+it is an injection — the UI then says exactly that and shows the passage.
 The patterns are deliberately narrow: ordinary contract wording ("the
 written instructions of the Customer", "prior written notice") does not
 trigger them; `tests/test_guardrails.py` keeps both lists honest, and its
