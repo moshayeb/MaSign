@@ -225,3 +225,14 @@ def test_deleting_a_contract_removes_its_key_terms(db, fake_chat_model: FakeChat
     assert repository.delete_contract(db, contract_id) is True
     db.commit()
     assert repository.list_key_terms(db, contract_id) == []
+
+
+# --- the passage reader's source (MAS-83) ------------------------------------------------------
+
+
+def test_passages_endpoint_returns_every_chunk_in_order(db) -> None:
+    contract_id = _stored(db, FEES, LATE, TERM)
+    body = client.get(f"/api/contracts/{contract_id}/passages").json()
+    assert [p["chunk_index"] for p in body] == [0, 1, 2]
+    assert body[1]["text"] == LATE and all(p["chunk_id"] for p in body)
+    assert client.get(f"/api/contracts/{uuid4()}/passages").status_code == 404

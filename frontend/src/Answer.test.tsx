@@ -104,6 +104,7 @@ function mockApi(queryReplies: Response[], risks: Response = json(404, { detail:
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input)
     if (url.endsWith('/risks')) return risks.clone()
+    if (url.endsWith('/passages')) return json(200, [])
     if (url === '/api/contracts') return json(200, [northwind])
     if (url === '/api/query') return replies.shift() ?? json(500, { detail: 'no reply scripted' })
     return json(404, { detail: `unexpected ${url}` })

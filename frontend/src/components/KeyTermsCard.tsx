@@ -1,15 +1,17 @@
 import type { KeyTermValue, RiskReview } from '../api'
+import type { SourceRef } from './PassageReader'
 
 interface Props {
   review: RiskReview
   filename: string
+  onShowSource?: (source: SourceRef) => void
 }
 
 // The financial key terms of the selected contract (MAS-82): what is paid,
 // when, what late payment and leaving cost, how long it binds — each value
 // with the passage that states it. Absence is only called "not stated" when
 // every passage was read; otherwise it is "not checked" (honest-outcomes).
-export function KeyTermsCard({ review, filename }: Props) {
+export function KeyTermsCard({ review, filename, onShowSource }: Props) {
   const running = review.status === 'pending' || review.status === 'running'
   const found = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
   const conflicting = review.key_terms.filter((t) => t.status === 'conflicting')
@@ -56,7 +58,7 @@ export function KeyTermsCard({ review, filename }: Props) {
 
       <dl className="terms">
         {review.key_terms.map((term) => (
-          <TermRow key={term.id} term={term} running={running} />
+          <TermRow key={term.id} term={term} running={running} onShowSource={onShowSource} />
         ))}
       </dl>
       <p className="muted disclaimer">Each value is quoted from the passage named beside it; nothing is inferred or computed.</p>
@@ -64,7 +66,7 @@ export function KeyTermsCard({ review, filename }: Props) {
   )
 }
 
-function TermRow({ term, running }: { term: KeyTermValue; running: boolean }) {
+function TermRow({ term, running, onShowSource }: { term: KeyTermValue; running: boolean; onShowSource?: (source: SourceRef) => void }) {
   const stated = term.status === 'found' || term.status === 'conflicting'
   return (
     <div className={`term ${term.status}`}>
@@ -77,7 +79,19 @@ function TermRow({ term, running }: { term: KeyTermValue; running: boolean }) {
             <span className="term-value">{term.value}</span>
             <span className="muted small">
               {' '}
-              · passage {term.source.chunk_index + 1}
+              ·{' '}
+              {onShowSource ? (
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => onShowSource({ chunk_index: term.source!.chunk_index, quote: term.source!.quote })}
+                  aria-label={`Show ${term.name} in contract`}
+                >
+                  passage {term.source.chunk_index + 1}
+                </button>
+              ) : (
+                <>passage {term.source.chunk_index + 1}</>
+              )}
               {term.status === 'conflicting' && <span className="status warn">Conflicting</span>}
             </span>
             <blockquote className="term-quote">“{term.source.quote}”</blockquote>

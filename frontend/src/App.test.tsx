@@ -163,6 +163,7 @@ describe('upload', () => {
       }
       if (url === '/api/contracts') return json(200, listed)
       // The selected contract's whole-contract review (MAS-81) is polled separately.
+      if (url.endsWith('/passages')) return json(200, [])
       if (url.endsWith('/risks')) return json(200, { status: 'pending', findings: [], categories: [], chunks_total: 12, chunks_checked: 0, chunks_withheld: 0, complete: false, key_terms_complete: false, key_terms: [], error: null, model: null })
       return json(404, { detail: `unexpected ${url}` })
     })
@@ -175,7 +176,7 @@ describe('upload', () => {
 
     await waitFor(() => expect(shown).toEqual([['success', 'northwind.txt uploaded — 12 chunks']]))
     expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
-    const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => !url.endsWith('/risks'))
+    const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages'))
     expect(calls).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
   })
 

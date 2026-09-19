@@ -399,6 +399,20 @@ def get_contract(
     return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id))
 
 
+class Passage(BaseModel):
+    chunk_id: UUID
+    chunk_index: int
+    text: str
+
+
+@router.get("/contracts/{contract_id}/passages", response_model=list[Passage])
+def get_contract_passages(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> list[Passage]:
+    """Every stored passage of the contract in order — the text behind each citation, finding and key term (MAS-83)."""
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    return [Passage(chunk_id=c.id, chunk_index=c.chunk_index, text=c.chunk_text) for c in repository.list_chunks(db, contract_id)]
+
+
 @router.get("/contracts/{contract_id}/risks", response_model=RiskReviewResponse)
 def get_contract_risks(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> RiskReviewResponse:
     """The whole-contract risk review: its status and the verified findings (MAS-81)."""

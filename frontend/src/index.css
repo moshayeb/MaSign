@@ -1103,3 +1103,66 @@ li.risk blockquote {
 .term .status {
   margin-left: 6px;
 }
+
+/* Contract text reader (MAS-83) */
+.reader > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reader > summary::-webkit-details-marker {
+  display: none;
+}
+
+.reader > summary::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.reader[open] > summary::before {
+  content: '▾';
+}
+
+.passages {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.passage {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.18);
+  transition: border-color 0.15s, background 0.15s;
+  outline: none;
+}
+
+.passage.highlighted {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.passage p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.passage mark {
+  background: rgba(251, 191, 36, 0.35);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}

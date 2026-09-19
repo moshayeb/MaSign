@@ -92,6 +92,20 @@ reviewed text" and is only sent when the pass completed; `unchecked` reads
 — never present absence as a fact the contract states. Pill: `n of 9 stated
 · k of m passages read` (green), `Partly checked` (amber) or `Extracting…`.
 
+## Contract text reader (MAS-83)
+
+`PassageReader` (a collapsible `.card.reader` below the review) loads
+`GET /api/contracts/{id}/passages` once per contract and renders every
+passage. App holds a `SourceRef {chunk_index, quote?}`; `RiskReviewPanel`
+and `KeyTermsCard` receive `onShowSource` and call it from the finding's
+"Show in contract" button and the key term's passage link (accessible
+names `Show <category> finding in contract`, `Show <term> in contract`). A
+new target opens the reader, scrolls the passage into view, focuses it
+(`tabIndex=-1`, `aria-current`) and wraps the quote in `<mark>` via
+`findQuote` in `src/quote.tsx` (exact match, then whitespace/quote-style
+tolerant). Selecting another contract clears the target. The answer view's
+`[n]` markers keep their own in-card highlighting.
+
 ## Risk review (MAS-81)
 
 Selecting a contract mounts `RiskReviewPanel` (keyed by contract id) which

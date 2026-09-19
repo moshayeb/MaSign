@@ -182,6 +182,18 @@ export interface RiskReview {
   key_terms: KeyTermValue[]
 }
 
+// --- the contract's own text (MAS-83) ---------------------------------------
+
+export interface Passage {
+  chunk_id: string
+  chunk_index: number
+  text: string
+}
+
+export function getContractPassages(contractId: string): Promise<Passage[]> {
+  return request<Passage[]>(`/api/contracts/${contractId}/passages`)
+}
+
 export function getContractRisks(contractId: string): Promise<RiskReview> {
   return request<RiskReview>(`/api/contracts/${contractId}/risks`)
 }
