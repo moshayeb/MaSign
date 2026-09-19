@@ -80,6 +80,18 @@ Verified with headless-Edge screenshots at 1280 px and inside a 400 px
 iframe (headless Edge clamps its own viewport to 492 px, so narrow widths
 must be checked through an iframe).
 
+## Key terms (MAS-82)
+
+`KeyTermsCard` renders above the Risk review from the same `RiskReview`
+response (`key_terms`, `key_terms_complete`), so it shares the panel's load
+and polling. One tile per term, always all nine: the value in bold, `·
+passage n`, the verbatim quote, and for `conflicting` an amber pill plus
+"Also stated in passage m" lines. `not_stated` reads "Not stated in the
+reviewed text" and is only sent when the pass completed; `unchecked` reads
+"Not checked" with an amber notice that some passages could not be checked
+— never present absence as a fact the contract states. Pill: `n of 9 stated
+· k of m passages read` (green), `Partly checked` (amber) or `Extracting…`.
+
 ## Risk review (MAS-81)
 
 Selecting a contract mounts `RiskReviewPanel` (keyed by contract id) which

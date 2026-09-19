@@ -163,7 +163,7 @@ describe('upload', () => {
       }
       if (url === '/api/contracts') return json(200, listed)
       // The selected contract's whole-contract review (MAS-81) is polled separately.
-      if (url.endsWith('/risks')) return json(200, { status: 'pending', findings: [], categories: [], chunks_total: 12, chunks_checked: 0, chunks_withheld: 0, complete: false, error: null, model: null })
+      if (url.endsWith('/risks')) return json(200, { status: 'pending', findings: [], categories: [], chunks_total: 12, chunks_checked: 0, chunks_withheld: 0, complete: false, key_terms_complete: false, key_terms: [], error: null, model: null })
       return json(404, { detail: `unexpected ${url}` })
     })
 

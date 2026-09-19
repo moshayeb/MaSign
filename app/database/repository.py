@@ -3,8 +3,9 @@
 from uuid import UUID
 
 import psycopg
+from psycopg.types.json import Jsonb
 
-from app.database.models import Chunk, Contract, RiskFindingRow, RiskReview, VectorIndex
+from app.database.models import Chunk, Contract, KeyTermRow, RiskFindingRow, RiskReview, VectorIndex
 
 
 def create_contract(
@@ -159,7 +160,7 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
                 VALUES (%s, %s)
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = EXCLUDED.status, error = NULL, chunks_checked = 0,
-                    chunks_withheld = 0, complete = FALSE, updated_at = now()
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE, updated_at = now()
                 RETURNING *
                 """,
                 (contract_id, status),
@@ -177,6 +178,7 @@ def update_risk_review(
     chunks_checked: int | None = None,
     chunks_withheld: int | None = None,
     complete: bool | None = None,
+    key_terms_complete: bool | None = None,
     error: str | None = None,
 ) -> RiskReview:
     with connection.transaction():
@@ -190,12 +192,13 @@ def update_risk_review(
                     chunks_checked = COALESCE(%s, chunks_checked),
                     chunks_withheld = COALESCE(%s, chunks_withheld),
                     complete = COALESCE(%s, complete),
+                    key_terms_complete = COALESCE(%s, key_terms_complete),
                     error = %s,
                     updated_at = now()
                 WHERE contract_id = %s
                 RETURNING *
                 """,
-                (status, model, chunks_total, chunks_checked, chunks_withheld, complete, error, contract_id),
+                (status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete, error, contract_id),
             )
             row = cursor.fetchone()
     if row is None:
@@ -239,6 +242,39 @@ def list_risk_findings(connection: psycopg.Connection, contract_id: UUID) -> lis
             (contract_id,),
         )
         return [RiskFindingRow(**row) for row in cursor.fetchall()]
+
+
+def replace_key_terms(
+    connection: psycopg.Connection,
+    contract_id: UUID,
+    terms: list[tuple[UUID, str, str, str, dict | None]],
+) -> None:
+    """Swap the contract's stored key terms for `(chunk_id, term, value, quote, typed)` rows."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM key_terms WHERE contract_id = %s", (contract_id,))
+            cursor.executemany(
+                """
+                INSERT INTO key_terms (contract_id, chunk_id, term, value, quote, typed)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (chunk_id, term) DO NOTHING
+                """,
+                [(contract_id, chunk_id, term, value, quote, Jsonb(typed) if typed is not None else None)
+                 for chunk_id, term, value, quote, typed in terms],
+            )
+
+
+def list_key_terms(connection: psycopg.Connection, contract_id: UUID) -> list[KeyTermRow]:
+    """Stored key terms in passage order, so the first row per term is the earliest statement."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT k.* FROM key_terms k JOIN chunks c ON c.id = k.chunk_id
+            WHERE k.contract_id = %s ORDER BY c.chunk_index, k.term
+            """,
+            (contract_id,),
+        )
+        return [KeyTermRow(**row) for row in cursor.fetchall()]
 
 
 def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, tuple[str, str | None]]:

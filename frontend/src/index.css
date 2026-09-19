@@ -1043,3 +1043,63 @@ li.risk blockquote {
   color: var(--text-2);
   white-space: pre-wrap;
 }
+
+/* Key terms card (MAS-82) */
+.terms {
+  margin: 4px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.term {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border-top-width: 3px;
+}
+
+.term.found {
+  border-top-color: rgba(56, 189, 248, 0.6);
+}
+
+.term.conflicting {
+  border-top-color: var(--medium);
+}
+
+.term dt {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 4px;
+}
+
+.term dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.term-value {
+  font-weight: 600;
+}
+
+.term-quote {
+  margin: 6px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.term-others {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.term .status {
+  margin-left: 6px;
+}

@@ -58,6 +58,9 @@ class RiskReview:
     updated_at: datetime
     # Passages the guardrail withheld from the model: not graded (MAS-94).
     chunks_withheld: int = 0
+    # The key-terms pass (MAS-82) runs in the same job; False while running
+    # or when a batch's key-terms reply was unusable.
+    key_terms_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -71,4 +74,18 @@ class RiskFindingRow:
     severity: str
     reason: str
     quote: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class KeyTermRow:
+    """One verified key term stored for a contract (MAS-82)."""
+
+    id: UUID
+    contract_id: UUID
+    chunk_id: UUID
+    term: str
+    value: str
+    quote: str
+    typed: dict | None
     created_at: datetime

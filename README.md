@@ -122,7 +122,8 @@ Interactive docs at `http://localhost:8000/docs`.
 | `GET`  | `/api/contracts` | List stored contracts, newest first. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
 | `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage) and the seven `categories` with their worst severity. Runs automatically after upload. |
-| `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review (202; 409 while one is running). |
+| `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
+| `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction (202; 409 while one is running). |
 | `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness check. |
 
@@ -140,6 +141,35 @@ Tests that need Postgres use a separate `contract_rag_test` database, created
 automatically from `DATABASE_URL` and emptied after each test — your dev data
 is never touched. Without a reachable Postgres they are skipped; set
 `MASIGN_REQUIRE_DB=1` (as CI does) to make that a failure instead.
+
+## Financial key terms (MAS-82)
+
+The 2026-09-17 product review put the *financial consequences* of a
+contract first. Every upload therefore also extracts nine key terms, defined
+as data in `app/key_terms/terms.py` (the prompt, the API and this list are
+built from it): recurring fee, one-off fees, payment deadline, late-payment
+interest or penalty, termination cost, initial term, renewal, notice period,
+price changes. The pass runs in the same background job as the risk review,
+one extra model call per batch of 8 passages, with the same discipline:
+
+- a term is kept only with a **verbatim quote** from the passage it names
+  (whitespace and quote style normalised); anything else is dropped and the
+  pass is marked incomplete;
+- where a term has a numeric form it also carries **typed fields** —
+  `{amount, currency[, period]}`, `{net_days}`, `{rate_percent, per}`,
+  `{days | months}` — kept only when every number in them appears in the
+  quote; otherwise the term is stored as text only. This is the data
+  invoice verification (MAS-92, post-course) will consume;
+- a term stated in several passages reports the first and lists the
+  others; when their values differ it is `conflicting`;
+- absence is **`not_stated`** only when every passage was read and every
+  reply was usable; otherwise it is **`unchecked`** ("Not checked" in the
+  UI) — an unreadable reply never turns into "the contract does not say".
+
+The **Key terms** card sits above the Risk review for the selected contract:
+a pill with `n of 9 stated · passages read`, one tile per term with the value,
+its passage number and the quote, and amber notices for conflicts or an
+incomplete pass. Click-to-source for these values is MAS-83.
 
 ## Prompt-injection guardrail (MAS-90)
 
