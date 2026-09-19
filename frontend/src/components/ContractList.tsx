@@ -47,6 +47,11 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
                   <span className="contract-meta">
                     {contract.chunk_count} passage{contract.chunk_count === 1 ? '' : 's'} · {formatSize(contract.size_bytes)} ·{' '}
                     {formatDate(contract.created_at)}
+                    {(contract.ingestion_notes?.length ?? 0) > 0 && (
+                      <span className="status warn tiny" title={contract.ingestion_notes!.join(' ')}>
+                        Partly readable
+                      </span>
+                    )}
                   </span>
                 </span>
               </button>

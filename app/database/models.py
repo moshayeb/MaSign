@@ -1,6 +1,6 @@
 """Plain records mirroring the contracts, chunks, vector_index and risk tables."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -15,6 +15,8 @@ class Contract:
     chunk_count: int
     status: str
     created_at: datetime
+    # What ingestion could not read, as sentences for the user (MAS-84).
+    ingestion_notes: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,10 @@ class RiskReview:
     # The key-terms pass (MAS-82) runs in the same job; False while running
     # or when a batch's key-terms reply was unusable.
     key_terms_complete: bool = False
+    # Passage indexes (0-based) whose model reply was unreadable, and those the
+    # guardrail withheld — listed, not only counted (MAS-84).
+    unreadable_chunks: list[int] = field(default_factory=list)
+    withheld_chunks: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

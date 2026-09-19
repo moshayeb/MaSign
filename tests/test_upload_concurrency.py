@@ -28,7 +28,7 @@ def anyio_backend() -> str:
 
 @pytest.fixture
 def slow_database(monkeypatch: pytest.MonkeyPatch):
-    def slow_create(db, *, filename, file_type, size_bytes, character_count, chunks):
+    def slow_create(db, *, filename, file_type, size_bytes, character_count, chunks, ingestion_notes=None):
         time.sleep(0.4)  # blocking, like a real synchronous insert
         return Contract(
             id=uuid4(),
@@ -64,7 +64,7 @@ def slow_cleanup(monkeypatch: pytest.MonkeyPatch):
         def rollback(self) -> None:
             pass
 
-    def fast_create(db, *, filename, file_type, size_bytes, character_count, chunks):
+    def fast_create(db, *, filename, file_type, size_bytes, character_count, chunks, ingestion_notes=None):
         return Contract(
             id=uuid4(),
             filename=filename,

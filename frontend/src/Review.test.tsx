@@ -246,6 +246,49 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText('EUR 18,500 per month')).toBeInTheDocument()
   })
 
+  it('lists what was not read, by passage, and links each one to the contract text (MAS-84)', async () => {
+    const onShowSource = vi.fn()
+    const coverage = {
+      chunks_total: 12,
+      chunks_checked: 9,
+      unreadable_passages: [4, 5],
+      withheld_passages: [11],
+      ingestion_notes: ['Page 3 of 14 has no text layer (scanned or image-only) and could not be read.'],
+      external_references: [{ name: 'Order Form', chunk_indexes: [1] }],
+    }
+    const partial = review({ status: 'done', complete: false, chunks_checked: 9, chunks_withheld: 1, findings: done.findings, coverage })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, partial))
+
+    render(<RiskReviewPanel contract={northwind} onShowSource={onShowSource} />)
+
+    expect(await screen.findByText(/Reviewed .* by claude-sonnet-5 · 9 of 12 passages graded, 1 withheld/)).toBeInTheDocument()
+    const notes = screen.getAllByRole('list', { name: 'Coverage' })
+    expect(notes).toHaveLength(2) // once on the review, once on the key terms
+    const note = notes.find((n) => n.textContent?.includes('for risks'))! // the key-terms card renders first
+    const lines = within(note).getAllByRole('listitem').map((li) => li.textContent)
+    expect(lines).toEqual([
+      'Not reviewed: Page 3 of 14 has no text layer (scanned or image-only) and could not be read.',
+      "Not graded for risks — the model's reply was unreadable for passages 5, 6. Read them yourself, or run the review again.",
+      'Withheld from the model — passage 12 contains instructions addressed to the AI and was not graded.',
+      'Depends on a document not uploaded: Order Form (referred to in passage 2). What it says could not be determined.',
+    ])
+    expect(notes.find((n) => n.textContent?.includes('for key terms'))).toBeDefined()
+
+    await userEvent.click(within(note).getByRole('button', { name: 'Show passage 5 in contract' }))
+    expect(onShowSource).toHaveBeenCalledWith({ chunk_index: 4 })
+    expect(screen.queryByText(/reply for them was unreadable/)).not.toBeInTheDocument() // replaced by the list
+  })
+
+  it('says next to a "not stated" key term which uploaded-elsewhere document it may be in (MAS-84)', async () => {
+    const coverage = { chunks_total: 12, chunks_checked: 12, unreadable_passages: [], withheld_passages: [], ingestion_notes: [], external_references: [{ name: 'Schedule 2', chunk_indexes: [3] }] }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: true, coverage })))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const card = (await screen.findByText('Key terms')).closest('section')!
+    expect(within(card).getAllByText(/Not stated in the reviewed text — may be in Schedule 2 \(not uploaded\)/)).toHaveLength(9)
+  })
+
   it('shows "Unable to determine" for every category of a failed review', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'failed', complete: false, chunks_checked: 0, error: 'rate limited' })))
 

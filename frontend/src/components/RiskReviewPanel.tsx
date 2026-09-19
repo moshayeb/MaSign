@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { ApiError, getContractRisks, reviewContract, type Contract, type RiskReview } from '../api'
 import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
+import { CoverageNote } from './CoverageNote'
 
 interface Props {
   contract: Contract
@@ -133,7 +134,15 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           The review stopped: {review.error ?? 'unknown error'}. {review.chunks_checked > 0 ? `${review.chunks_checked} of ${review.chunks_total} passages were graded before it failed.` : ''} Run it again.
         </p>
       )}
-      {review?.status === 'done' && !review.complete && (
+      {review && review.status !== 'pending' && review.status !== 'running' && (
+        <p className="muted small review-meta">
+          {review.status === 'done' ? 'Reviewed' : 'Last attempt'} {formatWhen(review.updated_at)}
+          {review.model ? ` by ${review.model}` : ''} · {review.chunks_checked} of {review.chunks_total} passages graded
+          {review.chunks_withheld > 0 ? `, ${review.chunks_withheld} withheld` : ''}
+        </p>
+      )}
+      {review?.coverage && <CoverageNote coverage={review.coverage} subject="risks" onShowSource={onShowSource} />}
+      {review?.status === 'done' && !review.complete && !review.coverage && (
         <p className="badge unverified" role="status">
           {review.chunks_withheld > 0 &&
             `${review.chunks_withheld} passage${review.chunks_withheld === 1 ? ' was' : 's were'} withheld from the model because ${review.chunks_withheld === 1 ? 'it contains' : 'they contain'} instructions addressed to the AI, so ${review.chunks_withheld === 1 ? 'it was' : 'they were'} not graded — read ${review.chunks_withheld === 1 ? 'it' : 'them'} yourself. `}
@@ -208,4 +217,10 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
     </section>
     </>
   )
+}
+
+function formatWhen(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }

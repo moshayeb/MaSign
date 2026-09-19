@@ -92,6 +92,18 @@ reviewed text" and is only sent when the pass completed; `unchecked` reads
 — never present absence as a fact the contract states. Pill: `n of 9 stated
 · k of m passages read` (green), `Partly checked` (amber) or `Extracting…`.
 
+## Coverage (MAS-84)
+
+`CoverageNote` renders `review.coverage` as an amber list on both the Key
+terms card and the Risk review: "Not reviewed: <ingestion note>", "Not
+graded for risks/key terms — … passages 5, 6", "Withheld from the model —
+passage 12 …", "Depends on a document not uploaded: Order Form (referred to
+in passage 2)". Every passage number is a link into the reader
+(`onShowSource`, accessible name `Show passage n in contract`). The review
+shows "Reviewed <date> by <model> · n of m passages graded"; a `not_stated`
+key term adds "— may be in <document> (not uploaded)"; the contract list
+shows a *Partly readable* badge whose title is the ingestion notes.
+
 ## Contract text reader (MAS-83)
 
 `PassageReader` (a collapsible `.card.reader` below the review) loads
