@@ -284,3 +284,62 @@ def test_standards_compare_typed_values_only_and_never_add_a_model_call(db, fake
     assert terms["notice_period"]["standard"]["status"] == "unknown"  # stated, but not as a verified number: no verdict
     assert body["deviations"] == 1
     assert len(fake_chat_model.calls) == calls_after_review  # reading verdicts costs nothing
+
+
+# --- export (MAS-97) --------------------------------------------------------------------------
+
+
+def test_export_markdown_and_csv_carry_every_finding_and_key_term_verbatim(db, fake_chat_model: FakeChatModel) -> None:
+    import csv
+    import io
+
+    contract_id = _stored(db, FEES, LATE, "4.3 Early termination fee: fifty percent (50%) of the remaining Subscription Fees.")
+
+    def grade(user: str) -> str:
+        if "1.5%" in user:
+            return json.dumps([{"category": "payment_terms", "severity": "Medium", "reason": "Late interest at the top of the range.", "passage": 1, "quote": "interest at 1.5% per month"}])
+        return "[]"
+
+    def extract(user: str) -> str:
+        if "18,500" in user:
+            return json.dumps([_item("recurring_fee", "EUR 18,500 per month", 1, "pay EUR 18,500 per month", {"amount": 18500, "currency": "EUR", "period": "month"})])
+        if "fifty percent" in user:
+            return json.dumps([_item("termination_cost", "50% of remaining fees", 1, "fifty percent (50%) of the remaining Subscription Fees", {"percent": 50})])
+        return "[]"
+
+    fake_chat_model.risk_reply = grade
+    fake_chat_model.key_terms_reply = extract
+    review_contract(contract_id, fake_chat_model, batch_size=1)
+    fake_chat_model.calls.clear()
+
+    md = client.get(f"/api/contracts/{contract_id}/export.md")
+    assert md.status_code == 200 and md.headers["content-type"].startswith("text/markdown")
+    assert md.headers["content-disposition"] == 'attachment; filename="c-review.md"'
+    text = md.text
+    assert "# Review of c.txt" in text and "3 of 3 passages graded" in text
+    assert "| Recurring fee | EUR 18,500 per month |  | 1 | pay EUR 18,500 per month |" in text
+    assert "| Termination cost | 50% of remaining fees | deviates: 50% of the remaining fees is payable (standard: no early-termination fee) | 3 |" in text
+    assert "| One-off fees | *Not stated in the reviewed text* |" in text
+    assert "### Medium" in text and "**Payment terms** (passage 2): Late interest at the top of the range." in text
+    assert "> interest at 1.5% per month" in text
+    assert "| Liability cap | Nothing found |" in text
+    assert "not legal advice" in text
+
+    csv_response = client.get(f"/api/contracts/{contract_id}/export.csv")
+    assert csv_response.status_code == 200 and csv_response.headers["content-disposition"] == 'attachment; filename="c-review.csv"'
+    rows = list(csv.DictReader(io.StringIO(csv_response.text)))
+    assert [r["kind"] for r in rows].count("finding") == 1 and [r["kind"] for r in rows].count("key_term") == 9
+    finding = next(r for r in rows if r["kind"] == "finding")
+    assert (finding["name"], finding["severity_or_status"], finding["passage"], finding["quote"]) == ("Payment terms", "Medium", "2", "interest at 1.5% per month")
+    term = next(r for r in rows if r["name"] == "Termination cost")
+    assert term["standard"].startswith("deviates") and term["quote"] == "fifty percent (50%) of the remaining Subscription Fees"
+    assert fake_chat_model.calls == []  # exporting costs nothing
+
+    assert client.get(f"/api/contracts/{contract_id}/export.pdf").status_code == 404
+
+
+def test_export_404s_before_a_review_and_for_unknown_contracts(db) -> None:
+    contract_id = _stored(db, FEES)
+    response = client.get(f"/api/contracts/{contract_id}/export.md")
+    assert response.status_code == 404 and "not been reviewed" in response.json()["detail"]
+    assert client.get(f"/api/contracts/{uuid4()}/export.csv").status_code == 404

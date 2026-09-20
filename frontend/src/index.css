@@ -1309,3 +1309,101 @@ li.risk blockquote {
 .term .term-standard.deviates .status {
   border-color: var(--warn-line);
 }
+
+/* Download links (MAS-97) */
+.workspace-titlebar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.downloads {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+a.link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.link:hover {
+  text-decoration: underline;
+}
+
+/* Print: the Overview cards only, black on white, one card per page break (MAS-97) */
+@media print {
+  :root {
+    --bg: #fff;
+    --panel: #fff;
+    --inset: #fff;
+    --text: #000;
+    --text-2: #111;
+    --muted: #444;
+    --ink: #000;
+    --shadow: none;
+  }
+
+  body::before,
+  .topbar .topnav,
+  .sidebar,
+  .tabs,
+  .downloads,
+  .review-tools,
+  form.question,
+  .examples,
+  button:not(.link),
+  .risk-head button.link,
+  .disclaimer + *:empty {
+    display: none !important;
+  }
+
+  /* Passage numbers stay, as plain text. */
+  button.link {
+    color: #000;
+    text-decoration: none;
+    padding: 0;
+  }
+
+  .layout {
+    display: block;
+  }
+
+  .tabpanel[hidden] {
+    display: flex !important;
+  }
+
+  #panel-ask,
+  #panel-text {
+    display: none !important;
+  }
+
+  .card {
+    break-inside: avoid;
+    border: 1px solid #999;
+    box-shadow: none;
+  }
+
+  .card + .card {
+    break-before: page;
+  }
+
+  .term,
+  .review-cat,
+  li.risk {
+    break-inside: avoid;
+  }
+
+  .coverage,
+  .badge.unverified {
+    color: #000;
+    border-color: #999;
+    background: #fff;
+  }
+}
