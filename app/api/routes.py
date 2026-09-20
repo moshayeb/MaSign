@@ -17,6 +17,7 @@ from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
 from app.guardrails.prompt_injection import refuse_injected_question
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import ExternalReference, find_external_references
+from app.key_terms.standards import compare as compare_to_standard
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
@@ -169,6 +170,13 @@ class KeyTermSource(BaseModel):
     typed: dict | None
 
 
+class StandardVerdict(BaseModel):
+    # meets | deviates | unknown (stated, but no comparable typed value) | none (no standard for this term)
+    status: str
+    standard: str | None = None
+    detail: str | None = None
+
+
 class KeyTermValue(BaseModel):
     id: str
     name: str
@@ -182,6 +190,8 @@ class KeyTermValue(BaseModel):
     source: KeyTermSource | None
     # Further passages stating the same term; "conflicting" when their values differ.
     others: list[KeyTermSource]
+    # The Customer's default position for this term, compared by rule over the typed value (MAS-96).
+    standard: StandardVerdict
 
     @classmethod
     def from_rows(cls, term_id: str, rows: list[KeyTermRow], chunk_index: dict[UUID, int], *, checked: bool) -> "KeyTermValue":
@@ -199,6 +209,7 @@ class KeyTermValue(BaseModel):
                 value=NOT_STATED if checked else "Not checked",
                 source=None,
                 others=[],
+                standard=StandardVerdict(status="none"),
             )
         first, others = sources[0], sources[1:]
         conflicting = any(_same_value(o, first) is False for o in others)
@@ -210,6 +221,7 @@ class KeyTermValue(BaseModel):
             value=first.value,
             source=first,
             others=others,
+            standard=StandardVerdict(**compare_to_standard(term.id, first.typed).__dict__),
         )
 
 
@@ -264,6 +276,8 @@ class KeyTermsResponse(BaseModel):
     model: str | None
     updated_at: datetime
     terms: list[KeyTermValue]
+    # How many stated terms deviate from the Customer's standard (MAS-96).
+    deviations: int = 0
     coverage: Coverage | None = None
 
     @classmethod
@@ -274,6 +288,7 @@ class KeyTermsResponse(BaseModel):
         by_term: dict[str, list[KeyTermRow]] = {term.id: [] for term in KEY_TERMS}
         for row in rows:
             by_term.setdefault(row.term, []).append(row)
+        terms = [KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked) for term in KEY_TERMS]
         return cls(
             contract_id=review.contract_id,
             status=review.status,
@@ -283,7 +298,8 @@ class KeyTermsResponse(BaseModel):
             chunks_withheld=review.chunks_withheld,
             model=review.model,
             updated_at=review.updated_at,
-            terms=[KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked) for term in KEY_TERMS],
+            terms=terms,
+            deviations=sum(1 for t in terms if t.standard.status == "deviates"),
             coverage=coverage,
         )
 

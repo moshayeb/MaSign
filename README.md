@@ -184,6 +184,20 @@ a pill with `n of 9 stated · passages read`, one tile per term with the value,
 its passage number and the quote, and amber notices for conflicts or an
 incomplete pass.
 
+**Deviations from your standard (MAS-96).** Where a term has a verified
+typed value, it is compared by rule — never by a model — with the
+Customer's default position in `app/key_terms/standards.py`, whose
+thresholds are the rubric's *Low* lines so the card and the risk grading
+cannot disagree: payment deadline net 30 or longer, late interest at most
+1 % per month, notice at most 60 days, no early-termination fee. Each such
+tile shows **Meets standard**, **Deviates** (with the distance: "1.5 % per
+month is 1.5× the standard") or **Can't compare** (stated, but not as a
+number the text confirms — no verdict is guessed from prose); the card pill
+counts the deviations, and the API carries `standard: {status, standard,
+detail}` per term plus `deviations`. Fees, the initial term, renewal and
+price changes have no standard (deal-specific). Changing a standard is an
+edit to the data file; a settings UI is post-course (MAS-98).
+
 **Click-to-source (MAS-83).** Every finding has a *Show in contract* button
 and every key term's passage number is a link: both open the **Contract
 text** reader below the review at that passage, scrolled into view, with the

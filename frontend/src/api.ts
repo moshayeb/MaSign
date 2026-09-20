@@ -155,6 +155,13 @@ export interface KeyTermSource {
   typed: Record<string, string | number> | null
 }
 
+export interface StandardVerdict {
+  // meets | deviates | unknown (stated, no comparable typed value) | none (no standard for this term)
+  status: 'meets' | 'deviates' | 'unknown' | 'none'
+  standard: string | null
+  detail: string | null
+}
+
 export interface KeyTermValue {
   id: string
   name: string
@@ -164,6 +171,8 @@ export interface KeyTermValue {
   value: string
   source: KeyTermSource | null
   others: KeyTermSource[]
+  // The Customer's default position, compared by rule over the typed value (MAS-96).
+  standard?: StandardVerdict
 }
 
 // --- coverage (MAS-84) ------------------------------------------------------

@@ -232,6 +232,29 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText(/One term is stated differently/)).toBeInTheDocument()
   })
 
+  it('shows the standard verdict on a key term and counts deviations in the pill (MAS-96)', async () => {
+    const terms = TERMS.map((t) =>
+      t[0] === 'late_payment'
+        ? { ...stated(t, '1.5% per month', 2, 'interest at 1.5% per month'), standard: { status: 'deviates' as const, standard: 'at most 1% per month (12% per year)', detail: '1.5% per month is 1.5× the standard' } }
+        : t[0] === 'payment_deadline'
+          ? { ...stated(t, '30 days', 1, 'thirty (30) days'), standard: { status: 'meets' as const, standard: 'net 30 days or longer', detail: null } }
+          : t[0] === 'notice_period'
+            ? { ...stated(t, '90 days', 4, "ninety (90) days' notice"), standard: { status: 'unknown' as const, standard: 'at most 60 days (2 months)', detail: null } }
+            : notStated(t),
+    )
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: true, key_terms: terms })))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const card = (await screen.findByText('Key terms')).closest('section')!
+    expect(within(card).getByText(/3 of 9 stated · 12 of 12 passages read · 1 deviates from your standard/)).toBeInTheDocument()
+    expect(within(card).getByText('Deviates')).toBeInTheDocument()
+    expect(within(card).getByText(/1\.5% per month is 1\.5× the standard — your standard: at most 1% per month/)).toBeInTheDocument()
+    expect(within(card).getByText('Meets standard')).toBeInTheDocument()
+    expect(within(card).getByText("Can't compare")).toBeInTheDocument()
+    expect(within(card).getByText(/stated, but not as a number the text confirms/)).toBeInTheDocument()
+  })
+
   it('says "Not checked", never "Not stated", when the key-terms pass did not complete (MAS-82)', async () => {
     const terms = TERMS.map((t) => (t[0] === 'recurring_fee' ? stated(t, 'EUR 18,500 per month', 1, 'EUR 18,500 per month') : notStated(t, 'unchecked')))
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: false, key_terms: terms })))

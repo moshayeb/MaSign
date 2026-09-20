@@ -158,7 +158,14 @@ def test_review_stores_terms_with_sources_and_reports_not_stated_only_when_compl
     assert terms["renewal"]["source"]["typed"] is None
     assert terms["one_off_fee"] == {
         "id": "one_off_fee", "name": "One-off fees", "kind": "money", "status": "not_stated", "value": NOT_STATED, "source": None, "others": [],
+        "standard": {"status": "none", "standard": None, "detail": None},
     }
+    # MAS-96: verdicts by rule over the typed values — Northwind's shape
+    assert terms["payment_deadline"]["standard"]["status"] == "meets"
+    assert terms["late_payment"]["standard"] == {"status": "deviates", "standard": "at most 1% per month (12% per year)", "detail": "1.5% per month is 1.5× the standard"}
+    assert terms["notice_period"]["standard"]["status"] == "deviates" and "30 days longer" in terms["notice_period"]["standard"]["detail"]
+    assert terms["recurring_fee"]["standard"]["status"] == "none"
+    assert body["deviations"] == 2
     # The same terms ride along in the review response.
     review_body = client.get(f"/api/contracts/{contract_id}/risks").json()
     assert review_body["key_terms_complete"] is True and [t["id"] for t in review_body["key_terms"]] == list(TERM_IDS)
@@ -236,3 +243,44 @@ def test_passages_endpoint_returns_every_chunk_in_order(db) -> None:
     assert [p["chunk_index"] for p in body] == [0, 1, 2]
     assert body[1]["text"] == LATE and all(p["chunk_id"] for p in body)
     assert client.get(f"/api/contracts/{uuid4()}/passages").status_code == 404
+
+
+# --- deviations from the Customer's standard (MAS-96) -------------------------------------------
+
+
+def test_standards_compare_typed_values_only_and_never_add_a_model_call(db, fake_chat_model: FakeChatModel) -> None:
+    from app.key_terms.standards import compare
+
+    # Harbor's shape: net 45, 1%/month, 60 days, three months' fee (as a percent share it would deviate; as text it cannot be compared)
+    assert compare("payment_deadline", {"net_days": 45}).status == "meets"
+    assert compare("late_payment", {"rate_percent": 1, "per": "month"}).status == "meets"
+    assert compare("late_payment", {"rate_percent": 24, "per": "year"}).status == "deviates"
+    assert compare("late_payment", {"amount": 250, "currency": "EUR"}).status == "unknown"  # a fixed penalty has no rate
+    assert compare("notice_period", {"days": 60}).status == "meets"
+    assert compare("notice_period", {"months": 3}).status == "deviates"
+    assert compare("termination_cost", {"percent": 50}).status == "deviates"
+    assert compare("termination_cost", {"amount": 0, "currency": "EUR"}).status == "meets"
+    assert compare("termination_cost", None).status == "unknown"  # stated as text only
+    assert compare("initial_term", {"months": 36}).status == "none"  # deal-specific: no standard
+
+    contract_id = _stored(db, FEES, "4.3 Early termination fee: fifty percent (50%) of the remaining Subscription Fees.", TERM)
+
+    def extract(user: str) -> str:
+        if "18,500" in user:
+            return json.dumps([_item("payment_deadline", "30 days", 1, "due thirty (30) days after the invoice date", {"net_days": 30})])
+        if "fifty percent" in user:
+            return json.dumps([_item("termination_cost", "50% of remaining fees", 1, "fifty percent (50%) of the remaining Subscription Fees", {"percent": 50})])
+        return json.dumps([_item("notice_period", "90 days", 1, "ninety (90) days' notice")])  # text only, no typed value
+
+    fake_chat_model.key_terms_reply = extract
+    fake_chat_model.calls.clear()
+    review_contract(contract_id, fake_chat_model, batch_size=1)
+    calls_after_review = len(fake_chat_model.calls)
+
+    body = client.get(f"/api/contracts/{contract_id}/key-terms").json()
+    terms = {t["id"]: t for t in body["terms"]}
+    assert terms["payment_deadline"]["standard"]["status"] == "meets"
+    assert terms["termination_cost"]["standard"] == {"status": "deviates", "standard": "no early-termination fee", "detail": "50% of the remaining fees is payable"}
+    assert terms["notice_period"]["standard"]["status"] == "unknown"  # stated, but not as a verified number: no verdict
+    assert body["deviations"] == 1
+    assert len(fake_chat_model.calls) == calls_after_review  # reading verdicts costs nothing

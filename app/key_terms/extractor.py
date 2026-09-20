@@ -186,11 +186,13 @@ def verify_typed(kind: str, typed: object, quote: str) -> dict | None:
 
 
 def _well_formed(kind: str, clean: dict) -> bool:
-    if kind in ("money", "recurring"):
-        ok = "amount" in clean and "currency" in clean and len(clean["currency"]) == 3
-        if kind == "recurring":
-            ok = ok and clean.get("period") in PERIODS
-        return ok
+    if kind == "money":
+        # Either a sum of money or a percentage of remaining fees, never both.
+        money = "amount" in clean and "currency" in clean and len(clean["currency"]) == 3 and "percent" not in clean
+        share = "percent" in clean and "amount" not in clean and "currency" not in clean
+        return money or share
+    if kind == "recurring":
+        return "amount" in clean and "currency" in clean and len(clean["currency"]) == 3 and clean.get("period") in PERIODS
     if kind == "net_days":
         return "net_days" in clean
     if kind == "rate":

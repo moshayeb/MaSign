@@ -1294,3 +1294,18 @@ li.risk blockquote {
 .reader[open] > summary {
   margin-bottom: 4px;
 }
+
+/* Standard verdicts on key-term tiles (MAS-96) */
+.term-standard {
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.term.found .term-standard.deviates ~ *,
+.term .term-standard.deviates .status {
+  border-color: var(--warn-line);
+}
