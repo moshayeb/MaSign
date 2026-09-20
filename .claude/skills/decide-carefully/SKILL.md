@@ -49,8 +49,9 @@ or trust. Skip for CSS, copy, and reversible refactors.
 - Risk review: batches of 8 passages, stored per contract, status row with
   three outcomes (MAS-81, MAS-74).
 - Guardrail: withhold the passage, keep numbering, refuse an injected question
-  before any call; pattern-based and passage-level — both named as
-  limitations, not hidden (MAS-90).
+  before any call; pattern-based (named as a limitation, MAS-90) and, since
+  MAS-99, sentence-level — only injected sentences are cut, a passage that is
+  nothing but injection is still withheld whole.
 - Priorities after the 2026-09-17 product review: financial key terms with
   sources, click-to-source, explicit coverage; risk score and redlines
   postponed; missing-clause checklist separate (MAS-82/83/84).

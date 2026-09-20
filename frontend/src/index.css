@@ -1407,3 +1407,17 @@ a.link:hover {
     background: #fff;
   }
 }
+
+/* Sentences the guardrail withheld (MAS-99) */
+.passage mark.withheld {
+  background: transparent;
+  color: inherit;
+  text-decoration: underline wavy var(--high);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+.withheld-note {
+  display: block;
+  margin-top: 6px;
+}

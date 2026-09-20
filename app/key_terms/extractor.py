@@ -58,6 +58,7 @@ class KeyTermReport:
     # False when some elements were dropped or a passage was withheld.
     complete: bool = True
     blocked: tuple[int, ...] = ()
+    redacted: tuple[int, ...] = ()
 
 
 def extract_key_terms(
@@ -110,7 +111,7 @@ def extract_key_terms(
     if dropped and not findings:
         logger.warning("Key terms from %s: all %d element(s) rejected; treating as unavailable", model.model_name, dropped)
         return KeyTermReport([], checked=False, complete=False, blocked=blocked)
-    return KeyTermReport(findings, checked=True, complete=dropped == 0 and not blocked, blocked=blocked)
+    return KeyTermReport(findings, checked=True, complete=dropped == 0 and not blocked, blocked=blocked, redacted=completion.redacted)
 
 
 def _validate(item: object, hits: list[ChunkHit]) -> KeyTermFinding | None:

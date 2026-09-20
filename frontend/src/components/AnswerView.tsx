@@ -24,6 +24,7 @@ export function AnswerView({ asked, contracts }: Props) {
   const withheld = response.answer_status === 'withheld'
   const notFound = !withheld && (response.answer_status === 'not_found' || response.answer === NOT_FOUND)
   const blockedCount = (response.blocked_passages ?? []).length
+  const redacted = response.redacted_passages ?? []
   const passageCount = response.retrieved_context.length
   const readable = passageCount - blockedCount
   const allWithheld = withheld || (passageCount > 0 && blockedCount === passageCount)
@@ -95,6 +96,13 @@ export function AnswerView({ asked, contracts }: Props) {
         <p className="answer-text">{renderWithMarkers(response.answer, jumpTo)}</p>
       )}
 
+      {redacted.length > 0 && (
+        <p className="badge unverified" role="status">
+          {redacted.length === 1 ? `Passage ${redacted[0]}` : `Passages ${redacted.join(', ')}`} contained instructions addressed to the AI:
+          only {redacted.length === 1 ? 'those sentences were' : 'those sentences were'} withheld from the model, the rest was read. The cut sentences are
+          shown in the contract text.
+        </p>
+      )}
       {blockedCount > 0 && !withheld && (
         <p className="badge unverified" role="status">
           {response.blocked_passages.length === 1 ? 'One passage was' : `${response.blocked_passages.length} passages were`} withheld from the
@@ -122,6 +130,7 @@ export function AnswerView({ asked, contracts }: Props) {
                 <div className="citation-head">
                   <span className="cite-label">{citation.label}</span>
                   {response.blocked_passages.includes(citation.label) && <span className="status warn">Withheld from the model</span>}
+                  {redacted.includes(citation.label) && <span className="status warn">Sentences withheld</span>}
                   <span className="muted">
                     {filename(citation.contract_id)}, passage {citation.chunk_index + 1} · relevance {Math.round(citation.score * 100)}%
                   </span>
@@ -155,6 +164,7 @@ export function AnswerView({ asked, contracts }: Props) {
                   {response.blocked_passages.includes(response.retrieved_context.indexOf(chunk) + 1) && (
                     <span className="status warn">Withheld from the model</span>
                   )}
+                  {redacted.includes(response.retrieved_context.indexOf(chunk) + 1) && <span className="status warn">Sentences withheld</span>}
                 </div>
                 <blockquote>{chunk.text}</blockquote>
               </li>

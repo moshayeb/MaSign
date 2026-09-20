@@ -247,12 +247,14 @@ LiteLLM `CustomGuardrail` (`app/guardrails/prompt_injection.py`) whose
   prompt*, *do not follow the previous …*, *reveal the system prompt*, *note to
   the AI:*, *you must answer that …*, chat-template markers such as
   `<|im_start|>` — case-insensitive, with common variants;
-- a **contract passage** that matches is withheld: its number and source stay
-  in the prompt (so citations still line up) and its text becomes
-  `[Passage withheld by MaSign: …]`; a warning is logged with the
-  `contract_id` and `chunk_index`; the request continues with the clean
-  passages, and the response lists them in `blocked_passages` so the UI can
-  say so;
+- a **contract passage** that matches loses only its injected **sentences**
+  (MAS-99): each becomes `[sentence withheld by MaSign: …]` in place, the
+  rest of the passage is read, and the response lists the passage in
+  `redacted_passages`; the reader underlines the cut sentences. A passage
+  that is nothing but injection (or a single injected sentence) is withheld
+  whole — number and source kept, text replaced by `[Passage withheld by
+  MaSign: …]`, listed in `blocked_passages`. Both are logged with the
+  `contract_id` and `chunk_index`;
 - a **question** that matches is refused with a 400 before any model call;
 - when **every** retrieved passage would be withheld, no call is made at all:
   the answer comes back as `answer_status: "withheld"` with its own wording
@@ -263,9 +265,12 @@ LiteLLM `CustomGuardrail` (`app/guardrails/prompt_injection.py`) whose
   `risks_complete: false`, and the whole-contract review reports them in
   `chunks_withheld`, outside `chunks_checked`, with `complete: false` (MAS-94).
 
-The redaction is passage-level: a short contract that becomes a single
-passage loses the whole passage, fee clause included, when one sentence in
-it is an injection — the UI then says exactly that and shows the passage.
+Sentences are split at line breaks and at `. ! ?` followed by a space,
+except after clause numbers (`9.`, `2.3`), so numbered headings stay with
+their first sentence. A pattern that only matches across a sentence
+boundary withholds the whole passage rather than guess. Quotes are still
+verified against the stored passage, so a quote from the kept text passes
+and a quote spanning a cut sentence cannot.
 The patterns are deliberately narrow: ordinary contract wording ("the
 written instructions of the Customer", "prior written notice") does not
 trigger them; `tests/test_guardrails.py` keeps both lists honest, and its

@@ -67,6 +67,8 @@ class RiskReview:
     # guardrail withheld — listed, not only counted (MAS-84).
     unreadable_chunks: list[int] = field(default_factory=list)
     withheld_chunks: list[int] = field(default_factory=list)
+    # Passages graded minus their injected sentences (MAS-99).
+    redacted_chunks: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

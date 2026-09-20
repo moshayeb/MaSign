@@ -86,7 +86,9 @@ after a switch. Since MAS-90 every call goes through `litellm.completion()`
 and the model is wrapped in the prompt-injection guardrail
 (`app/guardrails/prompt_injection.py`, a LiteLLM `CustomGuardrail`): contract
 passages carrying instructions to the AI are withheld before the call, never
-silently forwarded. Tests wrap the fake model in the same guardrail. Every answer must carry `[n]` citations; uncited answers are
+silently forwarded. Since MAS-99 only the injected sentences are cut and the rest of
+the passage is read (`redact_passage`); a passage that is nothing but injection
+is withheld whole. Tests wrap the fake model in the same guardrail. Every answer must carry `[n]` citations; uncited answers are
 returned with `grounded: false`, never silently accepted.
 
 ## Risk rubric (MAS-15/16)

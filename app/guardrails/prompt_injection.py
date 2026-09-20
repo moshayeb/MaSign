@@ -42,6 +42,8 @@ GUARDRAIL_NAME = "masign-prompt-injection"
 # What a withheld passage becomes in the prompt. The model still sees that a
 # passage existed at this number, and that it is not contract text.
 WITHHELD_TEXT = "[Passage withheld by MaSign: it contained instructions addressed to the AI rather than contract terms.]"
+# What a single cut sentence becomes (MAS-99): the rest of the passage stays readable.
+SENTENCE_WITHHELD_TEXT = "[sentence withheld by MaSign: instructions addressed to the AI]"
 
 # Each pattern names one family of injection phrasing. They are deliberately
 # specific — "instructions" alone appears in real contracts ("written
@@ -97,6 +99,11 @@ class BlockedPassage:
     contract_id: str | None = None
     chunk_index: int | None = None
     filename: str | None = None
+    # MAS-99: how much of the passage was cut. fully_withheld means the model
+    # saw none of it; otherwise only the injected sentences were replaced.
+    sentences_withheld: int = 1
+    sentences_total: int = 1
+    fully_withheld: bool = True
 
 
 def find_injection(text: str) -> str | None:
@@ -107,13 +114,101 @@ def find_injection(text: str) -> str | None:
     return None
 
 
+def sentence_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of each sentence in `text`, in order.
+
+    A sentence ends at a line break or at . ! ? followed by whitespace — except
+    when the dot closes a clause number ("9." or "2.3"), so numbered headings
+    stay attached to their first sentence.
+    """
+    spans: list[tuple[int, int]] = []
+    start = 0
+    n = len(text)
+    i = 0
+    while i < n:
+        ch = text[i]
+        boundary = False
+        if ch == "\n":
+            boundary = True
+        elif ch in ".!?" and (i + 1 == n or text[i + 1].isspace()):
+            # "9." / "2.3." / "No. 5" are not sentence ends when digits precede the dot
+            j = i - 1
+            while j >= 0 and text[j].isdigit():
+                j -= 1
+            number_before = j < i - 1 and (j < 0 or text[j].isspace() or text[j] == ".")
+            boundary = not (ch == "." and number_before)
+        if boundary:
+            if text[start : i + 1].strip():
+                spans.append((start, i + 1))
+            start = i + 1
+        i += 1
+    if text[start:].strip():
+        spans.append((start, n))
+    return spans
+
+
+@dataclass(frozen=True)
+class Redaction:
+    text: str  # what the model may see
+    sentences_withheld: int
+    sentences_total: int
+    # (start, end) in the original text of every withheld sentence
+    spans: tuple[tuple[int, int], ...]
+
+    @property
+    def fully_withheld(self) -> bool:
+        return self.sentences_withheld > 0 and self.sentences_withheld == self.sentences_total
+
+
+def redact_passage(text: str) -> Redaction | None:
+    """Cut the injected sentences out of a passage (MAS-99); None when it is clean.
+
+    A passage whose every sentence is injected (including a single-sentence
+    passage) is withheld whole, as before MAS-99.
+    """
+    if find_injection(text) is None:
+        return None
+    spans = sentence_spans(text)
+    cut = [(a, b) for a, b in spans if find_injection(text[a:b]) is not None]
+    if not cut:
+        # The pattern only matches across a sentence boundary: withhold the whole passage.
+        return Redaction(WITHHELD_TEXT, len(spans) or 1, len(spans) or 1, tuple(spans) or ((0, len(text)),))
+    if len(cut) == len(spans):
+        return Redaction(WITHHELD_TEXT, len(spans), len(spans), tuple(cut))
+    pieces: list[str] = []
+    last = 0
+    for a, b in cut:
+        lead = len(text[a:b]) - len(text[a:b].lstrip())  # keep the space before the sentence
+        pieces.append(text[last : a + lead])
+        pieces.append(SENTENCE_WITHHELD_TEXT)
+        last = b
+    pieces.append(text[last:])
+    return Redaction("".join(pieces), len(cut), len(spans), tuple(cut))
+
+
 def withheld_labels(texts: list[str]) -> tuple[int, ...]:
-    """The 1-based passage numbers the guardrail will withhold, decided before any call.
+    """The 1-based passage numbers the guardrail will withhold *whole*, decided before any call.
 
     Same detector as the hook, so callers can tell in advance when nothing
     readable would reach the model and skip the call altogether (MAS-93).
+    Passages that only lose some sentences (MAS-99) are not listed here.
     """
-    return tuple(number for number, text in enumerate(texts, start=1) if find_injection(text) is not None)
+    labels = []
+    for number, text in enumerate(texts, start=1):
+        redaction = redact_passage(text)
+        if redaction is not None and redaction.fully_withheld:
+            labels.append(number)
+    return tuple(labels)
+
+
+def redacted_labels(texts: list[str]) -> tuple[int, ...]:
+    """The 1-based passage numbers that keep some text but lose injected sentences (MAS-99)."""
+    labels = []
+    for number, text in enumerate(texts, start=1):
+        redaction = redact_passage(text)
+        if redaction is not None and not redaction.fully_withheld:
+            labels.append(number)
+    return tuple(labels)
 
 
 class PromptInjectionGuardrail(CustomGuardrail):
@@ -167,6 +262,8 @@ class PromptInjectionGuardrail(CustomGuardrail):
             if pattern is None:
                 pieces.append(body[header.start() : end])
                 continue
+            redaction = redact_passage(text)
+            assert redaction is not None
             label = int(header.group(1))
             meta = passages.get(label, {})
             hit = BlockedPassage(
@@ -175,13 +272,23 @@ class PromptInjectionGuardrail(CustomGuardrail):
                 contract_id=str(meta["contract_id"]) if meta.get("contract_id") is not None else None,
                 chunk_index=meta.get("chunk_index"),
                 filename=header.group(2),
+                sentences_withheld=redaction.sentences_withheld,
+                sentences_total=redaction.sentences_total,
+                fully_withheld=redaction.fully_withheld,
             )
             blocked.append(hit)
-            logger.warning(
-                "Prompt injection withheld: passage [%d] (%s, chunk_index=%s, contract_id=%s) matched %r",
-                label, hit.filename, hit.chunk_index, hit.contract_id, pattern,
-            )
-            pieces.append(f"{header.group(0)}\n{WITHHELD_TEXT}\n\n")
+            if redaction.fully_withheld:
+                logger.warning(
+                    "Prompt injection withheld: passage [%d] (%s, chunk_index=%s, contract_id=%s) matched %r",
+                    label, hit.filename, hit.chunk_index, hit.contract_id, pattern,
+                )
+                pieces.append(f"{header.group(0)}\n{WITHHELD_TEXT}\n\n")
+            else:
+                logger.warning(
+                    "Prompt injection redacted: %d of %d sentence(s) in passage [%d] (%s, chunk_index=%s, contract_id=%s) matched %r",
+                    redaction.sentences_withheld, redaction.sentences_total, label, hit.filename, hit.chunk_index, hit.contract_id, pattern,
+                )
+                pieces.append(header.group(0) + redaction.text)
         return "".join(pieces) + tail, blocked
 
 
@@ -221,9 +328,11 @@ class GuardedChatModel:
             "metadata": dict(metadata or {}),
         }
         data = _run(self.guardrail.async_pre_call_hook(UserAPIKeyAuth(), DualCache(), data, "completion"))
-        blocked = tuple(b["label"] for b in data["metadata"].get("blocked_passages", []))
+        hits = data["metadata"].get("blocked_passages", [])
+        blocked = tuple(b["label"] for b in hits if b.get("fully_withheld", True))
+        redacted = tuple(b["label"] for b in hits if not b.get("fully_withheld", True))
         completion = self.inner.complete(system, data["messages"][1]["content"], max_tokens=max_tokens, metadata=metadata)
-        return replace(completion, blocked=blocked) if blocked else completion
+        return replace(completion, blocked=blocked, redacted=redacted) if hits else completion
 
 
 def _run(coroutine):

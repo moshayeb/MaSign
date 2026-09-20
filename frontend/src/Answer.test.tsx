@@ -303,6 +303,16 @@ describe('asking a question', () => {
     expect(screen.getByText(/One passage was withheld from the model/)).toBeInTheDocument()
   })
 
+  it('says when a passage was read minus its injected sentences, not withheld (MAS-99)', async () => {
+    await renderWithContractAndAsk('fee?', json(200, { ...answered, redacted_passages: [1] }))
+    await screen.findByText(/The monthly fee is EUR 18,500/)
+
+    expect(screen.getByText(/Passage 1 contained instructions addressed to the AI: only those sentences were withheld from the model, the rest was read/)).toBeInTheDocument()
+    expect(screen.queryByText(/One passage was withheld from the model/)).not.toBeInTheDocument()
+    expect(screen.getByText('Sentences withheld')).toBeInTheDocument() // on the cited passage
+    expect(screen.getByText(/Grounded · 2 passages/)).toBeInTheDocument() // still a normal, grounded answer
+  })
+
   it('copies a citation with its source and confirms in a toast', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })

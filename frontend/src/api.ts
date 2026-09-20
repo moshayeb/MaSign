@@ -111,6 +111,8 @@ export interface QueryResponse {
   // Passage numbers (1-based, among retrieved_context) the prompt-injection
   // guardrail withheld from the model (MAS-90).
   blocked_passages: number[]
+  // Passages the model read minus their injected sentences (MAS-99).
+  redacted_passages?: number[]
 }
 
 export function askQuestion(question: string, contractId: string | null, limit = 5): Promise<QueryResponse> {
@@ -189,6 +191,8 @@ export interface Coverage {
   unreadable_passages: number[]
   // Passage indexes the guardrail withheld: not graded.
   withheld_passages: number[]
+  // Passage indexes graded minus their injected sentences (MAS-99).
+  redacted_passages?: number[]
   ingestion_notes: string[]
   // Documents the text depends on that were not uploaded.
   external_references: ExternalReference[]
@@ -220,6 +224,8 @@ export interface Passage {
   chunk_id: string
   chunk_index: number
   text: string
+  // [start, end] of each sentence the guardrail withholds from the model (MAS-99).
+  withheld_spans?: number[][]
 }
 
 export function getContractPassages(contractId: string): Promise<Passage[]> {

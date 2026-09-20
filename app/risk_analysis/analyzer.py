@@ -65,6 +65,8 @@ class RiskReport:
     # Passage numbers (1-based) the guardrail withheld — not graded, and never
     # to be read as "no risk" (MAS-94).
     blocked: tuple[int, ...] = ()
+    # Passages graded minus their injected sentences (MAS-99): counted as graded.
+    redacted: tuple[int, ...] = ()
 
 
 def analyze_risks(
@@ -127,7 +129,7 @@ def analyze_risks(
         return RiskReport([], checked=False, complete=False, blocked=blocked)
     # Withheld passages were never graded, so the report is incomplete even
     # when every finding for the others verified (MAS-94).
-    return RiskReport(findings, checked=True, complete=dropped == 0 and not blocked, blocked=blocked)
+    return RiskReport(findings, checked=True, complete=dropped == 0 and not blocked, blocked=blocked, redacted=completion.redacted)
 
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")
