@@ -12,17 +12,19 @@ interface Props {
   contract: Contract
   // The source to show; a new object scrolls to it and marks the quote.
   target: SourceRef | null
+  // Always expanded (inside its own tab, MAS-95); default collapses until a target arrives.
+  open?: boolean
 }
 
 // The contract's own text, passage by passage, so every finding, key term
 // and citation is one click from the words it came from (MAS-83). Stored
 // chunk text only — PDF page positions are a follow-up.
-export function PassageReader({ contract, target }: Props) {
+export function PassageReader({ contract, target, open: alwaysOpen = false }: Props) {
   const [passages, setPassages] = useState<Passage[] | null>(null)
   const [failed, setFailed] = useState(false)
   // Open whenever a new target arrives; the user's own toggle wins until the next target.
   const [toggled, setToggled] = useState<{ target: SourceRef | null; open: boolean } | null>(null)
-  const open = toggled && toggled.target === target ? toggled.open : target !== null
+  const open = alwaysOpen || (toggled && toggled.target === target ? toggled.open : target !== null)
 
   useEffect(() => {
     let cancelled = false
