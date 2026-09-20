@@ -221,7 +221,22 @@ export default function App() {
           ) : (
             <>
               <div className="workspace-head">
-                <h1 className="workspace-title">{selected.filename}</h1>
+                <div className="workspace-titlebar">
+                  <h1 className="workspace-title">{selected.filename}</h1>
+                  {/* Plain links: the browser shows the download itself (MAS-97). */}
+                  <nav className="downloads" aria-label="Download the review">
+                    <span className="muted small">Download</span>
+                    <a className="link" href={`/api/contracts/${selected.contract_id}/export.md`} download>
+                      Markdown
+                    </a>
+                    <a className="link" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
+                      CSV
+                    </a>
+                    <button type="button" className="link" onClick={() => window.print()}>
+                      Print
+                    </button>
+                  </nav>
+                </div>
                 <Tabs
                   label="Contract workspace"
                   active={tab}

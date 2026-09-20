@@ -127,6 +127,19 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
+  it('offers the review as Markdown and CSV downloads for the selected contract (MAS-97)', async () => {
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+
+    const nav = screen.getByRole('navigation', { name: 'Download the review' })
+    expect(within(nav).getByRole('link', { name: 'Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
+    expect(within(nav).getByRole('link', { name: 'CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
+    expect(within(nav).getByRole('link', { name: 'Markdown' })).toHaveAttribute('download')
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
+    await userEvent.click(within(nav).getByRole('button', { name: 'Print' }))
+    expect(print).toHaveBeenCalled()
+  })
+
   it('has no API docs link in the header any more', async () => {
     render(<App />)
     await screen.findByRole('button', { name: /northwind\.txt/ })

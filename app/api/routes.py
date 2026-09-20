@@ -6,9 +6,11 @@ from uuid import UUID
 import psycopg
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.actions.workflow import build_follow_up_actions
+from app.api import export
 from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
@@ -525,6 +527,35 @@ def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(g
     chunk_index = {chunk.id: chunk.chunk_index for chunk in chunks}
     coverage = Coverage.build(review, contract, find_external_references([c.chunk_text for c in chunks]))
     return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage)
+
+
+@router.get("/contracts/{contract_id}/export.{fmt}")
+def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection = Depends(get_db)) -> Response:
+    """The review as a file: `export.md` (Markdown) or `export.csv`. Same data as /risks and /key-terms (MAS-97)."""
+    if fmt not in ("md", "csv"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md or csv.")
+    contract = repository.get_contract(db, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    review = repository.get_risk_review(db, contract_id)
+    if review is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This contract has not been reviewed yet. Start a review before exporting it.",
+        )
+    review_body = _review_response(db, review)
+    chunks = repository.list_chunks(db, contract_id)
+    chunk_index = {chunk.id: chunk.chunk_index for chunk in chunks}
+    terms_body = KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage)
+    if fmt == "md":
+        text, media = export.render_markdown(contract.filename, review_body, terms_body), "text/markdown; charset=utf-8"
+    else:
+        text, media = export.render_csv(review_body, terms_body), "text/csv; charset=utf-8"
+    return Response(
+        content=text,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{export.safe_filename(contract.filename, fmt)}"'},
+    )
 
 
 @router.post("/contracts/{contract_id}/review", response_model=RiskReviewResponse, status_code=status.HTTP_202_ACCEPTED)

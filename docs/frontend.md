@@ -118,6 +118,15 @@ reviewed text" and is only sent when the pass completed; `unchecked` reads
 — never present absence as a fact the contract states. Pill: `n of 9 stated
 · k of m passages read` (green), `Partly checked` (amber) or `Extracting…`.
 
+### Download and print (MAS-97)
+
+The workspace title bar has plain `<a download>` links to
+`/api/contracts/{id}/export.md` and `.csv` (the browser shows the download;
+no toast) and a Print button (`window.print()`). `@media print` in
+`index.css` hides the sidebar, tabs, composer, download links and action
+buttons, forces the Overview panels visible in black on white, keeps
+passage numbers as plain text, and breaks the page between cards.
+
 ### Standard verdicts (MAS-96)
 
 A stated term with a standard shows a pill under its quote — green "Meets
