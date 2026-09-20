@@ -6,8 +6,19 @@ import { ContractList } from './components/ContractList'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
 import { RiskReviewPanel } from './components/RiskReviewPanel'
 import { PassageReader, type SourceRef } from './components/PassageReader'
+import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
 import { Wordmark } from './components/Wordmark'
+
+type Tab = 'overview' | 'ask' | 'text'
+const TABS: Tab[] = ['overview', 'ask', 'text']
+
+// The selected contract and tab live in the URL hash (#<contract_id>/<tab>)
+// so a refresh, or a pasted link, lands on the same view (MAS-95).
+function parseHash(): { contractId: string | null; tab: Tab } {
+  const [id, tab] = window.location.hash.replace('#', '').split('/')
+  return { contractId: id || null, tab: (TABS as string[]).includes(tab) ? (tab as Tab) : 'overview' }
+}
 
 const EXAMPLES = ['What is the termination fee?', 'Is there a cap on liability?', 'When are invoices due, and what happens if we pay late?']
 
@@ -51,6 +62,18 @@ export default function App() {
   // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
   const [source, setSource] = useState<SourceRef | null>(null)
   const [draft, setDraft] = useState('')
+  const [tab, setTabState] = useState<Tab>(() => parseHash().tab)
+  const setTab = useCallback((next: Tab) => {
+    setTabState(next)
+  }, [])
+  // Keep the hash in step with the view; clear it when nothing is selected.
+  useEffect(() => {
+    const next = selected ? `#${selected.contract_id}/${tab}` : ''
+    if (window.location.hash !== next) window.history.replaceState(null, '', next || window.location.pathname)
+  }, [selected, tab])
+  // A pasted link or a refresh: the hash read once at mount, applied when the
+  // first contract list arrives (in `load`, not an effect).
+  const initialHash = useRef<ReturnType<typeof parseHash> | null>(parseHash())
   // Loads can overlap (Refresh while an upload's reload is in flight); only
   // the most recent request may set the list, whatever order they return in (MAS-66).
   const latestLoad = useRef(0)
@@ -58,7 +81,18 @@ export default function App() {
   const load = useCallback(async () => {
     const id = ++latestLoad.current
     const loaded = await listContracts()
-    if (id === latestLoad.current) setContracts(loaded)
+    if (id === latestLoad.current) {
+      setContracts(loaded)
+      const wanted = initialHash.current
+      if (wanted) {
+        initialHash.current = null
+        const match = wanted.contractId ? loaded.find((c) => c.contract_id === wanted.contractId) : undefined
+        if (match) {
+          setSelected(match)
+          setTabState(wanted.tab)
+        }
+      }
+    }
     return loaded
   }, [])
 
@@ -97,14 +131,33 @@ export default function App() {
   // selection clears it so contract A's answer never sits under contract B's
   // review (MAS-86). The draft question stays.
   const select = useCallback((contract: Contract) => {
-    setSelected(contract)
+    setSelected((current) => {
+      if (current?.contract_id !== contract.contract_id) setTab('overview')
+      return contract
+    })
     setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
     setSource(null)
-  }, [])
+  }, [setTab])
+
+  // A finding or key term was clicked: show the text at that passage (MAS-83/95).
+  const showSource = useCallback(
+    (ref: SourceRef) => {
+      setSource(ref)
+      setTab('text')
+    },
+    [setTab],
+  )
+  const answered = useCallback(
+    (next: Asked | null) => {
+      setAsked(next)
+      if (next) setTab('ask')
+    },
+    [setTab],
+  )
 
   return (
     <>
-      <Toaster position="top-right" theme="dark" richColors closeButton />
+      <Toaster position="top-right" theme="light" richColors closeButton />
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/" aria-label="MaSign home">
@@ -112,7 +165,6 @@ export default function App() {
           </a>
           <nav className="topnav">
             <span className="tagline">Answers from the contract itself — with the clause to prove it.</span>
-            <a href="/docs">API docs</a>
           </nav>
         </div>
       </header>
@@ -129,60 +181,78 @@ export default function App() {
         </aside>
 
         <main className="content">
-          {!asked && (
-            <section className="hero">
-              <h1>
-                Ask the contract. <span className="glow">Get the clause that proves it.</span>
-              </h1>
-              <p>
-                {selected
-                  ? `${selected.filename} is selected — ask anything about it below.`
-                  : 'Upload a contract or pick one on the left, then ask in plain language. MaSign answers only from the text, quotes the passages it used, and grades the risky clauses from your side of the deal.'}
-              </p>
-            </section>
-          )}
-
-          <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={setAsked} />
-
-          {!asked && selected && (
-            <div className="examples">
-              <span className="muted">Try:</span>
-              {EXAMPLES.map((example) => (
-                <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
-                  {example}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
-
-          {selected && (
-            <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} onShowSource={setSource} />
-          )}
-          {selected && <PassageReader key={`reader-${selected.contract_id}`} contract={selected} target={source} />}
-
-          {!asked && !selected && (
+          {!selected ? (
             <>
-              <div className="examples">
-                <span className="muted">Try:</span>
-                {EXAMPLES.map((example) => (
-                  <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
-                    {example}
-                  </button>
-                ))}
+              <section className="hero">
+                <h1>
+                  Ask the contract. <span className="glow">Get the clause that proves it.</span>
+                </h1>
+                <p>
+                  Upload a contract or pick one on the left, then ask in plain language. MaSign answers only from the text, quotes the
+                  passages it used, and grades the risky clauses from your side of the deal.
+                </p>
+              </section>
+              <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
+              {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
+              {!asked && (
+                <>
+                  <div className="examples">
+                    <span className="muted">Try:</span>
+                    {EXAMPLES.map((example) => (
+                      <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="features">
+                    {FEATURES.map((feature) => (
+                      <section key={feature.title} className="card feature">
+                        <div className="feature-icon" aria-hidden="true">
+                          {feature.icon}
+                        </div>
+                        <h2>{feature.title}</h2>
+                        <p>{feature.text}</p>
+                      </section>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="workspace-head">
+                <h1 className="workspace-title">{selected.filename}</h1>
+                <Tabs
+                  label="Contract workspace"
+                  active={tab}
+                  onChange={setTab}
+                  tabs={[
+                    { id: 'overview', label: 'Overview' },
+                    { id: 'ask', label: 'Ask', hint: asked ? '· answered' : undefined },
+                    { id: 'text', label: 'Contract text' },
+                  ]}
+                />
               </div>
-              <div className="features">
-                {FEATURES.map((feature) => (
-                  <section key={feature.title} className="card feature">
-                    <div className="feature-icon" aria-hidden="true">
-                      {feature.icon}
-                    </div>
-                    <h2>{feature.title}</h2>
-                    <p>{feature.text}</p>
-                  </section>
-                ))}
-              </div>
+              <TabPanel id="overview" active={tab}>
+                <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} onShowSource={showSource} />
+              </TabPanel>
+              <TabPanel id="ask" active={tab}>
+                <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
+                {!asked && (
+                  <div className="examples">
+                    <span className="muted">Try:</span>
+                    {EXAMPLES.map((example) => (
+                      <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
+              </TabPanel>
+              <TabPanel id="text" active={tab}>
+                <PassageReader key={`reader-${selected.contract_id}`} contract={selected} target={source} open />
+              </TabPanel>
             </>
           )}
         </main>

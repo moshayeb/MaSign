@@ -47,8 +47,13 @@ Run `npx vite --port 5199 --strictPort` from `frontend/` (kill node afterwards:
   verbatim; loading toasts for uploads/questions; no toast for automatic loads.
 - Cards are `.card` (never bare `section`, or the toast container picks up
   styling). Status pills: green ok / amber warn / grey none / cyan running.
-- Dark theme by owner's choice (Gemini-inspired); the reviewer prefers light —
-  **do not change colours without the owner's explicit decision.**
+- **Light theme only** since MAS-95 (owner decision 2026-09-20; dark was the
+  MAS-79 choice) — colours are `:root` tokens in `index.css`, text-on-white
+  uses `--accent #0077b3`, never the raw logo cyan. Do not change the palette
+  without the owner's explicit decision.
+- With a contract selected the main column is tabbed (Overview · Ask ·
+  Contract text); in tests, click `getByRole('tab', { name: 'Ask' })` before
+  looking for the composer, and pass a hash like `#nw/text` to open a tab.
 - The brand: `components/Wordmark.tsx` (outlined, font-free); never reintroduce
   a font-dependent SVG. Header logo height is the owner's call (currently 22).
 - Phone width ≈ 400 px must not scroll horizontally: `min-width: 0` on flex

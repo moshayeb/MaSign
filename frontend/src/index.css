@@ -1,33 +1,41 @@
-/* MaSign UI — deep navy with the logo's cyan (#009fe3) as the single accent.
-   Round 2 (MAS-79): landing-style main column, quiet glass panels, no
-   decorative tiles around the logo. */
+/* MaSign UI — light, paper-like surfaces with the logo's cyan (#009fe3) as the
+   single accent (MAS-95, owner decision 2026-09-20: light theme only). The
+   previous dark palette (MAS-79) is in git history.
+
+   Contrast notes: text on white uses --accent (#0077b3, 4.6:1) rather than
+   the raw logo cyan (2.8:1); the cyan itself is kept for fills and borders. */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  color-scheme: dark;
-  --bg: #070c16;
-  --bg-2: #0c1425;
-  --panel: rgba(255, 255, 255, 0.03);
-  --panel-2: rgba(255, 255, 255, 0.055);
-  --line: rgba(255, 255, 255, 0.08);
-  --line-2: rgba(255, 255, 255, 0.14);
-  --text: #dfe6f0;
-  --text-2: #b7c2d3;
-  --muted: #7f8ca3;
-  --ink: #f8fafc;
-  --accent: #009fe3;
-  --accent-bright: #3cc3ff;
-  --accent-soft: rgba(0, 159, 227, 0.14);
-  --accent-line: rgba(60, 195, 255, 0.45);
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --high: #fb7185;
-  --medium: #fbbf24;
-  --low: #34d399;
+  color-scheme: light;
+  --bg: #f4f6fa;
+  --bg-2: #e9eef6;
+  --panel: #ffffff;
+  --panel-2: #f1f5fa;
+  --inset: #f7f9fc;
+  --line: #dde3ec;
+  --line-2: #c5cfdc;
+  --text: #22304a;
+  --text-2: #3f4d66;
+  --muted: #64748b;
+  --ink: #0b1220;
+  --accent: #0077b3;
+  --accent-bright: #009fe3;
+  --accent-soft: rgba(0, 159, 227, 0.1);
+  --accent-line: rgba(0, 159, 227, 0.45);
+  --ok: #047857;
+  --ok-bg: rgba(16, 185, 129, 0.12);
+  --ok-line: rgba(16, 185, 129, 0.4);
+  --warn: #b45309;
+  --warn-bg: rgba(245, 158, 11, 0.12);
+  --warn-line: rgba(245, 158, 11, 0.45);
+  --high: #dc2626;
+  --medium: #d97706;
+  --low: #059669;
   --radius: 16px;
   --radius-sm: 10px;
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 20px 40px -20px rgba(0, 0, 0, 0.6);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 14px 32px -20px rgba(15, 23, 42, 0.25);
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.55;
@@ -43,8 +51,8 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(900px 420px at 18% -120px, rgba(0, 159, 227, 0.22), transparent 65%),
-    radial-gradient(700px 380px at 92% 8%, rgba(99, 102, 241, 0.12), transparent 65%),
+    radial-gradient(900px 420px at 18% -120px, rgba(0, 159, 227, 0.14), transparent 65%),
+    radial-gradient(700px 380px at 92% 8%, rgba(99, 102, 241, 0.07), transparent 65%),
     var(--bg);
 }
 
@@ -55,8 +63,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
   background-size: 36px 36px;
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 70%);
   -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 70%);
@@ -111,7 +119,7 @@ a {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(7, 12, 22, 0.72);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
 }
@@ -142,7 +150,7 @@ a {
 }
 
 .brand .logo {
-  filter: drop-shadow(0 0 14px rgba(0, 159, 227, 0.35));
+  filter: none;
 }
 
 .wordmark-svg {
@@ -278,8 +286,8 @@ button {
 }
 
 button:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.09);
+  border-color: var(--line-2);
+  background: var(--bg-2);
 }
 
 button:disabled {
@@ -287,16 +295,16 @@ button:disabled {
 }
 
 button.primary {
-  background: linear-gradient(135deg, #0ab0f5, #007cc2);
+  background: linear-gradient(135deg, #009fe3, #0077b3);
   border-color: transparent;
   color: #fff;
   font-weight: 700;
-  box-shadow: 0 8px 24px -8px rgba(0, 159, 227, 0.7);
+  box-shadow: 0 8px 20px -10px rgba(0, 119, 179, 0.6);
 }
 
 button.primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2cc0ff, #0090dc);
-  box-shadow: 0 10px 28px -8px rgba(0, 159, 227, 0.9);
+  background: linear-gradient(135deg, #16aeee, #0084c4);
+  box-shadow: 0 10px 24px -10px rgba(0, 119, 179, 0.7);
 }
 
 button.primary:disabled {
@@ -363,7 +371,7 @@ button.chip:hover:not(:disabled) {
   padding: 22px 12px 18px;
   border: 1.5px dashed var(--line-2);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--inset);
   text-align: center;
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s;
@@ -473,18 +481,18 @@ button.contract.selected {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-align: center;
-  color: #cbd5e1;
-  background: rgba(148, 163, 184, 0.16);
+  color: #475569;
+  background: rgba(100, 116, 139, 0.14);
 }
 
 .filetype.pdf {
-  color: #fda4af;
-  background: rgba(251, 113, 133, 0.16);
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .filetype.docx {
-  color: #93c5fd;
-  background: rgba(96, 165, 250, 0.16);
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
 }
 
 /* --- hero (before the first answer) ------------------------------------- */
@@ -502,7 +510,7 @@ button.contract.selected {
 }
 
 .hero h1 .glow {
-  background: linear-gradient(90deg, #3cc3ff, #009fe3 55%, #7dd3fc);
+  background: linear-gradient(90deg, #0077b3, #009fe3 60%, #0ea5e9);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -597,7 +605,7 @@ form.question textarea {
 }
 
 form.question textarea::placeholder {
-  color: #5b6b85;
+  color: #8a97ad;
 }
 
 .question-row {
@@ -692,8 +700,16 @@ fieldset.scope {
 
 .answer-header h2 {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
+  /* The title stays on one line; a long status pill drops to the next line whole. */
+  white-space: nowrap;
+}
+
+.answer-header h2 .status {
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .answer-scope {
@@ -718,14 +734,14 @@ fieldset.scope {
 
 .status.ok {
   color: var(--ok);
-  background: rgba(52, 211, 153, 0.12);
-  border: 1px solid rgba(52, 211, 153, 0.35);
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-line);
 }
 
 .status.warn {
   color: var(--warn);
-  background: rgba(251, 191, 36, 0.12);
-  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
 }
 
 .status.none {
@@ -735,7 +751,7 @@ fieldset.scope {
 }
 
 .status.running {
-  color: var(--accent-bright);
+  color: var(--accent);
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
 }
@@ -784,7 +800,7 @@ button.cite-marker {
   margin: 0 2px;
   vertical-align: 3px;
   background: var(--accent-soft);
-  color: var(--accent-bright);
+  color: var(--accent);
   border: 1px solid var(--accent-line);
   border-radius: 6px;
 }
@@ -798,9 +814,9 @@ button.cite-marker:hover:not(:disabled) {
   margin: 8px 0;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  color: #fcd34d;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--warn);
   font-size: 0.9rem;
 }
 
@@ -817,7 +833,7 @@ li.citation {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px 14px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--inset);
   transition: border-color 0.15s, background 0.15s;
 }
 
@@ -899,12 +915,12 @@ details.others summary {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--inset);
   border-top-width: 3px;
 }
 
 .review-cat.clean {
-  border-top-color: rgba(52, 211, 153, 0.45);
+  border-top-color: rgba(16, 185, 129, 0.55);
 }
 
 .review-cat.severity-high {
@@ -933,7 +949,7 @@ details.others summary {
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 5px;
-  color: #06111f;
+  color: #fff;
 }
 
 .risk-dot {
@@ -982,7 +998,7 @@ li.risk {
   border-left-width: 3px;
   border-radius: 12px;
   padding: 12px 14px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--inset);
 }
 
 li.risk.severity-high {
@@ -1015,8 +1031,8 @@ li.risk.severity-low {
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 5px;
-  color: #06111f;
-  background: #94a3b8;
+  color: #fff;
+  background: #64748b;
 }
 
 .severity-high .severity {
@@ -1057,7 +1073,7 @@ li.risk blockquote {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--inset);
   border-top-width: 3px;
 }
 
@@ -1142,7 +1158,7 @@ li.risk blockquote {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--inset);
   transition: border-color 0.15s, background 0.15s;
   outline: none;
 }
@@ -1161,7 +1177,7 @@ li.risk blockquote {
 }
 
 .passage mark {
-  background: rgba(251, 191, 36, 0.35);
+  background: rgba(250, 204, 21, 0.45);
   color: inherit;
   border-radius: 3px;
   padding: 0 2px;
@@ -1172,10 +1188,10 @@ li.risk blockquote {
   margin: 8px 0 10px;
   padding: 10px 14px;
   list-style: none;
-  border: 1px solid rgba(251, 191, 36, 0.45);
+  border: 1px solid var(--warn-line);
   border-radius: 12px;
-  background: rgba(251, 191, 36, 0.08);
-  color: var(--warn, #fbbf24);
+  background: var(--warn-bg);
+  color: var(--warn);
   font-size: 0.88rem;
   display: flex;
   flex-direction: column;
@@ -1196,4 +1212,85 @@ li.risk blockquote {
   font-size: 0.6rem;
   margin-left: 6px;
   vertical-align: middle;
+}
+
+/* Contract workspace tabs (MAS-95) */
+.workspace-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspace-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 14px 10px;
+  margin-bottom: -1px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tab:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent-bright);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.tab-hint {
+  margin-left: 6px;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.tabpanel[hidden] {
+  display: none;
+}
+
+.reader[open] > summary {
+  margin-bottom: 4px;
 }

@@ -56,22 +56,48 @@ collapsed passage list) and the suggested actions (MAS-15/16).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
-## Look and feel (MAS-73, MAS-79)
+## Look and feel (MAS-73, MAS-79, MAS-95)
 
-Deep navy theme (Inter, `#070c16` ground with a cyan glow and a faint grid
-that fades out, translucent "glass" panels) with the logo's cyan `#009fe3` as
-the single accent — inspired by a Gemini-generated landing page the owner
-liked. The header shows the full logo inlined (`components/Wordmark.tsx`,
+**Light theme only** since MAS-95 (owner decision 2026-09-20; the MAS-79 navy
+palette is in git history). Inter on a `#f4f6fa` ground with a faint cyan
+wash and grid, white cards, the logo's cyan as the single accent: `#009fe3`
+for fills and borders, `#0077b3` (4.6:1 on white) wherever it is text.
+Status colours are the 700-weight shades (`--ok #047857`, `--warn #b45309`)
+on 12 % tints; severity tags are white on solid red/amber/green. Every
+colour is a `:root` token — no hard-coded dark values remain, and
+`color-scheme: light` is set. The header shows the full logo inlined (`components/Wordmark.tsx`,
 generated from `logo/MaSign_logo_BB.svg`) so the ink paths follow the theme
 and no font is needed: every letter is an outline — the owner exported the
 wordmark from Illustrator in Anurati, and the one letter Illustrator left as
 live text (the S) was outlined with fontTools. `frontend/public/brand/` holds
 the font-free colour and white versions for documents.
 Two-column layout: a sticky sidebar (upload drop zone, compact contract rows
-with a file-type tag) and the main column, stacking under 960 px. Before the
-first answer the main column is a landing: headline, the question composer
-(scope pills and Ask inside one bordered box), example questions as chips
-and three feature tiles; after it, the composer and the answer card.
+with a file-type tag) and the main column, stacking under 960 px. With no
+contract selected the main column is a landing: headline, the question
+composer (scope pills and Ask inside one bordered box), example questions
+as chips and three feature tiles.
+
+### Contract workspace tabs (MAS-95)
+
+Selecting a contract replaces the landing with the file name and a tab bar
+(`components/Tabs.tsx`, WAI-ARIA `tablist`/`tab`/`tabpanel`; arrow keys,
+Home and End move, only the active tab is in the tab order):
+
+- **Overview** — the Key terms card and the Risk review (default).
+- **Ask** — the composer, example chips, and the answer with citations and
+  per-question flags. Asking a question switches here.
+- **Contract text** — the passage reader, always expanded. "Show in
+  contract" and passage links switch here with the passage highlighted.
+
+Inactive panels stay mounted but `hidden`, so the answer, the draft and the
+reader position survive a switch. The selection and tab live in the URL
+hash as `#<contract_id>/<tab>`: a refresh or a pasted link restores both
+(applied when the first contract list arrives; an unknown id is ignored).
+Selecting a different contract resets to Overview and clears the answer
+(MAS-86). The header has no "API docs" link any more; `/docs` still works.
+Card titles are `white-space: nowrap` with `flex-wrap`, so a long status
+pill drops under the title whole at phone width instead of breaking the
+title.
 Cards are `.card` (never bare `section`, so the toast container stays
 invisible); section titles are small uppercase labels. The answer card
 carries a status pill — green "Grounded · n passages", amber "Unverified",
