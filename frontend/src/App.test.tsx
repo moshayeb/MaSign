@@ -82,6 +82,16 @@ describe('contract list', () => {
     expect(screen.getByRole('button', { name: /msa\.txt/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('badges a contract whose upload could not be read in full (MAS-84)', async () => {
+    const note = 'Page 3 of 14 has no text layer (scanned or image-only) and could not be read.'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, [contract({ contract_id: 'c3', filename: 'scan-mix.pdf', ingestion_notes: [note] })]))
+
+    render(<App />)
+
+    const badge = await screen.findByText('Partly readable')
+    expect(badge).toHaveAttribute('title', note)
+  })
+
   it('shows the API detail in an error toast when loading fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       json(503, { detail: 'Database unavailable. Check that Postgres is running and DATABASE_URL is correct.' }),
@@ -163,7 +173,8 @@ describe('upload', () => {
       }
       if (url === '/api/contracts') return json(200, listed)
       // The selected contract's whole-contract review (MAS-81) is polled separately.
-      if (url.endsWith('/risks')) return json(200, { status: 'pending', findings: [], categories: [], chunks_total: 12, chunks_checked: 0, chunks_withheld: 0, complete: false, error: null, model: null })
+      if (url.endsWith('/passages')) return json(200, [])
+      if (url.endsWith('/risks')) return json(200, { status: 'pending', findings: [], categories: [], chunks_total: 12, chunks_checked: 0, chunks_withheld: 0, complete: false, key_terms_complete: false, key_terms: [], error: null, model: null })
       return json(404, { detail: `unexpected ${url}` })
     })
 
@@ -175,7 +186,7 @@ describe('upload', () => {
 
     await waitFor(() => expect(shown).toEqual([['success', 'northwind.txt uploaded — 12 chunks']]))
     expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
-    const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => !url.endsWith('/risks'))
+    const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages'))
     expect(calls).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
   })
 

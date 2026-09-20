@@ -80,6 +80,44 @@ Verified with headless-Edge screenshots at 1280 px and inside a 400 px
 iframe (headless Edge clamps its own viewport to 492 px, so narrow widths
 must be checked through an iframe).
 
+## Key terms (MAS-82)
+
+`KeyTermsCard` renders above the Risk review from the same `RiskReview`
+response (`key_terms`, `key_terms_complete`), so it shares the panel's load
+and polling. One tile per term, always all nine: the value in bold, `·
+passage n`, the verbatim quote, and for `conflicting` an amber pill plus
+"Also stated in passage m" lines. `not_stated` reads "Not stated in the
+reviewed text" and is only sent when the pass completed; `unchecked` reads
+"Not checked" with an amber notice that some passages could not be checked
+— never present absence as a fact the contract states. Pill: `n of 9 stated
+· k of m passages read` (green), `Partly checked` (amber) or `Extracting…`.
+
+## Coverage (MAS-84)
+
+`CoverageNote` renders `review.coverage` as an amber list on both the Key
+terms card and the Risk review: "Not reviewed: <ingestion note>", "Not
+graded for risks/key terms — … passages 5, 6", "Withheld from the model —
+passage 12 …", "Depends on a document not uploaded: Order Form (referred to
+in passage 2)". Every passage number is a link into the reader
+(`onShowSource`, accessible name `Show passage n in contract`). The review
+shows "Reviewed <date> by <model> · n of m passages graded"; a `not_stated`
+key term adds "— may be in <document> (not uploaded)"; the contract list
+shows a *Partly readable* badge whose title is the ingestion notes.
+
+## Contract text reader (MAS-83)
+
+`PassageReader` (a collapsible `.card.reader` below the review) loads
+`GET /api/contracts/{id}/passages` once per contract and renders every
+passage. App holds a `SourceRef {chunk_index, quote?}`; `RiskReviewPanel`
+and `KeyTermsCard` receive `onShowSource` and call it from the finding's
+"Show in contract" button and the key term's passage link (accessible
+names `Show <category> finding in contract`, `Show <term> in contract`). A
+new target opens the reader, scrolls the passage into view, focuses it
+(`tabIndex=-1`, `aria-current`) and wraps the quote in `<mark>` via
+`findQuote` in `src/quote.tsx` (exact match, then whitespace/quote-style
+tolerant). Selecting another contract clears the target. The answer view's
+`[n]` markers keep their own in-card highlighting.
+
 ## Risk review (MAS-81)
 
 Selecting a contract mounts `RiskReviewPanel` (keyed by contract id) which

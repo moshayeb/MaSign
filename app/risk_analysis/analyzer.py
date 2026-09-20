@@ -89,6 +89,8 @@ def analyze_risks(
         max_tokens=MAX_RISK_TOKENS,
         metadata=passage_metadata(hits),
     )
+    # The guardrail reports what it withheld; the pre-check already knows. Keep both in step.
+    blocked = tuple(sorted(set(blocked) | set(completion.blocked)))
     if completion.truncated:
         # The findings that arrived whole are still verifiable; keep them and
         # say the analysis is incomplete rather than discard everything (MAS-80).
@@ -97,12 +99,12 @@ def analyze_risks(
             "Risk analysis reply from %s was cut off; %d complete finding(s) salvaged", model.model_name, len(items)
         )
         if not items:
-            return RiskReport([], checked=False, complete=False, blocked=completion.blocked)
+            return RiskReport([], checked=False, complete=False, blocked=blocked)
     else:
         items = _parse_findings(completion.text)
         if items is None:
             logger.warning("Risk analysis reply from %s was not a JSON array: %.200r", model.model_name, completion.text)
-            return RiskReport([], checked=False, complete=False, blocked=completion.blocked)
+            return RiskReport([], checked=False, complete=False, blocked=blocked)
 
     findings: list[RiskFinding] = []
     seen: set[tuple[str, int]] = set()
@@ -122,10 +124,10 @@ def analyze_risks(
         # The model reported risks but none could be verified: that is an
         # unusable analysis, not a clean bill of health (MAS-74).
         logger.warning("Risk analysis from %s: all %d finding(s) rejected; treating as unavailable", model.model_name, dropped)
-        return RiskReport([], checked=False, complete=False, blocked=completion.blocked)
+        return RiskReport([], checked=False, complete=False, blocked=blocked)
     # Withheld passages were never graded, so the report is incomplete even
     # when every finding for the others verified (MAS-94).
-    return RiskReport(findings, checked=True, complete=dropped == 0 and not completion.blocked, blocked=completion.blocked)
+    return RiskReport(findings, checked=True, complete=dropped == 0 and not blocked, blocked=blocked)
 
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")

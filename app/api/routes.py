@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
@@ -13,9 +13,11 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Contract, RiskFindingRow, RiskReview
+from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
 from app.guardrails.prompt_injection import refuse_injected_question
-from app.ingestion.parsing import DocumentTextError, extract_text
+from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
+from app.ingestion.references import ExternalReference, find_external_references
+from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
 from app.retrieval.embeddings import Embedder
@@ -119,6 +121,8 @@ class ContractSummary(BaseModel):
     # failed, or None for a contract uploaded before reviews existed.
     risk_status: str | None = None
     risk_worst_severity: str | None = None
+    # What ingestion could not read (MAS-84): shown as "Not reviewed: …".
+    ingestion_notes: list[str] = []
 
     @classmethod
     def from_model(cls, contract: Contract, review: tuple[str, str | None] | None = None) -> "ContractSummary":
@@ -133,6 +137,7 @@ class ContractSummary(BaseModel):
             created_at=contract.created_at,
             risk_status=review[0] if review else None,
             risk_worst_severity=review[1] if review else None,
+            ingestion_notes=list(contract.ingestion_notes),
         )
 
 
@@ -154,6 +159,135 @@ class ReviewCategory(BaseModel):
     findings: int
 
 
+class KeyTermSource(BaseModel):
+    value: str
+    quote: str
+    chunk_id: UUID
+    chunk_index: int
+    # Machine-readable value, present only when every number in it was found
+    # in the quote (MAS-82 typed addition); otherwise the term is text only.
+    typed: dict | None
+
+
+class KeyTermValue(BaseModel):
+    id: str
+    name: str
+    kind: str
+    # found | not_stated | conflicting | unchecked. "unchecked" means the
+    # key-terms pass did not complete for this contract, so absence proves
+    # nothing; "not_stated" is only claimed when every passage was read.
+    status: str
+    value: str
+    # The passage the value comes from (the earliest statement), or None.
+    source: KeyTermSource | None
+    # Further passages stating the same term; "conflicting" when their values differ.
+    others: list[KeyTermSource]
+
+    @classmethod
+    def from_rows(cls, term_id: str, rows: list[KeyTermRow], chunk_index: dict[UUID, int], *, checked: bool) -> "KeyTermValue":
+        term = TERM_BY_ID[term_id]
+        sources = [
+            KeyTermSource(value=r.value, quote=r.quote, chunk_id=r.chunk_id, chunk_index=chunk_index.get(r.chunk_id, 0), typed=r.typed)
+            for r in rows
+        ]
+        if not sources:
+            return cls(
+                id=term.id,
+                name=term.name,
+                kind=term.kind,
+                status="not_stated" if checked else "unchecked",
+                value=NOT_STATED if checked else "Not checked",
+                source=None,
+                others=[],
+            )
+        first, others = sources[0], sources[1:]
+        conflicting = any(_same_value(o, first) is False for o in others)
+        return cls(
+            id=term.id,
+            name=term.name,
+            kind=term.kind,
+            status="conflicting" if conflicting else "found",
+            value=first.value,
+            source=first,
+            others=others,
+        )
+
+
+def _same_value(a: KeyTermSource, b: KeyTermSource) -> bool:
+    # Typed values compare exactly; text values compare loosely (case, spacing).
+    if a.typed is not None and b.typed is not None:
+        return a.typed == b.typed
+    return " ".join(a.value.lower().split()) == " ".join(b.value.lower().split())
+
+
+class ExternalReferenceOut(BaseModel):
+    # A document the text points to that was not uploaded ("Order Form", "Schedule 2").
+    name: str
+    chunk_indexes: list[int]
+
+
+class Coverage(BaseModel):
+    """What was and was not read (MAS-84) — part of every review result."""
+
+    chunks_total: int
+    chunks_checked: int
+    # Passage indexes (0-based) whose model reply was unreadable: not graded; read them by hand.
+    unreadable_passages: list[int]
+    # Passage indexes the guardrail withheld: not graded.
+    withheld_passages: list[int]
+    # What ingestion could not read at all (no text layer, characters removed).
+    ingestion_notes: list[str]
+    # Documents the text depends on that are not part of the upload.
+    external_references: list[ExternalReferenceOut]
+
+    @classmethod
+    def build(cls, review: RiskReview, contract: Contract, references: list[ExternalReference]) -> "Coverage":
+        return cls(
+            chunks_total=review.chunks_total,
+            chunks_checked=review.chunks_checked,
+            unreadable_passages=sorted(review.unreadable_chunks),
+            withheld_passages=sorted(review.withheld_chunks),
+            ingestion_notes=list(contract.ingestion_notes),
+            external_references=[ExternalReferenceOut(name=r.name, chunk_indexes=list(r.chunk_indexes)) for r in references],
+        )
+
+
+class KeyTermsResponse(BaseModel):
+    contract_id: UUID
+    # The review's status: pending | running | done | failed.
+    status: str
+    # True when every passage was read for key terms and every reply was usable.
+    complete: bool
+    chunks_total: int
+    chunks_checked: int
+    chunks_withheld: int
+    model: str | None
+    updated_at: datetime
+    terms: list[KeyTermValue]
+    coverage: Coverage | None = None
+
+    @classmethod
+    def from_models(
+        cls, review: RiskReview, rows: list[KeyTermRow], chunk_index: dict[UUID, int], coverage: Coverage | None = None
+    ) -> "KeyTermsResponse":
+        checked = review.status == "done" and review.key_terms_complete
+        by_term: dict[str, list[KeyTermRow]] = {term.id: [] for term in KEY_TERMS}
+        for row in rows:
+            by_term.setdefault(row.term, []).append(row)
+        return cls(
+            contract_id=review.contract_id,
+            status=review.status,
+            complete=checked,
+            chunks_total=review.chunks_total,
+            chunks_checked=review.chunks_checked,
+            chunks_withheld=review.chunks_withheld,
+            model=review.model,
+            updated_at=review.updated_at,
+            terms=[KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked) for term in KEY_TERMS],
+            coverage=coverage,
+        )
+
+
 class RiskReviewResponse(BaseModel):
     contract_id: UUID
     status: str  # pending | running | done | failed
@@ -169,9 +303,21 @@ class RiskReviewResponse(BaseModel):
     updated_at: datetime
     findings: list[ReviewFinding]
     categories: list[ReviewCategory]
+    # The key-terms pass of the same job (MAS-82): its terms and whether it completed.
+    key_terms_complete: bool
+    key_terms: list[KeyTermValue]
+    # What was and was not read (MAS-84).
+    coverage: Coverage | None = None
 
     @classmethod
-    def from_models(cls, review: RiskReview, rows: list[RiskFindingRow], chunk_index: dict[UUID, int]) -> "RiskReviewResponse":
+    def from_models(
+        cls,
+        review: RiskReview,
+        rows: list[RiskFindingRow],
+        chunk_index: dict[UUID, int],
+        terms: list[KeyTermRow] = (),
+        coverage: Coverage | None = None,
+    ) -> "RiskReviewResponse":
         findings = [
             ReviewFinding(
                 category=row.category,
@@ -202,6 +348,9 @@ class RiskReviewResponse(BaseModel):
             updated_at=review.updated_at,
             findings=findings,
             categories=categories,
+            key_terms_complete=review.status == "done" and review.key_terms_complete,
+            key_terms=KeyTermsResponse.from_models(review, list(terms), chunk_index).terms,
+            coverage=coverage,
         )
 
 
@@ -225,7 +374,8 @@ async def upload_contract(
     # Running them inline would block the event loop for the whole upload — a
     # large PDF or a slow insert stalls every other request on this worker —
     # so each goes to the thread pool.
-    text, chunks = await run_in_threadpool(_parse_and_chunk, upload, embedder)
+    document, chunks = await run_in_threadpool(_parse_and_chunk, upload, embedder)
+    text = document.text
 
     contract = await run_in_threadpool(
         repository.create_contract,
@@ -235,6 +385,7 @@ async def upload_contract(
         size_bytes=upload.size_bytes,
         character_count=len(text),
         chunks=chunks,
+        ingestion_notes=document.notes,
     )
 
     # A contract without vectors can never be searched, so if indexing fails
@@ -298,6 +449,36 @@ def get_contract(
     return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id))
 
 
+class Passage(BaseModel):
+    chunk_id: UUID
+    chunk_index: int
+    text: str
+
+
+@router.get("/contracts/{contract_id}/passages", response_model=list[Passage])
+def get_contract_passages(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> list[Passage]:
+    """Every stored passage of the contract in order — the text behind each citation, finding and key term (MAS-83)."""
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    return [Passage(chunk_id=c.id, chunk_index=c.chunk_index, text=c.chunk_text) for c in repository.list_chunks(db, contract_id)]
+
+
+@router.get("/contracts/{contract_id}/search", response_model=list[RetrievedChunk])
+def search_contract(
+    contract_id: UUID,
+    q: str = Query(min_length=1, max_length=2000),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=20),
+    db: psycopg.Connection = Depends(get_db),
+    embedder: Embedder = Depends(get_embedder),
+    store: VectorStore = Depends(get_vector_store),
+) -> list[RetrievedChunk]:
+    """Retrieval only — the passages a question would be answered from, best first. No model call (MAS-91)."""
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    hits = retrieve_contract_context(q, db=db, embedder=embedder, store=store, contract_id=contract_id, limit=limit)
+    return [RetrievedChunk.from_hit(hit) for hit in hits]
+
+
 @router.get("/contracts/{contract_id}/risks", response_model=RiskReviewResponse)
 def get_contract_risks(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> RiskReviewResponse:
     """The whole-contract risk review: its status and the verified findings (MAS-81)."""
@@ -310,6 +491,24 @@ def get_contract_risks(contract_id: UUID, db: psycopg.Connection = Depends(get_d
             detail="This contract has not been reviewed for risks yet. Start a review to grade it.",
         )
     return _review_response(db, review)
+
+
+@router.get("/contracts/{contract_id}/key-terms", response_model=KeyTermsResponse)
+def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> KeyTermsResponse:
+    """The contract's financial key terms with their source passages (MAS-82)."""
+    contract = repository.get_contract(db, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    review = repository.get_risk_review(db, contract_id)
+    if review is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This contract has not been reviewed yet. Start a review to extract its key terms.",
+        )
+    chunks = repository.list_chunks(db, contract_id)
+    chunk_index = {chunk.id: chunk.chunk_index for chunk in chunks}
+    coverage = Coverage.build(review, contract, find_external_references([c.chunk_text for c in chunks]))
+    return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage)
 
 
 @router.post("/contracts/{contract_id}/review", response_model=RiskReviewResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -333,20 +532,25 @@ def review_contract_risks(
 
 def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewResponse:
     rows = repository.list_risk_findings(db, review.contract_id)
-    chunk_index = {chunk.id: chunk.chunk_index for chunk in repository.list_chunks(db, review.contract_id)}
-    return RiskReviewResponse.from_models(review, rows, chunk_index)
+    chunks = repository.list_chunks(db, review.contract_id)
+    chunk_index = {chunk.id: chunk.chunk_index for chunk in chunks}
+    contract = repository.get_contract(db, review.contract_id)
+    coverage = (
+        Coverage.build(review, contract, find_external_references([c.chunk_text for c in chunks])) if contract else None
+    )
+    return RiskReviewResponse.from_models(review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage)
 
 
-def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[str, list[str]]:
+def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[ExtractedDocument, list[str]]:
     """Extract text and split it into chunks. Runs off the event loop."""
-    text = _extract_or_reject(upload)
+    document = _extract_or_reject(upload)
     # Chunk within the model's token limit too, so nothing is truncated when
     # the chunk is embedded (MAS-49).
     budget = TokenBudget(count=embedder.count_tokens, max_tokens=embedder.max_tokens)
-    return text, chunk_contract_text(text, token_budget=budget)
+    return document, chunk_contract_text(document.text, token_budget=budget)
 
 
-def _extract_or_reject(upload: ValidatedUpload) -> str:
+def _extract_or_reject(upload: ValidatedUpload) -> ExtractedDocument:
     """Parse a validated upload, or turn the failure into a clear 422.
 
     Validation only proves the bytes look like a supported type. A scanned
@@ -355,7 +559,7 @@ def _extract_or_reject(upload: ValidatedUpload) -> str:
     rather than receiving an empty result.
     """
     try:
-        return extract_text(upload.content, upload.file_type)
+        return extract_document(upload.content, upload.file_type)
     except DocumentTextError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

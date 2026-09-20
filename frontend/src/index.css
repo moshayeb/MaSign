@@ -1043,3 +1043,157 @@ li.risk blockquote {
   color: var(--text-2);
   white-space: pre-wrap;
 }
+
+/* Key terms card (MAS-82) */
+.terms {
+  margin: 4px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.term {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border-top-width: 3px;
+}
+
+.term.found {
+  border-top-color: rgba(56, 189, 248, 0.6);
+}
+
+.term.conflicting {
+  border-top-color: var(--medium);
+}
+
+.term dt {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 4px;
+}
+
+.term dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.term-value {
+  font-weight: 600;
+}
+
+.term-quote {
+  margin: 6px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.term-others {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.term .status {
+  margin-left: 6px;
+}
+
+/* Contract text reader (MAS-83) */
+.reader > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reader > summary::-webkit-details-marker {
+  display: none;
+}
+
+.reader > summary::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.reader[open] > summary::before {
+  content: '▾';
+}
+
+.passages {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.passage {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.18);
+  transition: border-color 0.15s, background 0.15s;
+  outline: none;
+}
+
+.passage.highlighted {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.passage p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.passage mark {
+  background: rgba(251, 191, 36, 0.35);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+/* Coverage (MAS-84) */
+.coverage {
+  margin: 8px 0 10px;
+  padding: 10px 14px;
+  list-style: none;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--warn, #fbbf24);
+  font-size: 0.88rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coverage .link {
+  color: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.review-meta {
+  margin: 0 0 8px;
+}
+
+.status.tiny {
+  font-size: 0.6rem;
+  margin-left: 6px;
+  vertical-align: middle;
+}

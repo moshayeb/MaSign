@@ -121,11 +121,24 @@ Interactive docs at `http://localhost:8000/docs`.
 | `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. |
 | `GET`  | `/api/contracts` | List stored contracts, newest first. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
-| `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage) and the seven `categories` with their worst severity. Runs automatically after upload. |
-| `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review (202; 409 while one is running). |
-| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
+| `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`). Runs automatically after upload. |
+| `GET`  | `/api/contracts/{contract_id}/search` | `?q=<question>&limit=5` → the passages the question would be answered from, best first, with scores. Retrieval only, no model call (MAS-91). |
+| `GET`  | `/api/contracts/{contract_id}/passages` | Every stored passage of the contract in order (`chunk_id`, `chunk_index`, `text`) — the text behind each citation, finding and key term (MAS-83). |
+| `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
+| `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction (202; 409 while one is running). |
+| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |
 | `GET`  | `/ready` | Readiness: Postgres and Qdrant answer (200) or the failing one is named (503); also reports which chat model is configured. Use this, not `/health`, to know whether requests will succeed. |
+
+## Evaluation
+
+`docs/evaluation/` holds the question set, the results and how to run the
+harness: `python -m evaluation.evaluate --retrieval-only` measures retrieval
+(hit@1, hit@5, MRR) against the running stack with **no** model call, and
+`--judge` scores the real system's answers with Ragas (faithfulness, factual
+correctness) through a Haiku judge — paid, so it prints its estimate and
+refuses without `--yes`. `GET /api/contracts/{id}/search?q=` is the
+retrieval-only endpoint it uses. See `docs/evaluation/README.md` (MAS-91).
 
 ## Running the Tests
 
@@ -141,6 +154,67 @@ Tests that need Postgres use a separate `contract_rag_test` database, created
 automatically from `DATABASE_URL` and emptied after each test — your dev data
 is never touched. Without a reachable Postgres they are skipped; set
 `MASIGN_REQUIRE_DB=1` (as CI does) to make that a failure instead.
+
+## Financial key terms (MAS-82)
+
+The 2026-09-17 product review put the *financial consequences* of a
+contract first. Every upload therefore also extracts nine key terms, defined
+as data in `app/key_terms/terms.py` (the prompt, the API and this list are
+built from it): recurring fee, one-off fees, payment deadline, late-payment
+interest or penalty, termination cost, initial term, renewal, notice period,
+price changes. The pass runs in the same background job as the risk review,
+one extra model call per batch of 8 passages, with the same discipline:
+
+- a term is kept only with a **verbatim quote** from the passage it names
+  (whitespace and quote style normalised); anything else is dropped and the
+  pass is marked incomplete;
+- where a term has a numeric form it also carries **typed fields** —
+  `{amount, currency[, period]}`, `{net_days}`, `{rate_percent, per}`,
+  `{days | months}` — kept only when every number in them appears in the
+  quote; otherwise the term is stored as text only. This is the data
+  invoice verification (MAS-92, post-course) will consume;
+- a term stated in several passages reports the first and lists the
+  others; when their values differ it is `conflicting`;
+- absence is **`not_stated`** only when every passage was read and every
+  reply was usable; otherwise it is **`unchecked`** ("Not checked" in the
+  UI) — an unreadable reply never turns into "the contract does not say".
+
+The **Key terms** card sits above the Risk review for the selected contract:
+a pill with `n of 9 stated · passages read`, one tile per term with the value,
+its passage number and the quote, and amber notices for conflicts or an
+incomplete pass.
+
+**Click-to-source (MAS-83).** Every finding has a *Show in contract* button
+and every key term's passage number is a link: both open the **Contract
+text** reader below the review at that passage, scrolled into view, with the
+verified quote marked. The reader lists the stored passages
+(`GET /api/contracts/{id}/passages`); the quote is located the same loose
+way the API verified it (whitespace and quote style), and if it still cannot
+be found the passage is shown unmarked rather than marking the wrong words.
+Stored text only — highlighting on the original PDF page needs page and
+offset data at ingestion and is a follow-up.
+
+## Coverage: what was and was not read (MAS-84)
+
+A review of the readable part of a document must never look like a review
+of the whole document, so coverage is part of every result:
+
+- **Ingestion notes** are stored with the contract (`ingestion_notes` on
+  every contract response): PDF pages with no text layer ("Page 3 of 14 has
+  no text layer (scanned or image-only) and could not be read.") and
+  unreadable characters removed. The contract list shows a *Partly readable*
+  badge; the cards show "Not reviewed: …".
+- The review lists the passages it could **not grade** — `unreadable_passages`
+  (the model's reply for their batch was unusable) and `withheld_passages`
+  (the guardrail withheld them) — by number, each a link into the contract
+  text, next to the review date and model.
+- **External references**: documents the text points to but that were not
+  uploaded — `Schedule 2`, `Exhibit A`, `Order Form`, `Statement of Work`,
+  `SLA`… — are detected by a narrow textual rule (`app/ingestion/references.py`):
+  named, referred to, and never present as a heading in the text itself. They
+  are shown as "Depends on a document not uploaded" on both cards, and a key
+  term that is *not stated* says "may be in Order Form (not uploaded)". This
+  is an unable-to-determine state, not "the contract does not say".
 
 ## Prompt-injection guardrail (MAS-90)
 
