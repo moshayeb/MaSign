@@ -58,6 +58,13 @@ class VectorStore:
         self._client = client
         self.collection = collection
 
+    def ping(self) -> None:
+        """Raise VectorStoreError unless Qdrant answers (readiness, MAS-88)."""
+        try:
+            self._client.get_collections()
+        except (ResponseHandlingException, UnexpectedResponse) as error:
+            raise VectorStoreError(str(error)) from error
+
     def matches(self, dimension: int) -> bool:
         """Whether the collection exists with this vector size. Read-only."""
         try:

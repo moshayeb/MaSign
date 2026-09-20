@@ -6,19 +6,20 @@ from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.answering.llm import ChatModelError, get_chat_model
-from app.guardrails.prompt_injection import PromptInjectionError
+from app.answering.llm import ChatModel, ChatModelError, UnconfiguredChatModel, get_chat_model
 from app.api.routes import router as api_router
+from app.guardrails.prompt_injection import PromptInjectionError
+from app.api import dependencies
 from app.database.migrations import run_migrations
 from app.database.session import get_connection
 from app.retrieval.embeddings import EmbeddingServiceError, get_embedder
 from app.retrieval.indexing import ensure_index_current
-from app.retrieval.vector_store import VectorStoreError, get_vector_store
+from app.retrieval.vector_store import VectorStore, VectorStoreError, get_vector_store
 
 # Uvicorn configures only its own loggers; without this the app's startup and
 # error lines (migrations, model loading, outages) never reach the container log.
@@ -80,6 +81,10 @@ async def readable_validation_error(_: Request, error: RequestValidationError) -
     errors = error.errors()
     messages = []
     for item in errors:
+        if item.get("type") == "json_invalid":
+            # The location of a decode error is a character index, not a field (MAS-89).
+            messages.append("Request body is not valid JSON.")
+            continue
         location = ".".join(str(part) for part in item.get("loc", ()) if part not in ("body", "query", "path"))
         messages.append(f"{location}: {item['msg']}" if location else item["msg"])
     return JSONResponse(
@@ -144,7 +149,41 @@ async def chat_model_unavailable(_: Request, error: ChatModelError) -> JSONRespo
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
+    """Liveness: the process answers. Says nothing about its dependencies (see /ready)."""
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness_check(
+    store: VectorStore = Depends(dependencies.get_vector_store),
+    chat_model: ChatModel = Depends(dependencies.get_chat_model),
+) -> JSONResponse:
+    """Readiness (MAS-88): Postgres and Qdrant answer, and which chat model is configured.
+
+    200 when both stores answer; 503 naming the failing component otherwise.
+    An unconfigured chat model is reported, not failed: uploads and retrieval
+    still work without it.
+    """
+    report: dict[str, str] = {}
+    try:
+        with get_connection() as db, db.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        report["database"] = "ok"
+    except psycopg.Error as error:
+        logger.error("Readiness: database failed: %s", error)
+        report["database"] = "unavailable"
+    try:
+        store.ping()
+        report["vector_store"] = "ok"
+    except VectorStoreError as error:
+        logger.error("Readiness: vector store failed: %s", error)
+        report["vector_store"] = "unavailable"
+    report["chat_model"] = (
+        "not configured" if isinstance(chat_model, UnconfiguredChatModel) else f"{chat_model.provider} {chat_model.model_name}"
+    )
+    ready = report["database"] == "ok" and report["vector_store"] == "ok"
+    report["status"] = "ok" if ready else "unavailable"
+    return JSONResponse(status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE, content=report)
 
 
 # The built React app (frontend/dist, MAS-17) is served from the root when it

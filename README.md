@@ -127,7 +127,8 @@ Interactive docs at `http://localhost:8000/docs`.
 | `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
 | `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction (202; 409 while one is running). |
 | `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
-| `GET`  | `/health` | Liveness check. |
+| `GET`  | `/health` | Liveness: the process answers. Always 200. |
+| `GET`  | `/ready` | Readiness: Postgres and Qdrant answer (200) or the failing one is named (503); also reports which chat model is configured. Use this, not `/health`, to know whether requests will succeed. |
 
 ## Evaluation
 
