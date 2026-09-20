@@ -82,6 +82,16 @@ describe('contract list', () => {
     expect(screen.getByRole('button', { name: /msa\.txt/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('badges a contract whose upload could not be read in full (MAS-84)', async () => {
+    const note = 'Page 3 of 14 has no text layer (scanned or image-only) and could not be read.'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, [contract({ contract_id: 'c3', filename: 'scan-mix.pdf', ingestion_notes: [note] })]))
+
+    render(<App />)
+
+    const badge = await screen.findByText('Partly readable')
+    expect(badge).toHaveAttribute('title', note)
+  })
+
   it('shows the API detail in an error toast when loading fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       json(503, { detail: 'Database unavailable. Check that Postgres is running and DATABASE_URL is correct.' }),

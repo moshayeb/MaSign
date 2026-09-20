@@ -7,6 +7,7 @@ same functions work from scripts, tests and the API.
 """
 
 import re
+from dataclasses import dataclass, field
 from io import BytesIO
 from zipfile import BadZipFile
 
@@ -20,6 +21,20 @@ from lxml.etree import XMLSyntaxError
 
 
 SUPPORTED_FILE_TYPES = ("txt", "pdf", "docx")
+
+
+@dataclass(frozen=True)
+class ExtractedDocument:
+    """The text of an upload plus what could not be read from it (MAS-84).
+
+    `notes` are plain sentences for the user ("Pages 3 and 7 have no text
+    layer …"); they are stored with the contract and shown as coverage, so
+    that a review of the readable part is never mistaken for a review of the
+    whole document.
+    """
+
+    text: str
+    notes: list[str] = field(default_factory=list)
 
 
 class DocumentTextError(ValueError):
@@ -45,16 +60,22 @@ class NoExtractableTextError(DocumentTextError):
 
 
 def extract_text(content: bytes, file_type: str) -> str:
-    """Return the plain text of a validated upload.
+    """The plain text of a validated upload (see `extract_document` for what was not read)."""
+    return extract_document(content, file_type).text
+
+
+def extract_document(content: bytes, file_type: str) -> ExtractedDocument:
+    """Return the plain text of a validated upload and notes on what could not be read.
 
     Raises `UnsupportedFileTypeError` for unknown types, `DocumentParseError`
     if the bytes cannot be read, and `NoExtractableTextError` if they can be
     read but contain no text.
     """
+    notes: list[str] = []
     if file_type == "txt":
         text = _extract_txt(content)
     elif file_type == "pdf":
-        text = _extract_pdf(content)
+        text = _extract_pdf(content, notes)
     elif file_type == "docx":
         text = _extract_docx(content)
     else:
@@ -63,6 +84,9 @@ def extract_text(content: bytes, file_type: str) -> str:
             f"Supported types are {', '.join(SUPPORTED_FILE_TYPES)}."
         )
 
+    removed = text.count("\x00")
+    if removed:
+        notes.append(f"{removed} unreadable character{'' if removed == 1 else 's'} removed from the text.")
     text = normalize_text(text)
     if not text:
         raise NoExtractableTextError(
@@ -70,7 +94,7 @@ def extract_text(content: bytes, file_type: str) -> str:
             "run through OCR before they can be processed."
         )
 
-    return text
+    return ExtractedDocument(text, notes)
 
 
 def normalize_text(text: str) -> str:
@@ -91,7 +115,7 @@ def _extract_txt(content: bytes) -> str:
     return content.decode("utf-8-sig", errors="replace")
 
 
-def _extract_pdf(content: bytes) -> str:
+def _extract_pdf(content: bytes, notes: list[str] | None = None) -> str:
     try:
         reader = pypdf.PdfReader(BytesIO(content))
         pages = [page.extract_text() or "" for page in reader.pages]
@@ -100,7 +124,23 @@ def _extract_pdf(content: bytes) -> str:
             "The PDF could not be read. It may be corrupted or password protected."
         ) from error
 
+    # A page with no text layer (a scan, a drawing, a signature page) is
+    # not read at all; the contract must say so rather than look complete.
+    empty = [number for number, page in enumerate(pages, start=1) if not page.strip()]
+    if notes is not None and empty and len(empty) < len(pages):
+        notes.append(
+            f"{_page_list(empty)} of {len(pages)} {'has' if len(empty) == 1 else 'have'} no text layer "
+            "(scanned or image-only) and could not be read."
+        )
     return "\n\n".join(page for page in pages if page.strip())
+
+
+def _page_list(numbers: list[int]) -> str:
+    if len(numbers) == 1:
+        return f"Page {numbers[0]}"
+    if len(numbers) <= 6:
+        return "Pages " + ", ".join(str(n) for n in numbers[:-1]) + f" and {numbers[-1]}"
+    return f"{len(numbers)} pages"
 
 
 def _extract_docx(content: bytes) -> str:

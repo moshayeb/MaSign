@@ -121,7 +121,7 @@ Interactive docs at `http://localhost:8000/docs`.
 | `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. |
 | `GET`  | `/api/contracts` | List stored contracts, newest first. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
-| `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage) and the seven `categories` with their worst severity. Runs automatically after upload. |
+| `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`). Runs automatically after upload. |
 | `GET`  | `/api/contracts/{contract_id}/passages` | Every stored passage of the contract in order (`chunk_id`, `chunk_index`, `text`) — the text behind each citation, finding and key term (MAS-83). |
 | `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
 | `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction (202; 409 while one is running). |
@@ -181,6 +181,28 @@ way the API verified it (whitespace and quote style), and if it still cannot
 be found the passage is shown unmarked rather than marking the wrong words.
 Stored text only — highlighting on the original PDF page needs page and
 offset data at ingestion and is a follow-up.
+
+## Coverage: what was and was not read (MAS-84)
+
+A review of the readable part of a document must never look like a review
+of the whole document, so coverage is part of every result:
+
+- **Ingestion notes** are stored with the contract (`ingestion_notes` on
+  every contract response): PDF pages with no text layer ("Page 3 of 14 has
+  no text layer (scanned or image-only) and could not be read.") and
+  unreadable characters removed. The contract list shows a *Partly readable*
+  badge; the cards show "Not reviewed: …".
+- The review lists the passages it could **not grade** — `unreadable_passages`
+  (the model's reply for their batch was unusable) and `withheld_passages`
+  (the guardrail withheld them) — by number, each a link into the contract
+  text, next to the review date and model.
+- **External references**: documents the text points to but that were not
+  uploaded — `Schedule 2`, `Exhibit A`, `Order Form`, `Statement of Work`,
+  `SLA`… — are detected by a narrow textual rule (`app/ingestion/references.py`):
+  named, referred to, and never present as a heading in the text itself. They
+  are shown as "Depends on a document not uploaded" on both cards, and a key
+  term that is *not stated* says "may be in Order Form (not uploaded)". This
+  is an unable-to-determine state, not "the contract does not say".
 
 ## Prompt-injection guardrail (MAS-90)
 

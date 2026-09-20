@@ -16,17 +16,18 @@ def create_contract(
     size_bytes: int,
     character_count: int,
     chunks: list[str],
+    ingestion_notes: list[str] | None = None,
 ) -> Contract:
     """Store a parsed contract together with its chunks in one transaction."""
     with connection.transaction():
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO contracts (filename, file_type, size_bytes, character_count, chunk_count)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO contracts (filename, file_type, size_bytes, character_count, chunk_count, ingestion_notes)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (filename, file_type, size_bytes, character_count, len(chunks)),
+                (filename, file_type, size_bytes, character_count, len(chunks), Jsonb(list(ingestion_notes or []))),
             )
             contract = Contract(**cursor.fetchone())
 
@@ -160,7 +161,8 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
                 VALUES (%s, %s)
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = EXCLUDED.status, error = NULL, chunks_checked = 0,
-                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE, updated_at = now()
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
+                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb, updated_at = now()
                 RETURNING *
                 """,
                 (contract_id, status),
@@ -179,6 +181,8 @@ def update_risk_review(
     chunks_withheld: int | None = None,
     complete: bool | None = None,
     key_terms_complete: bool | None = None,
+    unreadable_chunks: list[int] | None = None,
+    withheld_chunks: list[int] | None = None,
     error: str | None = None,
 ) -> RiskReview:
     with connection.transaction():
@@ -193,12 +197,19 @@ def update_risk_review(
                     chunks_withheld = COALESCE(%s, chunks_withheld),
                     complete = COALESCE(%s, complete),
                     key_terms_complete = COALESCE(%s, key_terms_complete),
+                    unreadable_chunks = COALESCE(%s, unreadable_chunks),
+                    withheld_chunks = COALESCE(%s, withheld_chunks),
                     error = %s,
                     updated_at = now()
                 WHERE contract_id = %s
                 RETURNING *
                 """,
-                (status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete, error, contract_id),
+                (
+                    status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete,
+                    Jsonb(unreadable_chunks) if unreadable_chunks is not None else None,
+                    Jsonb(withheld_chunks) if withheld_chunks is not None else None,
+                    error, contract_id,
+                ),
             )
             row = cursor.fetchone()
     if row is None:

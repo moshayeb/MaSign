@@ -15,6 +15,8 @@ export interface Contract {
   // The whole-contract risk review (MAS-81); null for contracts uploaded before it existed.
   risk_status?: 'pending' | 'running' | 'done' | 'failed' | null
   risk_worst_severity?: 'Low' | 'Medium' | 'High' | null
+  // What ingestion could not read, as sentences (MAS-84).
+  ingestion_notes?: string[]
 }
 
 export interface UploadResult extends Contract {
@@ -164,6 +166,25 @@ export interface KeyTermValue {
   others: KeyTermSource[]
 }
 
+// --- coverage (MAS-84) ------------------------------------------------------
+
+export interface ExternalReference {
+  name: string
+  chunk_indexes: number[]
+}
+
+export interface Coverage {
+  chunks_total: number
+  chunks_checked: number
+  // Passage indexes (0-based) whose model reply was unreadable: not graded.
+  unreadable_passages: number[]
+  // Passage indexes the guardrail withheld: not graded.
+  withheld_passages: number[]
+  ingestion_notes: string[]
+  // Documents the text depends on that were not uploaded.
+  external_references: ExternalReference[]
+}
+
 export interface RiskReview {
   contract_id: string
   status: ReviewStatus
@@ -180,6 +201,8 @@ export interface RiskReview {
   // The key-terms pass of the same job (MAS-82).
   key_terms_complete: boolean
   key_terms: KeyTermValue[]
+  // What was and was not read (MAS-84); absent on older responses.
+  coverage?: Coverage | null
 }
 
 // --- the contract's own text (MAS-83) ---------------------------------------

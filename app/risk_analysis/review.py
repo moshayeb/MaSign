@@ -58,6 +58,8 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         terms_complete = True
         checked = 0
         withheld = 0
+        unreadable_chunks: list[int] = []
+        withheld_chunks: list[int] = []
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start : start + batch_size]
             hits = [
@@ -77,16 +79,21 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                     status="failed",
                     chunks_checked=checked,
                     chunks_withheld=withheld,
+                    unreadable_chunks=unreadable_chunks,
+                    withheld_chunks=withheld_chunks,
                     complete=False,
                     error=str(error),
                 )
             # Passages the guardrail withheld were never graded: they are
             # neither checked nor clean, and the review says so (MAS-94).
             withheld += len(report.blocked)
+            withheld_chunks.extend(batch[label - 1].chunk_index for label in report.blocked)
             if not report.checked:
                 # The model's reply for this batch was unusable: these
-                # passages are not reviewed, and the result must say so.
+                # passages are not reviewed, and the result must say so —
+                # by number, so the user can read them by hand (MAS-84).
                 complete = False
+                unreadable_chunks.extend(c.chunk_index for label, c in enumerate(batch, start=1) if label not in report.blocked)
             else:
                 complete = complete and report.complete
                 checked += len(batch) - len(report.blocked)
@@ -96,7 +103,13 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             terms_complete = terms_complete and term_report.checked and term_report.complete
             terms.extend((t.hit.chunk_id, t.term, t.value, t.quote, t.typed) for t in term_report.findings)
             repository.update_risk_review(
-                db, contract_id, status="running", chunks_checked=checked, chunks_withheld=withheld
+                db,
+                contract_id,
+                status="running",
+                chunks_checked=checked,
+                chunks_withheld=withheld,
+                unreadable_chunks=unreadable_chunks,
+                withheld_chunks=withheld_chunks,
             )
 
         repository.replace_risk_findings(db, contract_id, findings)
@@ -107,6 +120,8 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             status="done",
             chunks_checked=checked,
             chunks_withheld=withheld,
+            unreadable_chunks=unreadable_chunks,
+            withheld_chunks=withheld_chunks,
             complete=complete and checked == len(chunks),
             key_terms_complete=terms_complete and withheld == 0,
         )

@@ -1,5 +1,6 @@
 import type { KeyTermValue, RiskReview } from '../api'
 import type { SourceRef } from './PassageReader'
+import { CoverageNote } from './CoverageNote'
 
 interface Props {
   review: RiskReview
@@ -15,6 +16,9 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
   const running = review.status === 'pending' || review.status === 'running'
   const found = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
   const conflicting = review.key_terms.filter((t) => t.status === 'conflicting')
+  // Documents the text points to but that were not uploaded: a "not stated"
+  // term may live there, so say so next to it (MAS-84).
+  const external = (review.coverage?.external_references ?? []).map((r) => r.name)
   const coverage =
     review.chunks_withheld > 0
       ? `${review.chunks_checked} of ${review.chunks_total} passages read, ${review.chunks_withheld} withheld`
@@ -56,9 +60,10 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
         </p>
       )}
 
+      {review.coverage && <CoverageNote coverage={review.coverage} subject="key terms" onShowSource={onShowSource} />}
       <dl className="terms">
         {review.key_terms.map((term) => (
-          <TermRow key={term.id} term={term} running={running} onShowSource={onShowSource} />
+          <TermRow key={term.id} term={term} running={running} onShowSource={onShowSource} external={external} />
         ))}
       </dl>
       <p className="muted disclaimer">Each value is quoted from the passage named beside it; nothing is inferred or computed.</p>
@@ -66,7 +71,17 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
   )
 }
 
-function TermRow({ term, running, onShowSource }: { term: KeyTermValue; running: boolean; onShowSource?: (source: SourceRef) => void }) {
+function TermRow({
+  term,
+  running,
+  onShowSource,
+  external,
+}: {
+  term: KeyTermValue
+  running: boolean
+  onShowSource?: (source: SourceRef) => void
+  external: string[]
+}) {
   const stated = term.status === 'found' || term.status === 'conflicting'
   return (
     <div className={`term ${term.status}`}>
@@ -108,7 +123,10 @@ function TermRow({ term, running, onShowSource }: { term: KeyTermValue; running:
         ) : term.status === 'unchecked' ? (
           <span className="muted small">Not checked</span>
         ) : (
-          <span className="muted small">Not stated in the reviewed text</span>
+          <span className="muted small">
+            Not stated in the reviewed text
+            {external.length > 0 ? ` — may be in ${external.join(' or ')} (not uploaded)` : ''}
+          </span>
         )}
       </dd>
     </div>

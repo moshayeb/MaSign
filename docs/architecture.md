@@ -151,4 +151,18 @@ returns the stored chunks in order for the frontend's contract-text reader
 (MAS-83), so every finding, key term and citation is one click from the
 text it quotes.
 
+## Coverage (MAS-84)
+
+`extract_document()` in `ingestion/parsing.py` returns the text plus
+`notes` (pages with no text layer, characters removed), stored as
+`contracts.ingestion_notes` (migration 007). `review.py` records
+`unreadable_chunks` and `withheld_chunks` on the review row as lists of
+passage indexes, not only counts. `ingestion/references.py` finds
+documents the text refers to but does not contain (schedule / exhibit /
+annex / appendix / attachment / addendum + letter or number, Order Form,
+Statement of Work, SLA, Purchase Order; a heading at a line start counts as
+present). The API assembles these into `coverage` on the review and
+key-terms responses; nothing is stored for references — they are computed
+from the chunks on each read.
+
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.
