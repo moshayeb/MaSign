@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ApiError, getContractRisks, reviewContract, type Contract, type RiskReview } from '../api'
+import { KeyTermsCard } from './KeyTermsCard'
 
 interface Props {
   contract: Contract
@@ -85,6 +86,9 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
   const findings = review ? [...review.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.chunk_index - b.chunk_index) : []
 
   return (
+    <>
+    {/* The key terms come from the same review row, so the card shares this panel's load and polling (MAS-82). */}
+    {review && <KeyTermsCard review={review} filename={contract.filename} />}
     <section className="card review" aria-live="polite">
       <div className="answer-header">
         <h2>
@@ -189,5 +193,6 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
         <p className="muted disclaimer">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
       )}
     </section>
+    </>
   )
 }

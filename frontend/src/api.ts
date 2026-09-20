@@ -140,6 +140,30 @@ export interface ReviewCategory {
   findings: number
 }
 
+// --- financial key terms (MAS-82) -----------------------------------------
+
+export type KeyTermStatus = 'found' | 'not_stated' | 'conflicting' | 'unchecked'
+
+export interface KeyTermSource {
+  value: string
+  quote: string
+  chunk_id: string
+  chunk_index: number
+  // Machine-readable value, only when every number in it was found in the quote.
+  typed: Record<string, string | number> | null
+}
+
+export interface KeyTermValue {
+  id: string
+  name: string
+  kind: 'money' | 'recurring' | 'net_days' | 'rate' | 'duration' | 'text'
+  // "unchecked": the key-terms pass did not complete, so absence proves nothing.
+  status: KeyTermStatus
+  value: string
+  source: KeyTermSource | null
+  others: KeyTermSource[]
+}
+
 export interface RiskReview {
   contract_id: string
   status: ReviewStatus
@@ -153,6 +177,9 @@ export interface RiskReview {
   updated_at: string
   findings: ReviewFinding[]
   categories: ReviewCategory[]
+  // The key-terms pass of the same job (MAS-82).
+  key_terms_complete: boolean
+  key_terms: KeyTermValue[]
 }
 
 export function getContractRisks(contractId: string): Promise<RiskReview> {

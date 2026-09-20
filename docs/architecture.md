@@ -131,4 +131,21 @@ because the request's one is closed by the time it runs. `GET
 categories; `POST .../review` re-runs it (409 while one is running); the
 contract list carries `risk_status` and `risk_worst_severity`.
 
+## Key terms (MAS-82)
+
+`app/key_terms/terms.py` defines the nine financial terms as data (id,
+name, what to look for, and a `kind` that fixes the typed fields it may
+carry); `extractor.py` asks the model for them per batch with the same
+prompt shape and verification as the analyzer — verbatim quote from the
+named passage or dropped, unreadable reply → `checked: false`, withheld
+passages never read — plus `verify_typed()`, which keeps the typed object
+only when it is well-formed for its kind and every number in it occurs in
+the quote. `review.py` runs it right after `analyze_risks` for each batch
+and stores rows in `key_terms` (one per verified term × passage, `typed`
+as JSONB, migration 006) with `risk_reviews.key_terms_complete`. The API
+(`GET /api/contracts/{id}/key-terms`, and `key_terms` inside `/risks`)
+always returns all nine terms in order: `found` (value, quote, passage,
+typed, `others`), `conflicting` (others disagree), `not_stated` (only when
+the pass completed) or `unchecked`.
+
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

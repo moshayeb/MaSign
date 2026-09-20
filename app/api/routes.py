@@ -13,9 +13,10 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Contract, RiskFindingRow, RiskReview
+from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
 from app.guardrails.prompt_injection import refuse_injected_question
 from app.ingestion.parsing import DocumentTextError, extract_text
+from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
 from app.retrieval.embeddings import Embedder
@@ -154,6 +155,99 @@ class ReviewCategory(BaseModel):
     findings: int
 
 
+class KeyTermSource(BaseModel):
+    value: str
+    quote: str
+    chunk_id: UUID
+    chunk_index: int
+    # Machine-readable value, present only when every number in it was found
+    # in the quote (MAS-82 typed addition); otherwise the term is text only.
+    typed: dict | None
+
+
+class KeyTermValue(BaseModel):
+    id: str
+    name: str
+    kind: str
+    # found | not_stated | conflicting | unchecked. "unchecked" means the
+    # key-terms pass did not complete for this contract, so absence proves
+    # nothing; "not_stated" is only claimed when every passage was read.
+    status: str
+    value: str
+    # The passage the value comes from (the earliest statement), or None.
+    source: KeyTermSource | None
+    # Further passages stating the same term; "conflicting" when their values differ.
+    others: list[KeyTermSource]
+
+    @classmethod
+    def from_rows(cls, term_id: str, rows: list[KeyTermRow], chunk_index: dict[UUID, int], *, checked: bool) -> "KeyTermValue":
+        term = TERM_BY_ID[term_id]
+        sources = [
+            KeyTermSource(value=r.value, quote=r.quote, chunk_id=r.chunk_id, chunk_index=chunk_index.get(r.chunk_id, 0), typed=r.typed)
+            for r in rows
+        ]
+        if not sources:
+            return cls(
+                id=term.id,
+                name=term.name,
+                kind=term.kind,
+                status="not_stated" if checked else "unchecked",
+                value=NOT_STATED if checked else "Not checked",
+                source=None,
+                others=[],
+            )
+        first, others = sources[0], sources[1:]
+        conflicting = any(_same_value(o, first) is False for o in others)
+        return cls(
+            id=term.id,
+            name=term.name,
+            kind=term.kind,
+            status="conflicting" if conflicting else "found",
+            value=first.value,
+            source=first,
+            others=others,
+        )
+
+
+def _same_value(a: KeyTermSource, b: KeyTermSource) -> bool:
+    # Typed values compare exactly; text values compare loosely (case, spacing).
+    if a.typed is not None and b.typed is not None:
+        return a.typed == b.typed
+    return " ".join(a.value.lower().split()) == " ".join(b.value.lower().split())
+
+
+class KeyTermsResponse(BaseModel):
+    contract_id: UUID
+    # The review's status: pending | running | done | failed.
+    status: str
+    # True when every passage was read for key terms and every reply was usable.
+    complete: bool
+    chunks_total: int
+    chunks_checked: int
+    chunks_withheld: int
+    model: str | None
+    updated_at: datetime
+    terms: list[KeyTermValue]
+
+    @classmethod
+    def from_models(cls, review: RiskReview, rows: list[KeyTermRow], chunk_index: dict[UUID, int]) -> "KeyTermsResponse":
+        checked = review.status == "done" and review.key_terms_complete
+        by_term: dict[str, list[KeyTermRow]] = {term.id: [] for term in KEY_TERMS}
+        for row in rows:
+            by_term.setdefault(row.term, []).append(row)
+        return cls(
+            contract_id=review.contract_id,
+            status=review.status,
+            complete=checked,
+            chunks_total=review.chunks_total,
+            chunks_checked=review.chunks_checked,
+            chunks_withheld=review.chunks_withheld,
+            model=review.model,
+            updated_at=review.updated_at,
+            terms=[KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked) for term in KEY_TERMS],
+        )
+
+
 class RiskReviewResponse(BaseModel):
     contract_id: UUID
     status: str  # pending | running | done | failed
@@ -169,9 +263,14 @@ class RiskReviewResponse(BaseModel):
     updated_at: datetime
     findings: list[ReviewFinding]
     categories: list[ReviewCategory]
+    # The key-terms pass of the same job (MAS-82): its terms and whether it completed.
+    key_terms_complete: bool
+    key_terms: list[KeyTermValue]
 
     @classmethod
-    def from_models(cls, review: RiskReview, rows: list[RiskFindingRow], chunk_index: dict[UUID, int]) -> "RiskReviewResponse":
+    def from_models(
+        cls, review: RiskReview, rows: list[RiskFindingRow], chunk_index: dict[UUID, int], terms: list[KeyTermRow] = ()
+    ) -> "RiskReviewResponse":
         findings = [
             ReviewFinding(
                 category=row.category,
@@ -202,6 +301,8 @@ class RiskReviewResponse(BaseModel):
             updated_at=review.updated_at,
             findings=findings,
             categories=categories,
+            key_terms_complete=review.status == "done" and review.key_terms_complete,
+            key_terms=KeyTermsResponse.from_models(review, list(terms), chunk_index).terms,
         )
 
 
@@ -312,6 +413,21 @@ def get_contract_risks(contract_id: UUID, db: psycopg.Connection = Depends(get_d
     return _review_response(db, review)
 
 
+@router.get("/contracts/{contract_id}/key-terms", response_model=KeyTermsResponse)
+def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> KeyTermsResponse:
+    """The contract's financial key terms with their source passages (MAS-82)."""
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    review = repository.get_risk_review(db, contract_id)
+    if review is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This contract has not been reviewed yet. Start a review to extract its key terms.",
+        )
+    chunk_index = {chunk.id: chunk.chunk_index for chunk in repository.list_chunks(db, contract_id)}
+    return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index)
+
+
 @router.post("/contracts/{contract_id}/review", response_model=RiskReviewResponse, status_code=status.HTTP_202_ACCEPTED)
 def review_contract_risks(
     contract_id: UUID,
@@ -334,7 +450,7 @@ def review_contract_risks(
 def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewResponse:
     rows = repository.list_risk_findings(db, review.contract_id)
     chunk_index = {chunk.id: chunk.chunk_index for chunk in repository.list_chunks(db, review.contract_id)}
-    return RiskReviewResponse.from_models(review, rows, chunk_index)
+    return RiskReviewResponse.from_models(review, rows, chunk_index, repository.list_key_terms(db, review.contract_id))
 
 
 def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[str, list[str]]:

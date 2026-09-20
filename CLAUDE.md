@@ -100,6 +100,11 @@ must quote its passage verbatim or it is dropped; an unreadable model reply is
 whole-contract review (all passages, batches of 8, stored per contract, shown
 in the Risk review panel), and each question still flags its own retrieved
 passages. The review costs about one model call per 8 passages.
+Since MAS-82 the same job also extracts nine financial key terms
+(`app/key_terms/terms.py` is the single source, like the rubric): verbatim
+quote or dropped, typed fields kept only when their numbers are in the quote,
+`not_stated` only when the pass completed — otherwise `unchecked`. One more
+call per batch of 8 (Northwind: 4 calls per upload in total).
 
 ## Agent skills (MAS-72)
 

@@ -75,7 +75,7 @@ def test_review_grades_every_passage_in_batches_and_stores_the_verified_findings
 
     assert (review.status, review.chunks_total, review.chunks_checked, review.model) == ("done", 3, 3, "fake-chat")
     assert review.complete is False  # the invented liability finding was dropped
-    assert len(fake_chat_model.calls) == 3
+    assert len(fake_chat_model.calls) == 6  # per batch: one risk call, one key-terms call (MAS-82)
     rows = repository.list_risk_findings(db, contract_id)
     assert [(r.category, r.severity, r.quote) for r in rows] == [
         ("liability", "High", "shall be unlimited"),
@@ -91,7 +91,7 @@ def test_review_uses_the_batch_size_as_passages_per_call(db, fake_chat_model: Fa
     review = review_contract(contract_id, fake_chat_model, batch_size=8)
 
     assert review.status == "done" and review.complete is True
-    assert len(fake_chat_model.calls) == 3  # 8 + 8 + 4
+    assert len(fake_chat_model.calls) == 6  # (8 + 8 + 4) x (risks + key terms)
     assert "[8]" in fake_chat_model.calls[0][1] and "[9]" not in fake_chat_model.calls[0][1]
 
 
@@ -219,11 +219,11 @@ def test_unknown_contract_is_404_for_both_endpoints(db) -> None:
 
 
 @pytest.mark.skipif(not NORTHWIND.exists(), reason="sample contract missing")
-def test_northwind_is_reviewed_in_two_calls(db, fake_chat_model: FakeChatModel) -> None:
+def test_northwind_is_reviewed_in_two_batches(db, fake_chat_model: FakeChatModel) -> None:
     fake_chat_model.calls.clear()
     contract_id = _upload(NORTHWIND.read_text(encoding="utf-8"), "northwind.txt")
 
     body = client.get(f"/api/contracts/{contract_id}/risks").json()
 
     assert body["status"] == "done" and body["chunks_total"] == body["chunks_checked"]
-    assert len(fake_chat_model.calls) == -(-body["chunks_total"] // 8)  # ceil(chunks / 8)
+    assert len(fake_chat_model.calls) == 2 * -(-body["chunks_total"] // 8)  # ceil(chunks / 8) batches x 2 calls
