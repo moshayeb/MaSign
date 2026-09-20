@@ -12,12 +12,19 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from app.answering.llm import ChatModel
+from app.guardrails.prompt_injection import withheld_labels
 from app.retrieval.vector_store import ChunkHit
 
 logger = logging.getLogger(__name__)
 
 NOT_FOUND_TOKEN = "NOT_FOUND"
 NOT_FOUND_ANSWER = "Not found in contract."
+# Every retrieved passage was withheld by the guardrail: the model never saw
+# the text, so "not found" would be a false claim about the contract (MAS-93).
+WITHHELD_ANSWER = (
+    "Could not answer: the passages matching this question were withheld from the model "
+    "because they contain instructions addressed to the AI. They are listed below so you can read them yourself."
+)
 # Generous for "one to four sentences": running out would leave a cut-off
 # answer, which is returned unverified rather than trusted (MAS-70).
 MAX_ANSWER_TOKENS = 1024
@@ -46,6 +53,10 @@ class Answer:
     grounded: bool
     citations: list[Citation] = field(default_factory=list)
     model: str | None = None
+    # Passage numbers the prompt-injection guardrail withheld from the model (MAS-90).
+    blocked: tuple[int, ...] = ()
+    # answered | not_found | withheld — the three outcomes the UI must tell apart (MAS-93).
+    status: str = "answered"
 
 
 def answer_question(
@@ -58,15 +69,25 @@ def answer_question(
     """Answer from `hits` (best first, as the retriever returns them)."""
     if not hits:
         # Nothing to ground on: never ask the model (MAS-14).
-        return Answer(NOT_FOUND_ANSWER, grounded=False)
+        return Answer(NOT_FOUND_ANSWER, grounded=False, status="not_found")
+    blocked = withheld_labels([hit.text for hit in hits])
+    if len(blocked) == len(hits):
+        # The guardrail would withhold every passage: the call would cost a
+        # model round-trip to learn nothing, and "not found" would contradict
+        # the text the user can see below the answer (MAS-93).
+        logger.warning("All %d retrieved passage(s) withheld for %r; not asking the model", len(hits), question)
+        return Answer(WITHHELD_ANSWER, grounded=False, blocked=blocked, status="withheld")
 
     completion = model.complete(
-        SYSTEM_PROMPT, build_user_prompt(question, hits, filenames or {}), max_tokens=MAX_ANSWER_TOKENS
+        SYSTEM_PROMPT,
+        build_user_prompt(question, hits, filenames or {}),
+        max_tokens=MAX_ANSWER_TOKENS,
+        metadata=passage_metadata(hits),
     )
     reply = completion.text
 
     if not completion.truncated and _says_not_found(reply):
-        return Answer(NOT_FOUND_ANSWER, grounded=False, model=model.model_name)
+        return Answer(NOT_FOUND_ANSWER, grounded=False, model=model.model_name, blocked=completion.blocked, status="not_found")
 
     labels, invalid = _cited_labels(reply, len(hits))
     # The answer is shown either way; it is only *trusted* (grounded) when it
@@ -84,7 +105,18 @@ def answer_question(
         grounded=grounded,
         citations=[Citation(label, hits[label - 1]) for label in labels],
         model=model.model_name,
+        blocked=completion.blocked,
     )
+
+
+def passage_metadata(hits: list[ChunkHit]) -> dict:
+    """Which passage number is which chunk, for the guardrail's log lines (MAS-90)."""
+    return {
+        "passages": [
+            {"label": number, "contract_id": str(hit.contract_id), "chunk_index": hit.chunk_index}
+            for number, hit in enumerate(hits, start=1)
+        ]
+    }
 
 
 def build_user_prompt(question: str, hits: list[ChunkHit], filenames: dict[UUID, str]) -> str:

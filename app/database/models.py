@@ -56,6 +56,8 @@ class RiskReview:
     complete: bool
     error: str | None
     updated_at: datetime
+    # Passages the guardrail withheld from the model: not graded (MAS-94).
+    chunks_withheld: int = 0
 
 
 @dataclass(frozen=True)

@@ -127,6 +127,14 @@ async def embedding_service_unavailable(_: Request, error: EmbeddingServiceError
     )
 
 
+@app.exception_handler(PromptInjectionError)
+async def prompt_injection_refused(_: Request, error: PromptInjectionError) -> JSONResponse:
+    # The guardrail refused to forward the user's own message (MAS-90); the
+    # reason names the pattern so the message can be reworded.
+    logger.warning("Prompt injection refused: %s", error)
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(error)})
+
+
 @app.exception_handler(ChatModelError)
 async def chat_model_unavailable(_: Request, error: ChatModelError) -> JSONResponse:
     # The reason varies (no key, rate limit, provider down) and is what the

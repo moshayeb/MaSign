@@ -13,8 +13,9 @@ import re
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.answering.grounding import build_user_prompt
+from app.answering.grounding import build_user_prompt, passage_metadata
 from app.answering.llm import ChatModel
+from app.guardrails.prompt_injection import withheld_labels
 from app.retrieval.vector_store import ChunkHit
 from app.risk_analysis.rubric import CATEGORY_BY_ID, SEVERITIES, rubric_text
 
@@ -57,9 +58,13 @@ class RiskReport:
     # finding in it failed validation: the UI says so instead of showing an
     # empty, reassuring list (MAS-74).
     checked: bool
-    # False when some findings failed validation and were dropped: the ones
+    # False when some findings failed validation and were dropped, or when a
+    # passage was withheld by the guardrail and so never graded: the ones
     # that passed are shown, with a warning that the analysis is incomplete.
     complete: bool = True
+    # Passage numbers (1-based) the guardrail withheld — not graded, and never
+    # to be read as "no risk" (MAS-94).
+    blocked: tuple[int, ...] = ()
 
 
 def analyze_risks(
@@ -71,11 +76,18 @@ def analyze_risks(
     """Grade the retrieved passages with the rubric. Never raises on a bad reply, only on model errors."""
     if not hits:
         return RiskReport([], checked=True)
+    blocked = withheld_labels([hit.text for hit in hits])
+    if len(blocked) == len(hits):
+        # Nothing readable would reach the model: not a clean bill of health,
+        # an analysis that could not run (MAS-94) — and no call to pay for.
+        logger.warning("All %d passage(s) withheld from the risk analysis; not asking the model", len(hits))
+        return RiskReport([], checked=False, complete=False, blocked=blocked)
 
     completion = model.complete(
         SYSTEM_PROMPT,
         build_user_prompt("Which clauses in these passages are risky for the Customer?", hits, filenames or {}),
         max_tokens=MAX_RISK_TOKENS,
+        metadata=passage_metadata(hits),
     )
     if completion.truncated:
         # The findings that arrived whole are still verifiable; keep them and
@@ -85,12 +97,12 @@ def analyze_risks(
             "Risk analysis reply from %s was cut off; %d complete finding(s) salvaged", model.model_name, len(items)
         )
         if not items:
-            return RiskReport([], checked=False)
+            return RiskReport([], checked=False, complete=False, blocked=completion.blocked)
     else:
         items = _parse_findings(completion.text)
         if items is None:
             logger.warning("Risk analysis reply from %s was not a JSON array: %.200r", model.model_name, completion.text)
-            return RiskReport([], checked=False)
+            return RiskReport([], checked=False, complete=False, blocked=completion.blocked)
 
     findings: list[RiskFinding] = []
     seen: set[tuple[str, int]] = set()
@@ -110,8 +122,10 @@ def analyze_risks(
         # The model reported risks but none could be verified: that is an
         # unusable analysis, not a clean bill of health (MAS-74).
         logger.warning("Risk analysis from %s: all %d finding(s) rejected; treating as unavailable", model.model_name, dropped)
-        return RiskReport([], checked=False)
-    return RiskReport(findings, checked=True, complete=dropped == 0)
+        return RiskReport([], checked=False, complete=False, blocked=completion.blocked)
+    # Withheld passages were never graded, so the report is incomplete even
+    # when every finding for the others verified (MAS-94).
+    return RiskReport(findings, checked=True, complete=dropped == 0 and not completion.blocked, blocked=completion.blocked)
 
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")

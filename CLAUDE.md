@@ -82,7 +82,11 @@ detection) and MAS-14/32 (grounding discipline) need legal reading
 comprehension more than raw Q&A does, and per-query cost is cents either way.
 Switching providers is config only: the prompt is ours (`app/answering/
 grounding.py`) and nothing model-specific is stored — but rerun the MAS-32 set
-after a switch. Every answer must carry `[n]` citations; uncited answers are
+after a switch. Since MAS-90 every call goes through `litellm.completion()`
+and the model is wrapped in the prompt-injection guardrail
+(`app/guardrails/prompt_injection.py`, a LiteLLM `CustomGuardrail`): contract
+passages carrying instructions to the AI are withheld before the call, never
+silently forwarded. Tests wrap the fake model in the same guardrail. Every answer must carry `[n]` citations; uncited answers are
 returned with `grounded: false`, never silently accepted.
 
 ## Risk rubric (MAS-15/16)
@@ -96,6 +100,22 @@ must quote its passage verbatim or it is dropped; an unreadable model reply is
 whole-contract review (all passages, batches of 8, stored per contract, shown
 in the Risk review panel), and each question still flags its own retrieved
 passages. The review costs about one model call per 8 passages.
+
+## Agent skills (MAS-72)
+
+`.claude/skills/` holds seven MaSign-specific skills that load in every
+session here; `.claude/skills/README.md` is the index and
+`docs/agent-skills-hw03/` keeps the five generic Homework-03 originals they
+grew from. Their `description` fields are the triggers, written as this
+project's concrete situations: `masign-ticket-flow` (Jira/git procedure,
+owner's files never staged, connector timeouts → read before retry),
+`masign-done` (the exact commands and docs map before "done"),
+`api-spend-guard` (ask before any paid call, with the cost table),
+`honest-outcomes` (unavailable ≠ empty; verify quotes or drop),
+`ui-preview` (canned-API screenshots, zero spend), `masign-handoff`
+(`docs/handoffs/`, read the latest at session start) and `decide-carefully`
+(spec into the ticket before code; confirm → attack → conclude for costly
+decisions). When a skill and this file disagree, this file wins; fix the skill.
 
 ## Frontend Decision
 

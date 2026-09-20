@@ -14,6 +14,7 @@ from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract, RiskFindingRow, RiskReview
+from app.guardrails.prompt_injection import refuse_injected_question
 from app.ingestion.parsing import DocumentTextError, extract_text
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
@@ -83,6 +84,10 @@ class RiskFlag(BaseModel):
 
 class QueryResponse(BaseModel):
     answer: str
+    # answered | not_found | withheld. "withheld" means every retrieved
+    # passage was withheld by the guardrail and the model was never asked;
+    # it is a different fact from "not found" and the UI shows it as such (MAS-93).
+    answer_status: str
     # False when the answer is "Not found in contract." or carries no citation.
     grounded: bool
     citations: list[CitedChunk]
@@ -95,6 +100,10 @@ class QueryResponse(BaseModel):
     # dropped; the ones shown are verified, but the list may be short.
     risks_complete: bool
     recommended_actions: list[str]
+    # Passage numbers (1-based, among retrieved_context) that the prompt-
+    # injection guardrail withheld from the model (MAS-90). They are still
+    # listed in retrieved_context so the user can read what was refused.
+    blocked_passages: list[int] = []
 
 
 class ContractSummary(BaseModel):
@@ -151,6 +160,9 @@ class RiskReviewResponse(BaseModel):
     model: str | None
     chunks_total: int
     chunks_checked: int
+    # Passages the guardrail withheld from the model: never graded, and not
+    # counted in chunks_checked (MAS-94).
+    chunks_withheld: int
     # False while running, or when some passages could not be graded.
     complete: bool
     error: str | None
@@ -184,6 +196,7 @@ class RiskReviewResponse(BaseModel):
             model=review.model,
             chunks_total=review.chunks_total,
             chunks_checked=review.chunks_checked,
+            chunks_withheld=review.chunks_withheld,
             complete=review.complete,
             error=review.error,
             updated_at=review.updated_at,
@@ -358,12 +371,17 @@ async def query_contract(
     store: VectorStore = Depends(get_vector_store),
     chat_model: ChatModel = Depends(get_chat_model),
 ) -> QueryResponse:
+    # A question that is itself an injection is refused before retrieval and
+    # before either model call (MAS-90); the guardrail would catch it in the
+    # answer call, but the risk call runs alongside and would still be spent.
+    refuse_injected_question(request.question)
     # Embedding the question is CPU work, the lookups are synchronous and the
     # model call blocks, so all of it runs off the event loop like the upload path.
     hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
 
     return QueryResponse(
         answer=answer.text,
+        answer_status=answer.status,
         grounded=answer.grounded,
         citations=[
             CitedChunk(label=citation.label, **RetrievedChunk.from_hit(citation.hit).model_dump())
@@ -387,7 +405,8 @@ async def query_contract(
         ],
         risks_checked=risks.checked,
         risks_complete=risks.complete,
-        recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked),
+        recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked, withheld=len(risks.blocked)),
+        blocked_passages=sorted(set(answer.blocked) | set(risks.blocked)),
     )
 
 

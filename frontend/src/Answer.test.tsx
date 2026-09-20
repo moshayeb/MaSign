@@ -61,8 +61,10 @@ const answered: QueryResponse = {
       chunk_index: 9,
     },
   ],
+  answer_status: 'answered',
   risks_checked: true,
   risks_complete: true,
+  blocked_passages: [],
   recommended_actions: ['Escalate to legal review before signing: Termination.', 'Raise in negotiation: Payment terms.'],
 }
 
@@ -241,6 +243,59 @@ describe('asking a question', () => {
     await userEvent.click(screen.getByRole('button', { name: /nda\.pdf/ }))
     expect(screen.queryByText(/The monthly fee is EUR 18,500/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Ask about the contract')).toHaveValue('fee?')
+  })
+
+  it('says which passages the prompt-injection guardrail withheld (MAS-90)', async () => {
+    await renderWithContractAndAsk('fee?', json(200, { ...answered, blocked_passages: [3] }))
+    await screen.findByText(/The monthly fee is EUR 18,500/)
+
+    expect(screen.getByText(/One passage was withheld from the model/)).toBeInTheDocument()
+    expect(screen.getByText(/passage 3 below/)).toBeInTheDocument()
+    await userEvent.click(screen.getByText(/Other passages considered/))
+    expect(screen.getByText('Withheld from the model')).toBeInTheDocument()
+  })
+
+  it('shows a distinct "withheld" outcome when every passage was withheld, never "not found" or "no risk" (MAS-93/94)', async () => {
+    const only = answered.retrieved_context.slice(0, 1)
+    await renderWithContractAndAsk(
+      'what is the monthly invoice?',
+      json(200, {
+        ...answered,
+        answer: 'Could not answer: the passages matching this question were withheld from the model.',
+        answer_status: 'withheld',
+        grounded: false,
+        citations: [],
+        retrieved_context: only,
+        risks: [],
+        risks_checked: false,
+        risks_complete: false,
+        recommended_actions: [],
+        blocked_passages: [1],
+      }),
+    )
+    await screen.findByText(/Could not answer/)
+
+    expect(screen.getByText('Withheld')).toBeInTheDocument()
+    expect(screen.queryByText('Not in the text')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Not found in contract/)).not.toBeInTheDocument()
+    expect(screen.getByText(/The only passage matching this question was withheld from the model/)).toBeInTheDocument()
+    expect(screen.getByText(/Risk check not run/)).toBeInTheDocument()
+    expect(screen.queryByText(/No risk flagged/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Risk analysis was unavailable/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByText(/Passages considered/))
+    expect(screen.getByText('Withheld from the model')).toBeInTheDocument()
+  })
+
+  it('counts withheld passages as unchecked when some were withheld (MAS-94)', async () => {
+    await renderWithContractAndAsk(
+      'fee?',
+      json(200, { ...answered, answer: 'NOT_FOUND', answer_status: 'not_found', grounded: false, citations: [], risks: [], recommended_actions: [], risks_complete: false, blocked_passages: [3] }),
+    )
+    await screen.findByText(/Not found in contract/)
+
+    expect(screen.getByText(/Not in the 2 passages the model was allowed to read \(1 of 3 withheld\)/)).toBeInTheDocument()
+    expect(screen.getByText(/No risk flagged in the 2 of 3 passages the model could read; 1 withheld and not graded/)).toBeInTheDocument()
+    expect(screen.getByText(/One passage was withheld from the model/)).toBeInTheDocument()
   })
 
   it('copies a citation with its source and confirms in a toast', async () => {

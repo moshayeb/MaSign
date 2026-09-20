@@ -91,8 +91,13 @@ export interface RiskFlag {
   chunk_index: number
 }
 
+export type AnswerStatus = 'answered' | 'not_found' | 'withheld'
+
 export interface QueryResponse {
   answer: string
+  // "withheld": every retrieved passage was withheld by the guardrail and the
+  // model was never asked — not the same fact as "not found" (MAS-93).
+  answer_status: AnswerStatus
   grounded: boolean
   citations: CitedChunk[]
   answer_model: string | null
@@ -101,6 +106,9 @@ export interface QueryResponse {
   risks_checked: boolean
   risks_complete: boolean
   recommended_actions: string[]
+  // Passage numbers (1-based, among retrieved_context) the prompt-injection
+  // guardrail withheld from the model (MAS-90).
+  blocked_passages: number[]
 }
 
 export function askQuestion(question: string, contractId: string | null, limit = 5): Promise<QueryResponse> {
@@ -138,6 +146,8 @@ export interface RiskReview {
   model: string | null
   chunks_total: number
   chunks_checked: number
+  // Withheld by the guardrail, never graded; not part of chunks_checked (MAS-94).
+  chunks_withheld: number
   complete: boolean
   error: string | null
   updated_at: string

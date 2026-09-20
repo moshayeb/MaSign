@@ -93,7 +93,7 @@ class FakeChatModel:
         # Set to an exception to make only the risk call fail (MAS-76).
         self.risk_error: Exception | None = None
 
-    def complete(self, system: str, user: str, *, max_tokens: int):
+    def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None):
         from app.answering.llm import Completion
         from app.risk_analysis.analyzer import SYSTEM_PROMPT as RISK_PROMPT
 
@@ -127,7 +127,12 @@ def _fake_retrieval_stack(
     """Every API test gets the fake embedder, in-memory store and fake chat model by default."""
     app.dependency_overrides[dependencies.get_embedder] = lambda: fake_embedder
     app.dependency_overrides[dependencies.get_vector_store] = lambda: vector_store
-    app.dependency_overrides[dependencies.get_chat_model] = lambda: fake_chat_model
+    # Wrapped in the prompt-injection guardrail exactly as production models
+    # are (MAS-90), so API tests exercise it and `fake_chat_model.calls`
+    # records what actually reached the model.
+    from app.guardrails.prompt_injection import GuardedChatModel
+
+    app.dependency_overrides[dependencies.get_chat_model] = lambda: GuardedChatModel(fake_chat_model)
     yield
     app.dependency_overrides.pop(dependencies.get_embedder, None)
     app.dependency_overrides.pop(dependencies.get_vector_store, None)
