@@ -14,6 +14,8 @@ value (owner decision 2026-09-18, prep for invoice verification, MAS-92):
 - net_days:    {"net_days": 30}
 - rate:        {"rate_percent": 1.5, "per": "month"} or a fixed {"amount", "currency"}
 - duration:    {"months": 36} or {"days": 90}
+- date:        {"date": "2026-03-01"} (ISO), verified against the date as written in the quote
+- renewal:     text, optionally {"months": 12} or {"days": 365} for the renewal period
 - text:        no typed fields
 """
 
@@ -25,10 +27,16 @@ class KeyTerm:
     id: str
     name: str
     looks_for: str
-    kind: str  # money | recurring | net_days | rate | duration | text
+    kind: str  # money | recurring | net_days | rate | duration | date | renewal | text
 
 
 KEY_TERMS: tuple[KeyTerm, ...] = (
+    KeyTerm(
+        id="effective_date",
+        name="Effective date",
+        looks_for="The date the agreement starts (the effective date, commencement date or date it is made).",
+        kind="date",
+    ),
     KeyTerm(
         id="recurring_fee",
         name="Recurring fee",
@@ -69,7 +77,7 @@ KEY_TERMS: tuple[KeyTerm, ...] = (
         id="renewal",
         name="Renewal",
         looks_for="Whether and how the agreement renews (automatically, for how long, at what fees).",
-        kind="text",
+        kind="renewal",
     ),
     KeyTerm(
         id="notice_period",
@@ -96,6 +104,8 @@ TYPED_FIELDS: dict[str, dict[str, type]] = {
     "net_days": {"net_days": int},
     "rate": {"rate_percent": float, "per": str, "amount": float, "currency": str},
     "duration": {"days": int, "months": int},
+    "date": {"date": str},
+    "renewal": {"days": int, "months": int},
     "text": {},
 }
 PERIODS = ("month", "quarter", "year")
@@ -118,5 +128,7 @@ def _typed_hint(kind: str) -> str:
         "net_days": ' Typed: {"net_days": <integer>}.',
         "rate": ' Typed: {"rate_percent": <number>, "per": "month" | "year"} or, for a fixed penalty, {"amount": <number>, "currency": "<ISO 4217>"}.',
         "duration": ' Typed: {"months": <integer>} or {"days": <integer>}.',
+        "date": ' Typed: {"date": "YYYY-MM-DD"} — the date exactly as written in the quote, in ISO form.',
+        "renewal": ' Typed, only when the passage states the renewal period: {"months": <integer>} or {"days": <integer>}.',
         "text": "",
     }[kind]

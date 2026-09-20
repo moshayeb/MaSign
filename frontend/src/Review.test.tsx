@@ -265,6 +265,29 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText(/stated, but not as a number the text confirms/)).toBeInTheDocument()
   })
 
+  it('shows the computed deadlines with their formula, and says why one cannot be computed (MAS-100)', async () => {
+    const soon = new Date()
+    soon.setDate(soon.getDate() + 30)
+    const iso = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}` // local date
+    const deadlines = [
+      { id: 'term_end', name: 'Initial term ends', date: '2029-02-28', computed_from: ['effective_date', 'initial_term'], reason: null, how: '1 Mar 2026 + 36 months − 1 day' },
+      { id: 'notice_deadline', name: 'Give notice by', date: iso, computed_from: ['effective_date', 'initial_term', 'notice_period'], reason: null, how: '28 Feb 2029 − 90 days' },
+      { id: 'next_renewal_end', name: 'First renewal runs to', date: null, computed_from: ['initial_term'], reason: 'the renewal is stated, but not as a period the text confirms', how: null },
+    ]
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: true, deadlines })))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const list = await screen.findByRole('list', { name: 'Deadlines' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items).toHaveLength(3)
+    expect(items[0]).toHaveTextContent('Initial term ends')
+    expect(items[0]).toHaveTextContent('1 Mar 2026 + 36 months − 1 day')
+    expect(items[0]).toHaveAttribute('title', expect.stringContaining('from effective_date, initial_term'))
+    expect(within(items[1]).getByText(/in 30 days/)).toBeInTheDocument() // amber: notice within 90 days
+    expect(items[2]).toHaveTextContent('cannot compute: the renewal is stated, but not as a period the text confirms')
+  })
+
   it('says "Not checked", never "Not stated", when the key-terms pass did not complete (MAS-82)', async () => {
     const terms = TERMS.map((t) => (t[0] === 'recurring_fee' ? stated(t, 'EUR 18,500 per month', 1, 'EUR 18,500 per month') : notStated(t, 'unchecked')))
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: false, key_terms: terms })))

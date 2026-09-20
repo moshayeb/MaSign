@@ -37,7 +37,7 @@ def test_prompt_lists_every_term_with_its_typed_shape() -> None:
     for term in KEY_TERMS:
         assert f"- {term.id} ({term.name})" in SYSTEM_PROMPT
     assert '"period": "month" | "quarter" | "year"' in SYSTEM_PROMPT
-    assert len(TERM_IDS) == 9
+    assert len(TERM_IDS) == 10
 
 
 # --- extraction and verification -------------------------------------------------------
@@ -328,7 +328,7 @@ def test_export_markdown_and_csv_carry_every_finding_and_key_term_verbatim(db, f
     csv_response = client.get(f"/api/contracts/{contract_id}/export.csv")
     assert csv_response.status_code == 200 and csv_response.headers["content-disposition"] == 'attachment; filename="c-review.csv"'
     rows = list(csv.DictReader(io.StringIO(csv_response.text)))
-    assert [r["kind"] for r in rows].count("finding") == 1 and [r["kind"] for r in rows].count("key_term") == 9
+    assert [r["kind"] for r in rows].count("finding") == 1 and [r["kind"] for r in rows].count("key_term") == 10
     finding = next(r for r in rows if r["kind"] == "finding")
     assert (finding["name"], finding["severity_or_status"], finding["passage"], finding["quote"]) == ("Payment terms", "Medium", "2", "interest at 1.5% per month")
     term = next(r for r in rows if r["name"] == "Termination cost")
@@ -343,3 +343,81 @@ def test_export_404s_before_a_review_and_for_unknown_contracts(db) -> None:
     response = client.get(f"/api/contracts/{contract_id}/export.md")
     assert response.status_code == 404 and "not been reviewed" in response.json()["detail"]
     assert client.get(f"/api/contracts/{uuid4()}/export.csv").status_code == 404
+
+
+# --- deadlines (MAS-100) -----------------------------------------------------------------------
+
+
+def test_dates_verify_by_their_written_form_and_renewal_periods_by_number() -> None:
+    from app.key_terms.extractor import date_in_quote
+
+    assert verify_typed("date", {"date": "2026-03-01"}, "entered into as of 1 March 2026 (the Effective Date)") == {"date": "2026-03-01"}
+    for written in ("March 1, 2026", "1st March 2026", "2026-03-01", "01.03.2026", "1.3.2026", "01/03/2026", "1 Mar 2026"):
+        assert date_in_quote("2026-03-01", f"made on {written} between"), written
+    assert verify_typed("date", {"date": "2026-03-02"}, "as of 1 March 2026") is None  # a different day
+    assert verify_typed("date", {"date": "not-a-date"}, "1 March 2026") is None
+    assert verify_typed("renewal", {"months": 12}, "successive periods of twelve (12) months") == {"months": 12}
+    assert verify_typed("renewal", {"months": 12}, "renews automatically each year") is None  # 12 is not in the quote
+    assert verify_typed("renewal", None, "It does not renew automatically") is None
+
+
+def test_deadline_arithmetic_ends_the_day_before_the_anniversary_and_clamps_month_ends() -> None:
+    from datetime import date
+
+    from app.key_terms.deadlines import add_months, compute_deadlines
+
+    assert add_months(date(2026, 1, 31), 1) == date(2026, 2, 28)
+    assert add_months(date(2024, 1, 31), 1) == date(2024, 2, 29)
+    assert add_months(date(2026, 11, 30), 3) == date(2027, 2, 28)
+
+    northwind = compute_deadlines(
+        {"effective_date": {"date": "2026-03-01"}, "initial_term": {"months": 36}, "notice_period": {"days": 90}, "renewal": {"months": 12}},
+        {"effective_date", "initial_term", "notice_period", "renewal"},
+    )
+    assert [(d.id, d.date) for d in northwind] == [
+        ("term_end", date(2029, 2, 28)),
+        ("notice_deadline", date(2028, 11, 30)),
+        ("next_renewal_end", date(2030, 2, 28)),
+    ]
+    assert northwind[1].computed_from == ("effective_date", "initial_term", "notice_period")
+    assert northwind[0].how == "1 Mar 2026 + 36 months − 1 day"
+
+    harbor = compute_deadlines(
+        {"effective_date": {"date": "2026-04-15"}, "initial_term": {"months": 24}, "notice_period": {"days": 60}, "renewal": None},
+        {"effective_date", "initial_term", "notice_period", "renewal"},
+    )
+    assert harbor[0].date == date(2028, 4, 14)
+    assert harbor[1].date is None and "not as a period the text confirms" in harbor[1].reason
+    assert harbor[2].date is None
+
+    nothing = compute_deadlines({}, set())
+    assert [d.date for d in nothing] == [None, None, None]
+    assert nothing[0].reason == "effective date not stated in the reviewed text"
+    text_only = compute_deadlines({"effective_date": {"date": "2026-03-01"}, "initial_term": None}, {"effective_date", "initial_term"})
+    assert text_only[0].reason == "initial term stated, but not as a number the text confirms"
+
+
+def test_deadlines_ride_on_the_key_terms_and_review_responses_and_the_export(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, "This Agreement is entered into as of 1 March 2026 (the \"Effective Date\").", TERM)
+
+    def extract(user: str) -> str:
+        if "Effective Date" in user:
+            return json.dumps([_item("effective_date", "1 March 2026", 1, "entered into as of 1 March 2026", {"date": "2026-03-01"})])
+        return json.dumps(
+            [
+                _item("initial_term", "36 months", 1, "The Initial Term is thirty-six (36) months.", {"months": 36}),
+                _item("renewal", "Renews automatically for 12 months", 1, "renews automatically for twelve (12) months", {"months": 12}),
+                _item("notice_period", "90 days", 1, "ninety (90) days' notice", {"days": 90}),
+            ]
+        )
+
+    fake_chat_model.key_terms_reply = extract
+    review_contract(contract_id, fake_chat_model, batch_size=1)
+
+    body = client.get(f"/api/contracts/{contract_id}/key-terms").json()
+    deadlines = {d["id"]: d for d in body["deadlines"]}
+    assert deadlines["term_end"]["date"] == "2029-02-28" and deadlines["notice_deadline"]["date"] == "2028-11-30"
+    assert deadlines["next_renewal_end"]["date"] == "2030-02-28" and deadlines["next_renewal_end"]["computed_from"] == ["effective_date", "initial_term", "renewal"]
+    assert client.get(f"/api/contracts/{contract_id}/risks").json()["deadlines"] == body["deadlines"]
+    md = client.get(f"/api/contracts/{contract_id}/export.md").text
+    assert "## Deadlines" in md and "- Give notice by: **30 Nov 2028**" in md

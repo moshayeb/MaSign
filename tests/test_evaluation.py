@@ -86,7 +86,7 @@ def test_the_committed_question_set_is_well_formed_and_every_quote_is_in_its_con
         assert resolve_reference([{"chunk_index": 0, "text": text}], q.reference_quote) == 0, f"{q.id}: quote not in {q.contract}"
     # one question per MAS-82 key term, across the two contracts
     terms = {q.term for q in questions if q.term}
-    assert terms == {"recurring_fee", "one_off_fee", "payment_deadline", "late_payment", "termination_cost", "initial_term", "renewal", "notice_period", "price_changes"}
+    assert terms == {"effective_date", "recurring_fee", "one_off_fee", "payment_deadline", "late_payment", "termination_cost", "initial_term", "renewal", "notice_period", "price_changes"}
     assert sum(1 for q in questions if q.expect_not_found) >= 3
 
 

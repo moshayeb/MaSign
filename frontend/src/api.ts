@@ -167,7 +167,7 @@ export interface StandardVerdict {
 export interface KeyTermValue {
   id: string
   name: string
-  kind: 'money' | 'recurring' | 'net_days' | 'rate' | 'duration' | 'text'
+  kind: 'money' | 'recurring' | 'net_days' | 'rate' | 'duration' | 'date' | 'renewal' | 'text'
   // "unchecked": the key-terms pass did not complete, so absence proves nothing.
   status: KeyTermStatus
   value: string
@@ -198,6 +198,17 @@ export interface Coverage {
   external_references: ExternalReference[]
 }
 
+// --- deadlines computed from the typed key terms (MAS-100) -------------------
+
+export interface Deadline {
+  id: 'term_end' | 'notice_deadline' | 'next_renewal_end' | string
+  name: string
+  date: string | null // ISO date, or null with a reason
+  computed_from: string[]
+  reason: string | null
+  how: string | null
+}
+
 export interface RiskReview {
   contract_id: string
   status: ReviewStatus
@@ -214,6 +225,7 @@ export interface RiskReview {
   // The key-terms pass of the same job (MAS-82).
   key_terms_complete: boolean
   key_terms: KeyTermValue[]
+  deadlines?: Deadline[]
   // What was and was not read (MAS-84); absent on older responses.
   coverage?: Coverage | null
 }

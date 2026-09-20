@@ -127,6 +127,15 @@ no toast) and a Print button (`window.print()`). `@media print` in
 buttons, forces the Overview panels visible in black on white, keeps
 passage numbers as plain text, and breaks the page between cards.
 
+### Deadlines (MAS-100)
+
+A `Deadlines` strip at the top of the Key terms card (once the review is
+done): three tiles — Initial term ends · Give notice by · First renewal runs
+to — with the date, the formula (`how`) and, on hover, the terms it was
+computed from; a notice deadline within 90 days gets an amber "in n days"
+pill, a past one "passed"; a tile that cannot be computed shows the reason.
+Dates are compared at local midnight so "in 30 days" is exact.
+
 ### Standard verdicts (MAS-96)
 
 A stated term with a standard shows a pill under its quote — green "Meets
