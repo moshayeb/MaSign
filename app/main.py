@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.answering.llm import ChatModel, ChatModelError, UnconfiguredChatModel, get_chat_model
 from app.api.routes import router as api_router
+from app.guardrails.prompt_injection import PromptInjectionError
 from app.api import dependencies
 from app.database.migrations import run_migrations
 from app.database.session import get_connection
