@@ -186,7 +186,13 @@ an amber **Withheld** pill, "Could not answer" with the reason, opens the
 passage list so the user reads it, and says "Risk check not run" instead of
 "No risk flagged". With some passages withheld, "Not found" and "No risk
 flagged" are qualified with "in the n of m passages the model could read"
-(MAS-94). Withheld ≠ deleted, and withheld ≠ checked.
+(MAS-94). Withheld ≠ deleted, and withheld ≠ checked. `redacted_passages`
+(MAS-99) are passages read minus their injected sentences: an amber
+"Passage n contained instructions addressed to the AI: only those
+sentences were withheld, the rest was read" notice, a *Sentences withheld*
+tag on the passage, and in the Contract text reader the cut sentences are
+wavy-underlined in red (`<mark class="withheld">`, from `withheld_spans`
+on `/passages`) — together with the quote mark when both apply.
 
 
 `POST /api/query` returns (MAS-12/13):

@@ -32,6 +32,15 @@ export function CoverageNote({ coverage, subject, onShowSource }: Props) {
       </li>,
     )
   }
+  const redacted = coverage.redacted_passages ?? []
+  if (redacted.length > 0) {
+    lines.push(
+      <li key="redacted">
+        Read in part — {passageList(redacted, onShowSource)} {redacted.length === 1 ? 'contains' : 'contain'} sentences addressed to the AI;
+        those sentences were withheld from the model and the rest was graded. They are marked in the contract text.
+      </li>,
+    )
+  }
   for (const ref of coverage.external_references) {
     lines.push(
       <li key={`ref-${ref.name}`}>

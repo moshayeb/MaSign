@@ -162,7 +162,7 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = EXCLUDED.status, error = NULL, chunks_checked = 0,
                     chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
-                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb, updated_at = now()
+                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb, redacted_chunks = '[]'::jsonb, updated_at = now()
                 RETURNING *
                 """,
                 (contract_id, status),
@@ -183,6 +183,7 @@ def update_risk_review(
     key_terms_complete: bool | None = None,
     unreadable_chunks: list[int] | None = None,
     withheld_chunks: list[int] | None = None,
+    redacted_chunks: list[int] | None = None,
     error: str | None = None,
 ) -> RiskReview:
     with connection.transaction():
@@ -199,6 +200,7 @@ def update_risk_review(
                     key_terms_complete = COALESCE(%s, key_terms_complete),
                     unreadable_chunks = COALESCE(%s, unreadable_chunks),
                     withheld_chunks = COALESCE(%s, withheld_chunks),
+                    redacted_chunks = COALESCE(%s, redacted_chunks),
                     error = %s,
                     updated_at = now()
                 WHERE contract_id = %s
@@ -208,6 +210,7 @@ def update_risk_review(
                     status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete,
                     Jsonb(unreadable_chunks) if unreadable_chunks is not None else None,
                     Jsonb(withheld_chunks) if withheld_chunks is not None else None,
+                    Jsonb(redacted_chunks) if redacted_chunks is not None else None,
                     error, contract_id,
                 ),
             )

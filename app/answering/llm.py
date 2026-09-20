@@ -38,6 +38,8 @@ class Completion:
     truncated: bool = False
     # Passage numbers the guardrail withheld from the prompt (MAS-90).
     blocked: tuple[int, ...] = ()
+    # Passage numbers that kept their text minus the injected sentences (MAS-99).
+    redacted: tuple[int, ...] = ()
 
 
 class ChatModel(Protocol):

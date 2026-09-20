@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getContractPassages, type Contract, type Passage } from '../api'
-import { markQuote } from '../quote'
+import { markQuote, markSpans } from '../quote'
 
 // Where a value came from: the passage and, when known, the exact words.
 export interface SourceRef {
@@ -76,7 +76,17 @@ export function PassageReader({ contract, target, open: alwaysOpen = false }: Pr
                 aria-current={isTarget ? 'true' : undefined}
               >
                 <span className="passage-label muted small">Passage {passage.chunk_index + 1}</span>
-                <p>{isTarget && target?.quote ? markQuote(passage.text, target.quote) : passage.text}</p>
+                <p>
+                  {isTarget && target?.quote
+                    ? markQuote(passage.text, target.quote, passage.withheld_spans)
+                    : markSpans(passage.text, passage.withheld_spans ?? [])}
+                </p>
+                {(passage.withheld_spans?.length ?? 0) > 0 && (
+                  <span className="muted small withheld-note">
+                    {passage.withheld_spans!.length === 1 ? 'The underlined sentence was' : 'The underlined sentences were'} withheld from the model
+                    (instructions addressed to the AI).
+                  </span>
+                )}
               </li>
             )
           })}

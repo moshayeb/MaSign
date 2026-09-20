@@ -98,7 +98,12 @@ contract passages that carry instructions addressed to the AI (numbering
 kept, text replaced, warning with contract_id / chunk_index), refuses an
 injected question outright, and reports the withheld passage numbers, which
 `Completion.blocked` carries to the answer and to `/api/query`'s
-`blocked_passages`. `withheld_labels()` runs the same detector *before* a
+`blocked_passages`. Since MAS-99 `redact_passage()` cuts only the injected
+sentences (`sentence_spans()` splits on line breaks and `. ! ?` + space,
+not after clause numbers); a passage with clean sentences left is read in
+part and reported in `Completion.redacted` → `redacted_passages`, and the
+review stores `redacted_chunks` (migration 008) as graded. `/passages`
+returns `withheld_spans` so the reader can underline what was hidden. `withheld_labels()` runs the same detector *before* a
 call so the answer and risk paths can see when nothing readable would
 reach the model and skip the call: the answer is then `status: withheld`
 (MAS-93) and the risk report `checked: false`; a withheld passage is never

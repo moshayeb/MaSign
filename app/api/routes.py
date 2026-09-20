@@ -16,7 +16,7 @@ from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
 from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
-from app.guardrails.prompt_injection import refuse_injected_question
+from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import ExternalReference, find_external_references
 from app.key_terms.standards import compare as compare_to_standard
@@ -109,6 +109,8 @@ class QueryResponse(BaseModel):
     # injection guardrail withheld from the model (MAS-90). They are still
     # listed in retrieved_context so the user can read what was refused.
     blocked_passages: list[int] = []
+    # Passages read minus their injected sentences (MAS-99): the model saw the rest.
+    redacted_passages: list[int] = []
 
 
 class ContractSummary(BaseModel):
@@ -249,6 +251,8 @@ class Coverage(BaseModel):
     unreadable_passages: list[int]
     # Passage indexes the guardrail withheld: not graded.
     withheld_passages: list[int]
+    # Passage indexes graded minus their injected sentences (MAS-99).
+    redacted_passages: list[int]
     # What ingestion could not read at all (no text layer, characters removed).
     ingestion_notes: list[str]
     # Documents the text depends on that are not part of the upload.
@@ -261,6 +265,7 @@ class Coverage(BaseModel):
             chunks_checked=review.chunks_checked,
             unreadable_passages=sorted(review.unreadable_chunks),
             withheld_passages=sorted(review.withheld_chunks),
+            redacted_passages=sorted(review.redacted_chunks),
             ingestion_notes=list(contract.ingestion_notes),
             external_references=[ExternalReferenceOut(name=r.name, chunk_indexes=list(r.chunk_indexes)) for r in references],
         )
@@ -471,6 +476,9 @@ class Passage(BaseModel):
     chunk_id: UUID
     chunk_index: int
     text: str
+    # (start, end) of every sentence the guardrail withholds from the model (MAS-99),
+    # so the reader can show exactly what was hidden.
+    withheld_spans: list[list[int]] = []
 
 
 @router.get("/contracts/{contract_id}/passages", response_model=list[Passage])
@@ -478,7 +486,12 @@ def get_contract_passages(contract_id: UUID, db: psycopg.Connection = Depends(ge
     """Every stored passage of the contract in order — the text behind each citation, finding and key term (MAS-83)."""
     if repository.get_contract(db, contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    return [Passage(chunk_id=c.id, chunk_index=c.chunk_index, text=c.chunk_text) for c in repository.list_chunks(db, contract_id)]
+    passages = []
+    for c in repository.list_chunks(db, contract_id):
+        redaction = redact_passage(c.chunk_text)
+        spans = [list(span) for span in redaction.spans] if redaction else []
+        passages.append(Passage(chunk_id=c.id, chunk_index=c.chunk_index, text=c.chunk_text, withheld_spans=spans))
+    return passages
 
 
 @router.get("/contracts/{contract_id}/search", response_model=list[RetrievedChunk])
@@ -658,6 +671,7 @@ async def query_contract(
         risks_complete=risks.complete,
         recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked, withheld=len(risks.blocked)),
         blocked_passages=sorted(set(answer.blocked) | set(risks.blocked)),
+        redacted_passages=sorted(set(answer.redacted) | set(risks.redacted)),
     )
 
 

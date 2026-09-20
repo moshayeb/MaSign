@@ -126,15 +126,25 @@ afterEach(() => {
 
 describe('whole-contract risk review (MAS-81)', () => {
   it('polls while the review runs, then shows every category and the verified findings', async () => {
-    const replies = [json(200, review({ status: 'running', chunks_checked: 8, complete: false })), json(200, done)]
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => replies.shift() ?? json(200, done))
+    // The "done" reply is held back until the test has seen the running state;
+    // otherwise, under load, the 10 ms poll can finish before findByText looks.
+    let releaseDone: () => void = () => undefined
+    const doneReady = new Promise<void>((resolve) => (releaseDone = resolve))
+    let calls = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      calls += 1
+      if (calls === 1) return json(200, review({ status: 'running', chunks_checked: 8, complete: false }))
+      await doneReady
+      return json(200, done)
+    })
     const onSettled = vi.fn()
 
     render(<RiskReviewPanel contract={northwind} pollMs={10} onSettled={onSettled} />)
 
     expect(await screen.findByText(/Reviewing… 8\/12 passages/)).toBeInTheDocument()
+    releaseDone()
     expect(await screen.findByText(/Reviewed · 12 passages/)).toBeInTheDocument()
-    expect(onSettled).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onSettled).toHaveBeenCalledTimes(1)) // fired from the effect after the settle
 
     const cells = screen.getAllByRole('listitem').filter((li) => li.classList.contains('review-cat'))
     expect(cells).toHaveLength(7)
@@ -278,6 +288,7 @@ describe('whole-contract risk review (MAS-81)', () => {
       withheld_passages: [11],
       ingestion_notes: ['Page 3 of 14 has no text layer (scanned or image-only) and could not be read.'],
       external_references: [{ name: 'Order Form', chunk_indexes: [1] }],
+      redacted_passages: [7],
     }
     const partial = review({ status: 'done', complete: false, chunks_checked: 9, chunks_withheld: 1, findings: done.findings, coverage })
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, partial))
@@ -293,6 +304,7 @@ describe('whole-contract risk review (MAS-81)', () => {
       'Not reviewed: Page 3 of 14 has no text layer (scanned or image-only) and could not be read.',
       "Not graded for risks — the model's reply was unreadable for passages 5, 6. Read them yourself, or run the review again.",
       'Withheld from the model — passage 12 contains instructions addressed to the AI and was not graded.',
+      'Read in part — passage 8 contains sentences addressed to the AI; those sentences were withheld from the model and the rest was graded. They are marked in the contract text.',
       'Depends on a document not uploaded: Order Form (referred to in passage 2). What it says could not be determined.',
     ])
     expect(notes.find((n) => n.textContent?.includes('for key terms'))).toBeDefined()

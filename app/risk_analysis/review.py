@@ -60,6 +60,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         withheld = 0
         unreadable_chunks: list[int] = []
         withheld_chunks: list[int] = []
+        redacted_chunks: list[int] = []
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start : start + batch_size]
             hits = [
@@ -88,6 +89,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             # neither checked nor clean, and the review says so (MAS-94).
             withheld += len(report.blocked)
             withheld_chunks.extend(batch[label - 1].chunk_index for label in report.blocked)
+            redacted_chunks.extend(batch[label - 1].chunk_index for label in report.redacted)
             if not report.checked:
                 # The model's reply for this batch was unusable: these
                 # passages are not reviewed, and the result must say so —
@@ -110,6 +112,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 chunks_withheld=withheld,
                 unreadable_chunks=unreadable_chunks,
                 withheld_chunks=withheld_chunks,
+                redacted_chunks=redacted_chunks,
             )
 
         repository.replace_risk_findings(db, contract_id, findings)
@@ -122,6 +125,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             chunks_withheld=withheld,
             unreadable_chunks=unreadable_chunks,
             withheld_chunks=withheld_chunks,
+            redacted_chunks=redacted_chunks,
             complete=complete and checked == len(chunks),
             key_terms_complete=terms_complete and withheld == 0,
         )

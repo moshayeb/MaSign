@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from app.answering.llm import ChatModel
-from app.guardrails.prompt_injection import withheld_labels
+from app.guardrails.prompt_injection import redacted_labels, withheld_labels
 from app.retrieval.vector_store import ChunkHit
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,8 @@ class Answer:
     model: str | None = None
     # Passage numbers the prompt-injection guardrail withheld from the model (MAS-90).
     blocked: tuple[int, ...] = ()
+    # Passage numbers read minus their injected sentences (MAS-99).
+    redacted: tuple[int, ...] = ()
     # answered | not_found | withheld — the three outcomes the UI must tell apart (MAS-93).
     status: str = "answered"
 
@@ -87,7 +89,9 @@ def answer_question(
     reply = completion.text
 
     if not completion.truncated and _says_not_found(reply):
-        return Answer(NOT_FOUND_ANSWER, grounded=False, model=model.model_name, blocked=completion.blocked, status="not_found")
+        return Answer(
+            NOT_FOUND_ANSWER, grounded=False, model=model.model_name, blocked=completion.blocked, redacted=completion.redacted, status="not_found"
+        )
 
     labels, invalid = _cited_labels(reply, len(hits))
     # The answer is shown either way; it is only *trusted* (grounded) when it
@@ -106,6 +110,7 @@ def answer_question(
         citations=[Citation(label, hits[label - 1]) for label in labels],
         model=model.model_name,
         blocked=completion.blocked,
+        redacted=completion.redacted,
     )
 
 
