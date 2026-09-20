@@ -1,0 +1,69 @@
+SOFTWARE SUBSCRIPTION AGREEMENT
+
+This Software Subscription Agreement (the "Agreement") is made on 15 April 2026 between Harbor Logistics Oy, a company registered in Finland with business ID 2345678-9 and its registered office at Satamakatu 12, 00160 Helsinki ("Customer"), and Fabrikam Software Ltd, a company registered in Ireland with company number 654321 and its registered office at 4 Dock Road, Dublin 1 ("Supplier"). Customer and Supplier are each a "Party" and together the "Parties".
+
+1. Subscription
+
+1.1 Supplier grants Customer a non-exclusive, non-transferable subscription to access and use the Fabrikam Route Planner software as a service (the "Software") for up to two hundred (200) named users during the Term, solely for Customer's internal logistics operations.
+
+1.2 Supplier shall provide the onboarding services described in the Order Form and second-line support during Supplier's business hours (09:00 to 17:00 Irish time on business days).
+
+2. Fees
+
+2.1 Customer shall pay Supplier an annual subscription fee of EUR 96,000 (the "Annual Fee"), invoiced annually in advance on the Effective Date and on each anniversary of it.
+
+2.2 Customer shall pay a one-time onboarding fee of EUR 12,000, invoiced on the Effective Date.
+
+2.3 Additional named users above two hundred (200) are charged at EUR 40 per user per month, invoiced quarterly in arrears.
+
+2.4 All fees are stated exclusive of VAT. Invoices are due within forty-five (45) days of the invoice date.
+
+2.5 Overdue amounts bear interest at one percent (1%) per month from the due date until payment is received. Supplier may suspend access to the Software if any invoice remains unpaid thirty (30) days after a written reminder.
+
+2.6 Supplier may increase the Annual Fee at each anniversary of the Effective Date by up to five percent (5%) on sixty (60) days' written notice.
+
+3. Term
+
+3.1 This Agreement starts on the Effective Date and continues for twenty-four (24) months (the "Term"). It does not renew automatically; any extension requires a written renewal order signed by both Parties.
+
+3.2 Either Party may terminate this Agreement for convenience on sixty (60) days' written notice. If Customer terminates for convenience during the Term, Customer shall pay Supplier an early termination charge equal to three (3) months of the Annual Fee, calculated pro rata, and no prepaid fees are refunded.
+
+3.3 Either Party may terminate this Agreement immediately by written notice if the other Party materially breaches it and does not cure the breach within fourteen (14) days of written notice.
+
+4. Intellectual Property
+
+4.1 Supplier owns all intellectual property rights in the Software, its documentation and all improvements, including improvements suggested by Customer.
+
+4.2 Customer owns the data it uploads to the Software ("Customer Data") and grants Supplier a licence to process Customer Data to provide the Software and to produce anonymised, aggregated statistics that Supplier may use for any purpose.
+
+5. Confidentiality
+
+5.1 Customer shall keep confidential all non-public information about the Software, Supplier's pricing and Supplier's business, and shall not disclose it to any third party without Supplier's prior written consent. This obligation continues indefinitely.
+
+6. Warranties and Liability
+
+6.1 Supplier warrants that the Software will perform materially in accordance with its documentation. Customer's sole remedy for breach of this warranty is for Supplier to use reasonable efforts to correct the non-conformity.
+
+6.2 Except for the warranty in Section 6.1, the Software is provided "as is" and Supplier disclaims all other warranties, express or implied.
+
+6.3 Supplier's total liability under this Agreement in any contract year shall not exceed the fees paid by Customer in that contract year. Customer's liability for infringement of Supplier's intellectual property rights or breach of Section 5 is not limited.
+
+6.4 Neither Party is liable for indirect or consequential loss, or for loss of profit, revenue or data.
+
+7. Indemnity
+
+7.1 Customer shall indemnify Supplier against all claims, losses and costs arising from Customer's use of the Software or Customer Data.
+
+8. Data Protection
+
+8.1 The Parties shall comply with applicable data protection law. Supplier processes personal data in Customer Data as Customer's processor on the terms of the data processing addendum in Schedule 1.
+
+9. General
+
+9.1 This Agreement is governed by the laws of Ireland. The courts of Dublin have exclusive jurisdiction.
+
+9.2 This Agreement, the Order Form and Schedule 1 form the entire agreement between the Parties.
+
+Signed for Harbor Logistics Oy: ______________________ Name: Sanna Korhonen Title: Head of Operations
+
+Signed for Fabrikam Software Ltd: ______________________ Name: Declan Byrne Title: Commercial Director
