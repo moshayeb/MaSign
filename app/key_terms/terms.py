@@ -8,7 +8,8 @@ leaving costs, and how long the contract binds — from the Customer's side.
 Each term has a `kind` that says which typed fields may accompany its text
 value (owner decision 2026-09-18, prep for invoice verification, MAS-92):
 
-- money:       {"amount": 18500, "currency": "EUR"}
+- money:       {"amount": 18500, "currency": "EUR"} or, for a fee expressed as a
+               share of remaining fees, {"percent": 50}
 - recurring:   {"amount": 18500, "currency": "EUR", "period": "month"}
 - net_days:    {"net_days": 30}
 - rate:        {"rate_percent": 1.5, "per": "month"} or a fixed {"amount", "currency"}
@@ -90,7 +91,7 @@ TERM_BY_ID = {term.id: term for term in KEY_TERMS}
 # The typed fields the model may return per kind, and which of them must be
 # numbers found in the quote for the typed value to be kept.
 TYPED_FIELDS: dict[str, dict[str, type]] = {
-    "money": {"amount": float, "currency": str},
+    "money": {"amount": float, "currency": str, "percent": float},
     "recurring": {"amount": float, "currency": str, "period": str},
     "net_days": {"net_days": int},
     "rate": {"rate_percent": float, "per": str, "amount": float, "currency": str},
@@ -112,7 +113,7 @@ def terms_text() -> str:
 
 def _typed_hint(kind: str) -> str:
     return {
-        "money": ' Typed: {"amount": <number>, "currency": "<ISO 4217>"}.',
+        "money": ' Typed: {"amount": <number>, "currency": "<ISO 4217>"} or, for a share of remaining fees, {"percent": <number>}.',
         "recurring": ' Typed: {"amount": <number>, "currency": "<ISO 4217>", "period": "month" | "quarter" | "year"}.',
         "net_days": ' Typed: {"net_days": <integer>}.',
         "rate": ' Typed: {"rate_percent": <number>, "per": "month" | "year"} or, for a fixed penalty, {"amount": <number>, "currency": "<ISO 4217>"}.',

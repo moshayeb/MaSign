@@ -118,6 +118,14 @@ reviewed text" and is only sent when the pass completed; `unchecked` reads
 — never present absence as a fact the contract states. Pill: `n of 9 stated
 · k of m passages read` (green), `Partly checked` (amber) or `Extracting…`.
 
+### Standard verdicts (MAS-96)
+
+A stated term with a standard shows a pill under its quote — green "Meets
+standard", amber "Deviates" with the detail and the standard, grey "Can't
+compare" when the value is text-only — from `term.standard`; terms without
+a standard show nothing. The card pill adds "· n deviate(s) from your
+standard" and turns amber when n > 0.
+
 ## Coverage (MAS-84)
 
 `CoverageNote` renders `review.coverage` as an amber list on both the Key

@@ -16,6 +16,7 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
   const running = review.status === 'pending' || review.status === 'running'
   const found = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
   const conflicting = review.key_terms.filter((t) => t.status === 'conflicting')
+  const deviations = review.key_terms.filter((t) => t.standard?.status === 'deviates').length
   // Documents the text points to but that were not uploaded: a "not stated"
   // term may live there, so say so next to it (MAS-84).
   const external = (review.coverage?.external_references ?? []).map((r) => r.name)
@@ -31,8 +32,9 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
           Key terms
           {running && <span className="status running">Extracting…</span>}
           {!running && review.status === 'done' && review.key_terms_complete && (
-            <span className="status ok">
+            <span className={deviations > 0 ? 'status warn' : 'status ok'}>
               {found.length} of {review.key_terms.length} stated · {coverage}
+              {deviations > 0 ? ` · ${deviations} deviate${deviations === 1 ? 's' : ''} from your standard` : ''}
             </span>
           )}
           {!running && review.status === 'done' && !review.key_terms_complete && <span className="status warn">Partly checked · {coverage}</span>}
@@ -66,7 +68,10 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
           <TermRow key={term.id} term={term} running={running} onShowSource={onShowSource} external={external} />
         ))}
       </dl>
-      <p className="muted disclaimer">Each value is quoted from the passage named beside it; nothing is inferred or computed.</p>
+      <p className="muted disclaimer">
+        Each value is quoted from the passage named beside it; nothing is inferred or computed. Standards are the Customer-side defaults from the
+        rubric (docs/risk-rubric.md), compared by rule — a first read, not legal advice.
+      </p>
     </section>
   )
 }
@@ -110,6 +115,20 @@ function TermRow({
               {term.status === 'conflicting' && <span className="status warn">Conflicting</span>}
             </span>
             <blockquote className="term-quote">“{term.source.quote}”</blockquote>
+            {term.standard && term.standard.status !== 'none' && (
+              <p className={`term-standard ${term.standard.status}`} title={`Your standard: ${term.standard.standard ?? ''}`}>
+                <span className={`status ${term.standard.status === 'meets' ? 'ok' : term.standard.status === 'deviates' ? 'warn' : 'none'}`}>
+                  {term.standard.status === 'meets' ? 'Meets standard' : term.standard.status === 'deviates' ? 'Deviates' : "Can't compare"}
+                </span>{' '}
+                <span className="muted small">
+                  {term.standard.status === 'deviates' && term.standard.detail
+                    ? `${term.standard.detail} — your standard: ${term.standard.standard}`
+                    : term.standard.status === 'unknown'
+                      ? `stated, but not as a number the text confirms — your standard: ${term.standard.standard}`
+                      : `your standard: ${term.standard.standard}`}
+                </span>
+              </p>
+            )}
             {term.others.length > 0 && (
               <ul className="term-others">
                 {term.others.map((other) => (
