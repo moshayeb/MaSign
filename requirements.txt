@@ -6,7 +6,9 @@ python-multipart>=0.0.9
 pypdf>=6.0.0
 python-docx>=1.1.2
 psycopg[binary]>=3.2.0
-qdrant-client>=1.10.0
+# Keep the client on the server's minor line (compose runs qdrant v1.12): a newer
+# client prints an incompatibility warning on every start and is untested here.
+qdrant-client>=1.12,<1.14
 # Local CPU embeddings. Install torch from the CPU index first (see Dockerfile /
 # CI) so this line resolves to the ~200 MB CPU wheel, not the multi-GB CUDA build:
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu

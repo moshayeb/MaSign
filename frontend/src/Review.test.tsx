@@ -126,13 +126,23 @@ afterEach(() => {
 
 describe('whole-contract risk review (MAS-81)', () => {
   it('polls while the review runs, then shows every category and the verified findings', async () => {
-    const replies = [json(200, review({ status: 'running', chunks_checked: 8, complete: false })), json(200, done)]
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => replies.shift() ?? json(200, done))
+    // The "done" reply is held back until the test has seen the running state;
+    // otherwise, under load, the 10 ms poll can finish before findByText looks.
+    let releaseDone: () => void = () => undefined
+    const doneReady = new Promise<void>((resolve) => (releaseDone = resolve))
+    let calls = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      calls += 1
+      if (calls === 1) return json(200, review({ status: 'running', chunks_checked: 8, complete: false }))
+      await doneReady
+      return json(200, done)
+    })
     const onSettled = vi.fn()
 
     render(<RiskReviewPanel contract={northwind} pollMs={10} onSettled={onSettled} />)
 
     expect(await screen.findByText(/Reviewing… 8\/12 passages/)).toBeInTheDocument()
+    releaseDone()
     expect(await screen.findByText(/Reviewed · 12 passages/)).toBeInTheDocument()
     expect(onSettled).toHaveBeenCalledTimes(1)
 
