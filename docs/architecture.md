@@ -146,6 +146,9 @@ as JSONB, migration 006) with `risk_reviews.key_terms_complete`. The API
 (`GET /api/contracts/{id}/key-terms`, and `key_terms` inside `/risks`)
 always returns all nine terms in order: `found` (value, quote, passage,
 typed, `others`), `conflicting` (others disagree), `not_stated` (only when
-the pass completed) or `unchecked`.
+the pass completed) or `unchecked`. `GET /api/contracts/{id}/passages`
+returns the stored chunks in order for the frontend's contract-text reader
+(MAS-83), so every finding, key term and citation is one click from the
+text it quotes.
 
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

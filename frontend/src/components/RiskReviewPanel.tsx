@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ApiError, getContractRisks, reviewContract, type Contract, type RiskReview } from '../api'
 import { KeyTermsCard } from './KeyTermsCard'
+import type { SourceRef } from './PassageReader'
 
 interface Props {
   contract: Contract
@@ -9,6 +10,8 @@ interface Props {
   pollMs?: number
   // Called when a review reaches done/failed, so the contract list can refresh its badge.
   onSettled?: () => void
+  // Opens the contract text at a finding's or key term's passage (MAS-83).
+  onShowSource?: (source: SourceRef) => void
 }
 
 const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
@@ -16,7 +19,7 @@ const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
 // The whole-contract risk review (MAS-81): every passage of the selected
 // contract graded with the rubric, shown per category so that a clean
 // category reads as "reviewed, nothing found" — never "not looked at".
-export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
+export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource }: Props) {
   const [review, setReview] = useState<RiskReview | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error'>('loading')
   const [starting, setStarting] = useState(false)
@@ -88,7 +91,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
   return (
     <>
     {/* The key terms come from the same review row, so the card shares this panel's load and polling (MAS-82). */}
-    {review && <KeyTermsCard review={review} filename={contract.filename} />}
+    {review && <KeyTermsCard review={review} filename={contract.filename} onShowSource={onShowSource} />}
     <section className="card review" aria-live="polite">
       <div className="answer-header">
         <h2>
@@ -178,6 +181,16 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled }: Props) {
                   <span className="severity">{finding.severity}</span>
                   <strong>{finding.category_name}</strong>
                   <span className="muted small">passage {finding.chunk_index + 1}</span>
+                  {onShowSource && (
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={() => onShowSource({ chunk_index: finding.chunk_index, quote: finding.quote })}
+                      aria-label={`Show ${finding.category_name} finding in contract`}
+                    >
+                      Show in contract
+                    </button>
+                  )}
                 </div>
                 <p className="risk-reason">{finding.reason}</p>
                 <blockquote>“{finding.quote}”</blockquote>

@@ -5,6 +5,7 @@ import { AnswerView } from './components/AnswerView'
 import { ContractList } from './components/ContractList'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
 import { RiskReviewPanel } from './components/RiskReviewPanel'
+import { PassageReader, type SourceRef } from './components/PassageReader'
 import { UploadForm } from './components/UploadForm'
 import { Wordmark } from './components/Wordmark'
 
@@ -47,6 +48,8 @@ export default function App() {
   const [contracts, setContracts] = useState<Contract[] | null>(null)
   const [selected, setSelected] = useState<Contract | null>(null)
   const [asked, setAsked] = useState<Asked | null>(null)
+  // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
+  const [source, setSource] = useState<SourceRef | null>(null)
   const [draft, setDraft] = useState('')
   // Loads can overlap (Refresh while an upload's reload is in flight); only
   // the most recent request may set the list, whatever order they return in (MAS-66).
@@ -96,6 +99,7 @@ export default function App() {
   const select = useCallback((contract: Contract) => {
     setSelected(contract)
     setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
+    setSource(null)
   }, [])
 
   return (
@@ -153,7 +157,10 @@ export default function App() {
 
           {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
 
-          {selected && <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} />}
+          {selected && (
+            <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} onShowSource={setSource} />
+          )}
+          {selected && <PassageReader key={`reader-${selected.contract_id}`} contract={selected} target={source} />}
 
           {!asked && !selected && (
             <>
