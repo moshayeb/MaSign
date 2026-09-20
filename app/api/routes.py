@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
@@ -461,6 +461,22 @@ def get_contract_passages(contract_id: UUID, db: psycopg.Connection = Depends(ge
     if repository.get_contract(db, contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     return [Passage(chunk_id=c.id, chunk_index=c.chunk_index, text=c.chunk_text) for c in repository.list_chunks(db, contract_id)]
+
+
+@router.get("/contracts/{contract_id}/search", response_model=list[RetrievedChunk])
+def search_contract(
+    contract_id: UUID,
+    q: str = Query(min_length=1, max_length=2000),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=20),
+    db: psycopg.Connection = Depends(get_db),
+    embedder: Embedder = Depends(get_embedder),
+    store: VectorStore = Depends(get_vector_store),
+) -> list[RetrievedChunk]:
+    """Retrieval only — the passages a question would be answered from, best first. No model call (MAS-91)."""
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    hits = retrieve_contract_context(q, db=db, embedder=embedder, store=store, contract_id=contract_id, limit=limit)
+    return [RetrievedChunk.from_hit(hit) for hit in hits]
 
 
 @router.get("/contracts/{contract_id}/risks", response_model=RiskReviewResponse)

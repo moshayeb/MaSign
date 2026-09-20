@@ -122,11 +122,22 @@ Interactive docs at `http://localhost:8000/docs`.
 | `GET`  | `/api/contracts` | List stored contracts, newest first. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
 | `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`). Runs automatically after upload. |
+| `GET`  | `/api/contracts/{contract_id}/search` | `?q=<question>&limit=5` → the passages the question would be answered from, best first, with scores. Retrieval only, no model call (MAS-91). |
 | `GET`  | `/api/contracts/{contract_id}/passages` | Every stored passage of the contract in order (`chunk_id`, `chunk_index`, `text`) — the text behind each citation, finding and key term (MAS-83). |
 | `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
 | `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction (202; 409 while one is running). |
 | `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness check. |
+
+## Evaluation
+
+`docs/evaluation/` holds the question set, the results and how to run the
+harness: `python -m evaluation.evaluate --retrieval-only` measures retrieval
+(hit@1, hit@5, MRR) against the running stack with **no** model call, and
+`--judge` scores the real system's answers with Ragas (faithfulness, factual
+correctness) through a Haiku judge — paid, so it prints its estimate and
+refuses without `--yes`. `GET /api/contracts/{id}/search?q=` is the
+retrieval-only endpoint it uses. See `docs/evaluation/README.md` (MAS-91).
 
 ## Running the Tests
 
