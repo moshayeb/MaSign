@@ -208,6 +208,24 @@ def test_upload_starts_a_review_and_the_result_is_readable(db, fake_chat_model: 
 
     listed = {c["contract_id"]: c for c in client.get("/api/contracts").json()}[contract_id]
     assert (listed["risk_status"], listed["risk_worst_severity"]) == ("done", "High")
+    assert (listed["risk_complete"], listed["risk_chunks_checked"], listed["risk_chunks_total"]) == (
+        True,
+        body["chunks_checked"],
+        body["chunks_total"],
+    )
+
+
+def test_contract_list_reports_an_incomplete_review(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, FEES, UNLIMITED)
+    repository.start_risk_review(db, contract_id, status="running")
+    repository.update_risk_review(db, contract_id, status="done", chunks_total=2, chunks_checked=1, complete=False)
+    db.commit()
+
+    listed = {c["contract_id"]: c for c in client.get("/api/contracts").json()}[str(contract_id)]
+
+    assert listed["risk_status"] == "done"
+    assert listed["risk_complete"] is False
+    assert (listed["risk_chunks_checked"], listed["risk_chunks_total"]) == (1, 2)
 
 
 def test_review_can_be_rerun_for_a_contract_and_is_refused_while_running(db, fake_chat_model: FakeChatModel) -> None:

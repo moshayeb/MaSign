@@ -14,6 +14,12 @@ export function reviewBadge(contract: Contract): ReviewBadge {
     case 'running':
       return { label: 'Reviewing…', tone: 'running' }
     case 'done':
+      if (contract.risk_complete === false) {
+        return {
+          label: contract.risk_worst_severity ? `Partly reviewed · ${contract.risk_worst_severity} risk` : 'Partly reviewed',
+          tone: 'warn',
+        }
+      }
       return contract.risk_worst_severity
         ? { label: `Reviewed · ${contract.risk_worst_severity} risk`, tone: contract.risk_worst_severity === 'Low' ? 'ok' : 'warn' }
         : { label: 'Reviewed', tone: 'ok' }

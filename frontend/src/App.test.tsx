@@ -95,9 +95,10 @@ describe('contract list', () => {
   it("filters the sidebar by filename and shows each row's review state in words (MAS-104)", async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       json(200, [
-        contract({ contract_id: 'c1', filename: 'msa.txt', risk_status: 'done', risk_worst_severity: 'High' }),
+        contract({ contract_id: 'c1', filename: 'msa.txt', risk_status: 'done', risk_worst_severity: 'High', risk_complete: true }),
         contract({ contract_id: 'c2', filename: 'nda.pdf', file_type: 'pdf', risk_status: null }),
         contract({ contract_id: 'c3', filename: 'sow.docx', file_type: 'docx', risk_status: 'running' }),
+        contract({ contract_id: 'c4', filename: 'partial.txt', risk_status: 'done', risk_complete: false, risk_chunks_checked: 1, risk_chunks_total: 2 }),
       ]),
     )
 
@@ -106,13 +107,14 @@ describe('contract list', () => {
     expect(await screen.findByRole('button', { name: /msa\.txt/ })).toHaveTextContent('Reviewed · High risk')
     expect(screen.getByRole('button', { name: /nda\.pdf/ })).toHaveTextContent('Not reviewed')
     expect(screen.getByRole('button', { name: /sow\.docx/ })).toHaveTextContent('Reviewing…')
+    expect(screen.getByRole('button', { name: /partial\.txt/ })).toHaveTextContent('Partly reviewed')
     // Size, passage count and date left the row (they are in the contract header now).
     expect(screen.getByRole('button', { name: /msa\.txt/ })).not.toHaveTextContent(/passages|kB|Sep/)
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search contracts' }), 'ND')
     expect(screen.getByRole('button', { name: /nda\.pdf/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /msa\.txt/ })).not.toBeInTheDocument()
-    expect(screen.getByText('Contracts')).toHaveTextContent('3') // the count is the whole list, not the matches
+    expect(screen.getByText('Contracts')).toHaveTextContent('4') // the count is the whole list, not the matches
 
     await userEvent.clear(screen.getByRole('searchbox', { name: 'Search contracts' }))
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search contracts' }), 'zzz')

@@ -63,6 +63,8 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
                         <span className="risk-dot running" />
                       ) : contract.risk_worst_severity && contract.risk_status === 'done' ? (
                         <span className={`risk-dot severity-${contract.risk_worst_severity.toLowerCase()}`} />
+                      ) : contract.risk_status === 'done' && contract.risk_complete === false ? (
+                        <span className="risk-dot severity-medium" />
                       ) : contract.risk_status === 'done' ? (
                         <span className="risk-dot clean" />
                       ) : null}

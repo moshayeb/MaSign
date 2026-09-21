@@ -15,7 +15,7 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
+from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
@@ -128,6 +128,9 @@ class ContractSummary(BaseModel):
     # failed, or None for a contract uploaded before reviews existed.
     risk_status: str | None = None
     risk_worst_severity: str | None = None
+    risk_complete: bool | None = None
+    risk_chunks_checked: int | None = None
+    risk_chunks_total: int | None = None
     # What ingestion could not read (MAS-84): shown as "Not reviewed: …".
     ingestion_notes: list[str] = []
     # Is it a commercial contract at all (MAS-107)? contract | uncertain |
@@ -138,7 +141,7 @@ class ContractSummary(BaseModel):
     document_kind_reasons: list[str] = []
 
     @classmethod
-    def from_model(cls, contract: Contract, review: tuple[str, str | None] | None = None) -> "ContractSummary":
+    def from_model(cls, contract: Contract, review: RiskSummary | None = None) -> "ContractSummary":
         return cls(
             contract_id=contract.id,
             filename=contract.filename,
@@ -148,8 +151,11 @@ class ContractSummary(BaseModel):
             chunk_count=contract.chunk_count,
             status=contract.status,
             created_at=contract.created_at,
-            risk_status=review[0] if review else None,
-            risk_worst_severity=review[1] if review else None,
+            risk_status=review.status if review else None,
+            risk_worst_severity=review.worst_severity if review else None,
+            risk_complete=review.complete if review else None,
+            risk_chunks_checked=review.chunks_checked if review else None,
+            risk_chunks_total=review.chunks_total if review else None,
             ingestion_notes=list(contract.ingestion_notes),
             document_kind=contract.document_kind,
             document_looks_like=contract.document_looks_like,
@@ -473,7 +479,10 @@ async def upload_contract(
     background_tasks.add_task(run_review_in_background, contract.id, chat_model)
 
     return UploadContractResponse(
-        **ContractSummary.from_model(contract, ("pending", None)).model_dump(),
+        **ContractSummary.from_model(
+            contract,
+            RiskSummary("pending", None, False, 0, contract.chunk_count),
+        ).model_dump(),
         content_type=upload.content_type,
         max_size_bytes=MAX_UPLOAD_BYTES,
     )

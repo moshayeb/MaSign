@@ -5,7 +5,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import Chunk, Contract, KeyTermRow, RiskFindingRow, RiskReview, VectorIndex
+from app.database.models import Chunk, Contract, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
 from app.ingestion.document_type import DocumentKind, classify_document
 
 
@@ -377,15 +377,24 @@ def list_key_terms(connection: psycopg.Connection, contract_id: UUID) -> list[Ke
         return [KeyTermRow(**row) for row in cursor.fetchall()]
 
 
-def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, tuple[str, str | None]]:
-    """Per contract: review status and the worst severity found, for the contract list."""
+def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, RiskSummary]:
+    """Review status, severity and coverage for each contract list row."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT r.contract_id, r.status,
+            SELECT r.contract_id, r.status, r.complete, r.chunks_checked, r.chunks_total,
                    (SELECT severity FROM risk_findings f WHERE f.contract_id = r.contract_id
                     ORDER BY CASE severity WHEN 'High' THEN 3 WHEN 'Medium' THEN 2 ELSE 1 END DESC LIMIT 1) AS worst
             FROM risk_reviews r
             """
         )
-        return {row["contract_id"]: (row["status"], row["worst"]) for row in cursor.fetchall()}
+        return {
+            row["contract_id"]: RiskSummary(
+                status=row["status"],
+                worst_severity=row["worst"],
+                complete=row["complete"],
+                chunks_checked=row["chunks_checked"],
+                chunks_total=row["chunks_total"],
+            )
+            for row in cursor.fetchall()
+        }
