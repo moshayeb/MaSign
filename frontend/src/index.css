@@ -1839,6 +1839,8 @@ a.link:hover {
 .check .link {
   flex: none;
   margin-top: 3px;
+}
+
 /* Suggested questions ranked by the review (MAS-108) */
 button.chip.ranked {
   border-color: var(--accent-line);
