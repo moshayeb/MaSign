@@ -142,6 +142,7 @@ describe('asking a question', () => {
     // No success toast: the answer is on screen (rule 3); the loading toast is just dismissed.
     expect(shown).toEqual([['dismissed', 'Reading the contract…']])
     expect(screen.queryByText(/Unverified/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Citations attached · 2 passages/)).toBeInTheDocument()
     // Uncited passages are still reachable.
     expect(screen.getByText(/Other passages considered \(1\)/)).toBeInTheDocument()
   })
@@ -310,7 +311,7 @@ describe('asking a question', () => {
     expect(screen.getByText(/Passage 1 contained instructions addressed to the AI: only those sentences were withheld from the model, the rest was read/)).toBeInTheDocument()
     expect(screen.queryByText(/One passage was withheld from the model/)).not.toBeInTheDocument()
     expect(screen.getByText('Sentences withheld')).toBeInTheDocument() // on the cited passage
-    expect(screen.getByText(/Grounded · 2 passages/)).toBeInTheDocument() // still a normal, grounded answer
+    expect(screen.getByText(/Citations attached · 2 passages/)).toBeInTheDocument()
   })
 
   it('copies a citation with its source and confirms in a toast', async () => {

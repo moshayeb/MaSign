@@ -81,8 +81,9 @@ system prompt allows only those passages and demands a `[n]` after every
 factual sentence, and the model must answer `NOT_FOUND` when they do not
 cover the question — which the API returns as the fixed "Not found in
 contract." An empty retrieval never reaches the model. Citations in the reply
-are parsed and resolved to the chunks; an answer that cites nothing is still
-returned but `grounded: false`, so the UI can flag it and MAS-32 can count it.
+are parsed and resolved to the chunks. `grounded` also requires each detected
+money amount, percentage, date and duration in the answer to occur in a cited
+passage; an answer that fails either check is returned as unverified.
 
 ## Model calls and the prompt-injection guardrail (MAS-90)
 

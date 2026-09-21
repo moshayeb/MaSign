@@ -110,7 +110,7 @@ pill drops under the title whole at phone width instead of breaking the
 title.
 Cards are `.card` (never bare `section`, so the toast container stays
 invisible); section titles are small uppercase labels. The answer card
-carries a status pill — green "Grounded · n passages", amber "Unverified",
+carries a status pill — green "Citations attached · n passages", amber "Unverified",
 grey "Not in the text" — and citation cards with a numbered bubble.
 Verified with headless-Edge screenshots at 1280 px and inside a 400 px
 iframe (headless Edge clamps its own viewport to 492 px, so narrow widths

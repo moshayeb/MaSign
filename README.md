@@ -86,7 +86,8 @@ curl http://localhost:8000/health
 Then open **http://localhost:8000** — the web UI (built into the image from
 `frontend/`) lets you upload a contract, pick it, and ask questions: the
 answer cites the passages it came from (click a `[n]` to see the quote) and
-is marked *Unverified* when it is not fully backed by them. Every action
+is marked *Unverified* when citations are missing or a concrete financial
+value does not appear in a cited passage. Every action
 reports its outcome in a toast, errors with the API's own message. The
 interactive API docs stay at `/docs`.
 
@@ -127,7 +128,7 @@ Interactive docs at `http://localhost:8000/docs`.
 | `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
 | `GET`  | `/api/contracts/{contract_id}/export.md` · `export.csv` | The review as a file (MAS-97): Markdown with coverage, the key-terms table (value, standard verdict, passage, quote) and the findings by severity; or CSV with one row per finding and key term. Same data as `/risks` + `/key-terms`; 404 before a review. |
 | `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction. The start is atomic: one request gets 202; concurrent attempts get 409 while it runs. |
-| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
+| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` with `[n]` citations resolved in `citations`; `grounded` requires valid citations, a complete reply, and every detected money amount, percentage, date and duration to occur in a cited passage. It is false for "Not found in contract.". `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |
 | `GET`  | `/ready` | Readiness: Postgres and Qdrant answer (200) or the failing one is named (503); also reports which chat model is configured. Use this, not `/health`, to know whether requests will succeed. |
 

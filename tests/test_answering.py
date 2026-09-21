@@ -48,7 +48,7 @@ def test_prompt_numbers_the_passages_and_names_their_source() -> None:
 
 
 def test_answer_cites_the_passages_it_used_in_order_of_use() -> None:
-    hits = _hits("fees", "term", "liability")
+    hits = _hits("The fee is EUR 18,500 per month and interest is capped at 3%.", "term", "Interest is 1.5% per month.")
     model = FakeChatModel()
     model.reply = "The fee is EUR 18,500 per month [1]. Late payment bears interest at 1.5% per month, capped at 3% [3][1]."
 
@@ -61,6 +61,26 @@ def test_answer_cites_the_passages_it_used_in_order_of_use() -> None:
     system, user = model.calls[0]
     assert system == SYSTEM_PROMPT
     assert user.endswith("Question: fees?")
+
+
+@pytest.mark.parametrize(
+    "reply, passage, expected",
+    [
+        ("The fee is EUR 100 per month [1].", "The fee is EUR 100 per month.", True),
+        ("The fee is EUR 999 per month [1].", "The fee is EUR 100 per month.", False),
+        ("Interest is 1.5% per month [1].", "Interest is 1.5% per month.", True),
+        ("Interest is 11.5% per month [1].", "Interest is 1.5% per month.", False),
+        ("The term is 24 months [1].", "The initial term is 12 months.", False),
+        ("It ends on 1 March 2027 [1].", "It ends on 1 March 2026.", False),
+    ],
+)
+def test_financial_values_must_appear_in_a_cited_passage(reply: str, passage: str, expected: bool) -> None:
+    model = FakeChatModel()
+    model.reply = reply
+
+    answer = answer_question("q", _hits(passage), model)
+
+    assert answer.grounded is expected
 
 
 @pytest.mark.parametrize("reply", ["[1, 2] are relevant.", "See [1] and [2].", "[2][1]", "[1] twice [1]."])
@@ -206,7 +226,9 @@ def test_query_returns_the_answer_with_resolved_citations(northwind: str, fake_c
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["answer"].startswith("The monthly fee is EUR 18,500 [1].")
-    assert body["grounded"] is True
+    # The fake retriever's top passages do not contain EUR 18,500. Citations
+    # still resolve, but MAS-116 correctly refuses to verify the invented value.
+    assert body["grounded"] is False
     assert body["answer_model"] == "fake-chat"
     assert [c["label"] for c in body["citations"]] == [1, 2]
     assert body["citations"][0]["chunk_id"] == body["retrieved_context"][0]["chunk_id"]
