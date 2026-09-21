@@ -39,6 +39,13 @@ def render_markdown(filename: str, review: RiskReviewResponse, terms: KeyTermsRe
         for ref in review.coverage.external_references:
             lines.append(f"- Depends on a document not uploaded: {ref.name} (passage(s) {', '.join(str(i + 1) for i in ref.chunk_indexes)})")
 
+    if terms.deadlines:
+        lines += ["", "## Deadlines", ""]
+        for d in terms.deadlines:
+            if d.date:
+                lines.append(f"- {d.name}: **{d.date.strftime('%d %b %Y')}** ({d.how}; from {', '.join(d.computed_from)})")
+            else:
+                lines.append(f"- {d.name}: cannot compute — {d.reason}")
     lines += ["", "## Key terms", ""]
     if not terms.complete:
         lines += ["Some passages could not be checked for key terms; a term marked *Not checked* may still be in the contract.", ""]

@@ -92,6 +92,40 @@ describe('contract list', () => {
     expect(badge).toHaveAttribute('title', note)
   })
 
+  it("filters the sidebar by filename and shows each row's review state in words (MAS-104)", async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json(200, [
+        contract({ contract_id: 'c1', filename: 'msa.txt', risk_status: 'done', risk_worst_severity: 'High' }),
+        contract({ contract_id: 'c2', filename: 'nda.pdf', file_type: 'pdf', risk_status: null }),
+        contract({ contract_id: 'c3', filename: 'sow.docx', file_type: 'docx', risk_status: 'running' }),
+      ]),
+    )
+
+    render(<App />)
+
+    expect(await screen.findByRole('button', { name: /msa\.txt/ })).toHaveTextContent('Reviewed · High risk')
+    expect(screen.getByRole('button', { name: /nda\.pdf/ })).toHaveTextContent('Not reviewed')
+    expect(screen.getByRole('button', { name: /sow\.docx/ })).toHaveTextContent('Reviewing…')
+    // Size, passage count and date left the row (they are in the contract header now).
+    expect(screen.getByRole('button', { name: /msa\.txt/ })).not.toHaveTextContent(/passages|kB|Sep/)
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search contracts' }), 'ND')
+    expect(screen.getByRole('button', { name: /nda\.pdf/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /msa\.txt/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Contracts')).toHaveTextContent('3') // the count is the whole list, not the matches
+
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Search contracts' }))
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search contracts' }), 'zzz')
+    expect(screen.getByText('No contract matches “zzz”.')).toBeInTheDocument()
+  })
+
+  it('hides the search box while there is only one contract (MAS-104)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, [contract()]))
+    render(<App />)
+    await screen.findByText('msa.txt')
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+  })
+
   it('shows the API detail in an error toast when loading fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       json(503, { detail: 'Database unavailable. Check that Postgres is running and DATABASE_URL is correct.' }),
@@ -150,6 +184,7 @@ describe('refresh', () => {
     render(<App />)
     await screen.findByText(/No contracts yet/)
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await userEvent.click(screen.getByRole('button', { name: 'New contract' })) // opens the dropzone (MAS-104)
     await userEvent.upload(screen.getByLabelText(/Contract file/), new File(['1. Fees'], 'northwind.txt', { type: 'text/plain' }))
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
     expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toBeInTheDocument()
@@ -180,12 +215,17 @@ describe('upload', () => {
 
     render(<App />)
     await screen.findByText(/No contracts yet/)
+    expect(screen.queryByLabelText(/Contract file/)).not.toBeInTheDocument() // compact by default (MAS-104)
+    await userEvent.click(screen.getByRole('button', { name: 'New contract' }))
     const input = screen.getByLabelText(/Contract file/) as HTMLInputElement
+    expect(input).toHaveFocus()
     await userEvent.upload(input, new File(['1. Fees'], 'northwind.txt', { type: 'text/plain' }))
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
 
     await waitFor(() => expect(shown).toEqual([['success', 'northwind.txt uploaded — 12 chunks']]))
     expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByLabelText(/Contract file/)).not.toBeInTheDocument() // the dropzone closes after a success (MAS-104)
+    expect(screen.getByRole('button', { name: 'New contract' })).toHaveAttribute('aria-expanded', 'false')
     const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages'))
     expect(calls).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
   })
@@ -197,6 +237,7 @@ describe('upload', () => {
 
     render(<App />)
     await screen.findByText(/No contracts yet/)
+    await userEvent.click(screen.getByRole('button', { name: 'New contract' }))
     await userEvent.upload(screen.getByLabelText(/Contract file/), new File(['%PDF'], 'scan.pdf', { type: 'application/pdf' }))
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
 

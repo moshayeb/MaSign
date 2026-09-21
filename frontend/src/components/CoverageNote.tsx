@@ -3,8 +3,9 @@ import type { SourceRef } from './PassageReader'
 
 interface Props {
   coverage: Coverage
-  // "risks" or "key terms": what the unread passages were not checked for.
-  subject: string
+  // What the unread passages were not checked for; omitted when the note
+  // stands for the whole review (MAS-104).
+  subject?: string
   onShowSource?: (source: SourceRef) => void
 }
 
@@ -18,7 +19,7 @@ export function CoverageNote({ coverage, subject, onShowSource }: Props) {
   if (coverage.unreadable_passages.length > 0) {
     lines.push(
       <li key="unreadable">
-        Not graded for {subject} — the model's reply was unreadable for {passageList(coverage.unreadable_passages, onShowSource)}. Read{' '}
+        Not graded{subject ? ` for ${subject}` : ''} — the model's reply was unreadable for {passageList(coverage.unreadable_passages, onShowSource)}. Read{' '}
         {coverage.unreadable_passages.length === 1 ? 'it' : 'them'} yourself, or run the review again.
       </li>,
     )

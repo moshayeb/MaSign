@@ -1,6 +1,6 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 import psycopg
@@ -19,6 +19,7 @@ from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import ExternalReference, find_external_references
+from app.key_terms.deadlines import compute_deadlines
 from app.key_terms.standards import compare as compare_to_standard
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
@@ -271,6 +272,24 @@ class Coverage(BaseModel):
         )
 
 
+class DeadlineOut(BaseModel):
+    id: str
+    name: str
+    date: date | None
+    computed_from: list[str]
+    reason: str | None = None
+    how: str | None = None
+
+
+def _deadlines(terms: list["KeyTermValue"]) -> list[DeadlineOut]:
+    typed = {t.id: (t.source.typed if t.source else None) for t in terms}
+    stated = {t.id for t in terms if t.source}
+    return [
+        DeadlineOut(id=d.id, name=d.name, date=d.date, computed_from=list(d.computed_from), reason=d.reason, how=d.how)
+        for d in compute_deadlines(typed, stated)
+    ]
+
+
 class KeyTermsResponse(BaseModel):
     contract_id: UUID
     # The review's status: pending | running | done | failed.
@@ -285,6 +304,8 @@ class KeyTermsResponse(BaseModel):
     terms: list[KeyTermValue]
     # How many stated terms deviate from the Customer's standard (MAS-96).
     deviations: int = 0
+    # Dates that follow from the typed terms (MAS-100).
+    deadlines: list[DeadlineOut] = []
     coverage: Coverage | None = None
 
     @classmethod
@@ -307,6 +328,7 @@ class KeyTermsResponse(BaseModel):
             updated_at=review.updated_at,
             terms=terms,
             deviations=sum(1 for t in terms if t.standard.status == "deviates"),
+            deadlines=_deadlines(terms),
             coverage=coverage,
         )
 
@@ -329,6 +351,7 @@ class RiskReviewResponse(BaseModel):
     # The key-terms pass of the same job (MAS-82): its terms and whether it completed.
     key_terms_complete: bool
     key_terms: list[KeyTermValue]
+    deadlines: list[DeadlineOut] = []
     # What was and was not read (MAS-84).
     coverage: Coverage | None = None
 
@@ -372,7 +395,8 @@ class RiskReviewResponse(BaseModel):
             findings=findings,
             categories=categories,
             key_terms_complete=review.status == "done" and review.key_terms_complete,
-            key_terms=KeyTermsResponse.from_models(review, list(terms), chunk_index).terms,
+            key_terms=(key_terms := KeyTermsResponse.from_models(review, list(terms), chunk_index)).terms,
+            deadlines=key_terms.deadlines,
             coverage=coverage,
         )
 

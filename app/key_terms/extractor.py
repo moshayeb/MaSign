@@ -7,9 +7,11 @@ held to the same rule — every number in them must appear in the quote — and
 are otherwise stored as text only.
 """
 
+import calendar
 import logging
 import re
 from dataclasses import dataclass
+from datetime import date
 from uuid import UUID
 
 from app.answering.grounding import build_user_prompt, passage_metadata
@@ -179,6 +181,9 @@ def verify_typed(kind: str, typed: object, quote: str) -> dict | None:
         return None
     if not _well_formed(kind, clean):
         return None
+    if kind == "date":
+        # A date is verified by its written forms, not by its digits ("1 March 2026" has no "03").
+        return clean if date_in_quote(clean["date"], quote) else None
     numbers = {_digits(match) for match in _NUMBER.findall(quote)} | {_digits(run) for run in _DIGIT_RUN.findall(quote)}
     for key, number in clean.items():
         if isinstance(number, (int, float)) and _digits(_plain(number)) not in numbers:
@@ -200,9 +205,38 @@ def _well_formed(kind: str, clean: dict) -> bool:
         percent = "rate_percent" in clean and clean.get("per") in ("month", "year") and "amount" not in clean
         fixed = "amount" in clean and "currency" in clean and "rate_percent" not in clean
         return percent or fixed
-    if kind == "duration":
+    if kind in ("duration", "renewal"):
         return ("days" in clean) != ("months" in clean)
+    if kind == "date":
+        try:
+            date.fromisoformat(clean.get("date", ""))
+        except ValueError:
+            return False
+        return True
     return False
+
+
+def date_in_quote(iso: str, quote: str) -> bool:
+    """True when the ISO date appears in the quote in a common written form (MAS-100).
+
+    Accepted: 1 March 2026 · 1st March 2026 · March 1, 2026 · March 1 2026 · 2026-03-01 ·
+    01.03.2026 · 1.3.2026 · 01/03/2026 (day first). Case and spacing do not matter.
+    """
+    try:
+        d = date.fromisoformat(iso)
+    except ValueError:
+        return False
+    month = calendar.month_name[d.month]
+    abbr = calendar.month_abbr[d.month]
+    suffix = "th" if 11 <= d.day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(d.day % 10, "th")
+    forms = {
+        f"{d.day} {month} {d.year}", f"{d.day}{suffix} {month} {d.year}", f"{d.day} {abbr} {d.year}",
+        f"{month} {d.day}, {d.year}", f"{month} {d.day} {d.year}", f"{abbr} {d.day}, {d.year}", f"{abbr}. {d.day}, {d.year}",
+        d.isoformat(), f"{d.day:02d}.{d.month:02d}.{d.year}", f"{d.day}.{d.month}.{d.year}", f"{d.day:02d}/{d.month:02d}/{d.year}",
+        f"{d.day:02d} {month} {d.year}",
+    }
+    haystack = _normalise(quote)
+    return any(_normalise(form) in haystack for form in forms)
 
 
 def _plain(number: float | int) -> str:

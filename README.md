@@ -185,6 +185,18 @@ a pill with `n of 9 stated · passages read`, one tile per term with the value,
 its passage number and the quote, and amber notices for conflicts or an
 incomplete pass.
 
+**Deadlines (MAS-100).** A tenth key term, the *effective date* (typed as an
+ISO date and verified by its written form in the quote — `1 March 2026`,
+`March 1, 2026`, `01.03.2026`…), lets MaSign compute three dates by plain
+arithmetic in `app/key_terms/deadlines.py`: when the initial term ends (the
+day before the anniversary), the last day to give notice against a renewal,
+and when the first renewal runs to (the `renewal` term may now carry a typed
+period). Each shows its formula and the terms it came from; when an input is
+missing or text-only the strip says "cannot compute: initial term stated,
+but not as a number the text confirms" — never a blank. A notice deadline
+within 90 days is flagged amber. `deadlines` is on `/key-terms`, `/risks`
+and in the Markdown export.
+
 **Deviations from your standard (MAS-96).** Where a term has a verified
 typed value, it is compared by rule — never by a model — with the
 Customer's default position in `app/key_terms/standards.py`, whose

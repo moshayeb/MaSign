@@ -117,7 +117,7 @@ async function renderWithContractAndAsk(question: string, ...responses: Response
   const fetchMock = mockApi(responses)
   render(<App />)
   await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
-  await userEvent.click(screen.getByRole('tab', { name: 'Ask' })) // the composer lives on the Ask tab (MAS-95)
+  await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' })) // the composer lives on the Ask tab (MAS-95)
   await userEvent.type(screen.getByLabelText('Ask about the contract'), question)
   await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
   return fetchMock
@@ -235,7 +235,7 @@ describe('asking a question', () => {
     })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('tab', { name: 'Ask' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await userEvent.type(screen.getByLabelText('Ask about the contract'), 'fee?')
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
     await screen.findByText(/The monthly fee is EUR 18,500/)
