@@ -26,22 +26,38 @@ const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
 // passage was graded — never "not looked at".
 export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource }: Props) {
   const [review, setReview] = useState<RiskReview | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error' | 'retrying'>('loading')
+  const [pollFailures, setPollFailures] = useState(0)
   const [starting, setStarting] = useState(false)
   // Whether this panel saw the review in flight: only then does settling
   // mean "something changed" for the contract list.
   const sawRunning = useRef(false)
+  const reviewRef = useRef<RiskReview | null>(null)
   const coverageRef = useRef<HTMLDetailsElement>(null)
 
   const load = useCallback(async () => {
     try {
       const next = await getContractRisks(contract.contract_id)
+      reviewRef.current = next
       setReview(next)
+      setPollFailures(0)
       setState('ready')
     } catch (error) {
       // 404 = uploaded before reviews existed (or the row was removed): offer to run one.
-      setState(error instanceof ApiError && error.status === 404 ? 'never' : 'error')
-      setReview(null)
+      if (error instanceof ApiError && error.status === 404) {
+        reviewRef.current = null
+        setReview(null)
+        setState('never')
+      } else if (reviewRef.current && ['pending', 'running'].includes(reviewRef.current.status)) {
+        // Keep the last known progress and keep polling. A brief 503 or lost
+        // connection must not make a still-running server job look stopped.
+        setPollFailures((failures) => failures + 1)
+        setState('retrying')
+      } else {
+        reviewRef.current = null
+        setReview(null)
+        setState('error')
+      }
     }
   }, [contract.contract_id])
 
@@ -58,7 +74,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   useEffect(() => {
     if (running) {
       sawRunning.current = true
-      const timer = setTimeout(() => void load(), pollMs)
+      const retryDelay = Math.min(pollMs * 2 ** pollFailures, 30_000)
+      const timer = setTimeout(() => void load(), retryDelay)
       return () => clearTimeout(timer)
     }
     if (review && sawRunning.current) {
@@ -66,7 +83,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
       onSettled?.()
     }
     return undefined
-  }, [running, review, load, pollMs, onSettled])
+  }, [running, review, load, pollMs, pollFailures, onSettled])
 
   async function start() {
     setStarting(true)
@@ -78,7 +95,9 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           error: (e: Error) => e.message,
         })
         .unwrap()
+      reviewRef.current = started
       setReview(started) // pending: the polling effect takes over
+      setPollFailures(0)
       setState('ready')
     } catch {
       // Already reported by the toast.
@@ -132,7 +151,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
             {state === 'loading' && <span className="status none">Loading…</span>}
             {state === 'never' && <span className="status none">Not reviewed</span>}
             {state === 'error' && <span className="status warn">Unavailable</span>}
-            {review && running && (
+            {state === 'retrying' && <span className="status warn">Connection interrupted · retrying</span>}
+            {review && running && state !== 'retrying' && (
               <span className="status running">
                 Reviewing… {review.chunks_checked}/{review.chunks_total || contract.chunk_count} passages
               </span>
@@ -159,6 +179,11 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           <p className="muted">This contract was uploaded before whole-contract reviews existed. Run one to grade every passage with the rubric.</p>
         )}
         {state === 'error' && <p className="muted">The review could not be loaded. Refresh, or check that the API is running.</p>}
+        {state === 'retrying' && review && (
+          <p className="badge unverified" role="status">
+            Connection interrupted — retrying. Last seen at {review.chunks_checked}/{review.chunks_total || contract.chunk_count} passages.
+          </p>
+        )}
         {review?.status === 'failed' && (
           <p className="badge unverified" role="status">
             The review stopped: {review.error ?? 'unknown error'}. {review.chunks_checked > 0 ? `${review.chunks_checked} of ${review.chunks_total} passages were graded before it failed.` : ''} Run it again.
