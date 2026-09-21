@@ -72,9 +72,8 @@ wordmark from Illustrator in Anurati, and the one letter Illustrator left as
 live text (the S) was outlined with fontTools. `frontend/public/brand/` holds
 the font-free colour and white versions for documents.
 Two-column layout: a sticky sidebar and the main column, stacking under
-960 px. Since MAS-104 the sidebar is a **+ New contract** button (the drop
-zone opens under it, or when a file is dropped on the closed card, and closes
-after a successful upload), a search box once there is more than one
+960 px. Since MAS-104 the sidebar is the upload card (the dashed drop zone —
+the owner kept it over a "+ New contract" button, 2026-09-21), a search box once there is more than one
 contract, and one line per contract: file-type tag, name, and the review
 state in words (Reviewed · High risk / Not reviewed / Reviewing… / Review
 failed, `reviewStatus.ts`) — size, passage count and date moved to the
@@ -127,8 +126,8 @@ must be checked through an iframe).
 ## Overview (MAS-104)
 
 `RiskReviewPanel` is the Overview: it loads and polls the stored review and
-renders, top to bottom, `SummaryStrip`, `CoverageNotice`, `KeyTermsCard`
-and the Risk review card. The strip is four tiles — Key terms `n of 10`,
+renders, top to bottom, `SummaryStrip`, `CoverageNotice`, `BriefCard`,
+`KeyTermsCard` and the Risk review card. The strip is four tiles — Key terms `n of 10`,
 Deviations `n`, Risks `2 High · 1 Medium` (or `None` only when the review
 is complete), Coverage `n of m` passages read (+ withheld) — with "…" while
 the review runs and "—" / "Not reviewed" before one exists, so the strip
@@ -138,6 +137,28 @@ one muted line: "No issues found in the 5 other categories: …" when the
 review is complete, "5 other categories: unable to determine — the review
 did not cover every passage" when it is not, "… still being graded…" while
 it runs. There are no green "Nothing found" cards.
+
+### Before you sign (MAS-105/106/111)
+
+`BriefCard` is derived by rule in `src/brief.ts` from the stored review — no
+model call, so nothing can be invented. **In brief** is five facts (Term,
+Cost, Renewal, Leaving, Risks), each with its passage link: "36 months from
+1 March 2026, ending 28 Feb 2029", "Renews automatically … — notice by
+30 Nov 2028 (90 days)", "2 High · 1 Medium: Liability cap, …"; an absent term
+reads "not stated in the reviewed text" only after a complete key-terms
+pass, "not checked" otherwise, and "nothing flagged in 7 categories" only for
+a complete review. **Needs attention** is one checklist (so nothing is
+listed twice): High/Medium findings ("Confirm Liability cap — reason"),
+deviations ("Check late-payment interest — value — your standard"),
+important terms not stated (effective date, recurring fee, initial term,
+notice period, termination cost; with the "may be in Order Form" hint), the
+notice deadline ("Diary …"), and an incomplete review ("2 passages were not
+graded", with a link that opens the coverage details). Each item has a
+session-local tick box; the pill counts what is left. A clean, complete
+review reads "Nothing needs attention: …" — no score, no alarm. Low findings
+stay in the Risk review. A running review shows "The summary appears when the
+review finishes"; a failed one the failure, verbatim. Dates use the same
+`30 Nov 2028` form as the deadline formulas, whatever the browser locale.
 
 ## Key terms (MAS-82)
 

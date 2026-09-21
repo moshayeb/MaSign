@@ -184,7 +184,6 @@ describe('refresh', () => {
     render(<App />)
     await screen.findByText(/No contracts yet/)
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-    await userEvent.click(screen.getByRole('button', { name: 'New contract' })) // opens the dropzone (MAS-104)
     await userEvent.upload(screen.getByLabelText(/Contract file/), new File(['1. Fees'], 'northwind.txt', { type: 'text/plain' }))
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
     expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toBeInTheDocument()
@@ -215,17 +214,12 @@ describe('upload', () => {
 
     render(<App />)
     await screen.findByText(/No contracts yet/)
-    expect(screen.queryByLabelText(/Contract file/)).not.toBeInTheDocument() // compact by default (MAS-104)
-    await userEvent.click(screen.getByRole('button', { name: 'New contract' }))
     const input = screen.getByLabelText(/Contract file/) as HTMLInputElement
-    expect(input).toHaveFocus()
     await userEvent.upload(input, new File(['1. Fees'], 'northwind.txt', { type: 'text/plain' }))
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
 
     await waitFor(() => expect(shown).toEqual([['success', 'northwind.txt uploaded — 12 chunks']]))
     expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.queryByLabelText(/Contract file/)).not.toBeInTheDocument() // the dropzone closes after a success (MAS-104)
-    expect(screen.getByRole('button', { name: 'New contract' })).toHaveAttribute('aria-expanded', 'false')
     const calls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages'))
     expect(calls).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
   })
@@ -237,7 +231,6 @@ describe('upload', () => {
 
     render(<App />)
     await screen.findByText(/No contracts yet/)
-    await userEvent.click(screen.getByRole('button', { name: 'New contract' }))
     await userEvent.upload(screen.getByLabelText(/Contract file/), new File(['%PDF'], 'scan.pdf', { type: 'application/pdf' }))
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
 

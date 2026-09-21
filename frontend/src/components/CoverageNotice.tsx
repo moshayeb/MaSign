@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import type { Coverage } from '../api'
 import { CoverageNote } from './CoverageNote'
 import type { SourceRef } from './PassageReader'
@@ -5,13 +6,15 @@ import type { SourceRef } from './PassageReader'
 interface Props {
   coverage: Coverage
   onShowSource?: (source: SourceRef) => void
+  // Lets the Overview open the details from elsewhere (the checklist's coverage item).
+  ref?: Ref<HTMLDetailsElement>
 }
 
 // One line for everything the review could not read or had to withhold
 // (MAS-104): "AI instructions detected · 1 passage withheld · View details".
 // The details are the per-passage list (CoverageNote), rendered once for the
 // whole Overview instead of once per card.
-export function CoverageNotice({ coverage, onShowSource }: Props) {
+export function CoverageNotice({ coverage, onShowSource, ref }: Props) {
   const withheld = coverage.withheld_passages.length
   const redacted = coverage.redacted_passages?.length ?? 0
   const unreadable = coverage.unreadable_passages.length
@@ -31,7 +34,7 @@ export function CoverageNotice({ coverage, onShowSource }: Props) {
 
   const security = withheld + redacted > 0
   return (
-    <details className={`coverage-notice${security ? ' security' : ''}`}>
+    <details className={`coverage-notice${security ? ' security' : ''}`} ref={ref}>
       <summary>
         <span className="coverage-icon" aria-hidden="true">
           {security ? (

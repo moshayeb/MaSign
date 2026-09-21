@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ApiError, getContractRisks, reviewContract, type Contract, type RiskReview } from '../api'
+import { BriefCard } from './BriefCard'
 import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
@@ -31,6 +32,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   // Whether this panel saw the review in flight: only then does settling
   // mean "something changed" for the contract list.
   const sawRunning = useRef(false)
+  const coverageRef = useRef<HTMLDetailsElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -100,7 +102,18 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   return (
     <>
       <SummaryStrip review={review} state={state} />
-      {review?.coverage && <CoverageNotice coverage={review.coverage} onShowSource={onShowSource} />}
+      {review?.coverage && <CoverageNotice coverage={review.coverage} onShowSource={onShowSource} ref={coverageRef} />}
+      {/* The contract in five facts and the checklist (MAS-105/106/111), before the details. */}
+      {review && (
+        <BriefCard
+          review={review}
+          onShowSource={onShowSource}
+          onShowCoverage={() => {
+            coverageRef.current?.setAttribute('open', '')
+            coverageRef.current?.scrollIntoView({ block: 'nearest' })
+          }}
+        />
+      )}
       {/* The key terms come from the same review row, so the card shares this panel's load and polling (MAS-82). */}
       {review && <KeyTermsCard review={review} onShowSource={onShowSource} />}
       <section className="card review" aria-live="polite">

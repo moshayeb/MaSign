@@ -367,42 +367,12 @@ button.chip:hover:not(:disabled) {
 
 /* --- upload ------------------------------------------------------------- */
 
-.card.upload {
-  padding: 12px;
-}
-
-.new-contract {
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
-}
-
-.new-contract span {
-  font-size: 1.15rem;
-  line-height: 1;
-  font-weight: 500;
-}
-
-.upload-form {
-  margin-top: 10px;
-}
-
-.upload-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
-}
-
 .dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 18px 12px 14px;
+  padding: 22px 12px 18px;
   border: 1.5px dashed var(--line-2);
   border-radius: 12px;
   background: var(--inset);
@@ -1720,6 +1690,155 @@ a.link:hover {
   margin-left: 0;
 }
 
+/* "Before you sign" (MAS-105/106/111) */
+.brief h3:first-of-type {
+  margin-top: 14px;
+}
+
+.brief-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  align-items: baseline;
+}
+
+.brief-fact {
+  display: contents;
+}
+
+.brief-fact dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.brief-fact dd {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.brief-fact dd .link {
+  margin-left: 0;
+}
+
+.brief-text {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.brief-text::first-letter {
+  text-transform: uppercase;
+}
+
+.brief-fact.high .brief-text {
+  color: var(--high);
+}
+
+.brief-fact.warn .brief-text {
+  color: var(--warn);
+}
+
+.brief-fact.ok .brief-text {
+  color: var(--ok);
+}
+
+@media (max-width: 540px) {
+  .brief-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .brief-fact dd {
+    margin-bottom: 8px;
+  }
+}
+
+.brief-clean {
+  color: var(--text-2);
+}
+
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--inset);
+}
+
+.check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.check-label input {
+  margin: 4px 0 0;
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.check .severity {
+  flex: none;
+  margin-top: 3px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 5px;
+  color: #fff;
+  background: #64748b;
+}
+
+.check .severity-high {
+  background: var(--high);
+}
+
+.check .severity-medium {
+  background: var(--medium);
+}
+
+.check-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.check-text strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.check.done .check-text {
+  opacity: 0.55;
+}
+
+.check.done .check-text strong {
+  text-decoration: line-through;
+}
+
+.check .link {
+  flex: none;
+  margin-top: 3px;
 /* Suggested questions ranked by the review (MAS-108) */
 button.chip.ranked {
   border-color: var(--accent-line);
