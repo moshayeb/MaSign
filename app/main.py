@@ -17,6 +17,7 @@ from app.guardrails.prompt_injection import PromptInjectionError
 from app.api import dependencies
 from app.database import repository
 from app.database.migrations import run_migrations
+from app.database import repository
 from app.database.session import get_connection
 from app.retrieval.embeddings import EmbeddingServiceError, get_embedder
 from app.retrieval.indexing import ensure_index_current
@@ -41,6 +42,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if os.getenv("APP_ENV") != "test":
         applied = run_migrations()
         logger.info("Database ready (%d migration(s) applied)", len(applied))
+
+        # BackgroundTasks live only in this server process. Any active review
+        # row found during startup belongs to a process that can no longer
+        # finish it, so make it visibly failed and retryable (MAS-114).
+        with get_connection() as db:
+            interrupted = repository.fail_interrupted_risk_reviews(db)
+        if interrupted:
+            logger.warning("Recovered %d interrupted risk review(s)", interrupted)
 
         # Load the embedding model now (first load downloads it; the HTTP
         # backend contacts its service) and make sure the Qdrant collection

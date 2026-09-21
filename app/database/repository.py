@@ -257,6 +257,22 @@ def get_risk_review(connection: psycopg.Connection, contract_id: UUID) -> RiskRe
     return RiskReview(**row) if row else None
 
 
+def fail_interrupted_risk_reviews(connection: psycopg.Connection) -> int:
+    """Make reviews left active by a previous server process retryable."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE risk_reviews SET
+                    status = 'failed', complete = FALSE,
+                    error = 'Review interrupted by a server restart. Run it again.',
+                    updated_at = now()
+                WHERE status IN ('pending', 'running')
+                """
+            )
+            return cursor.rowcount
+
+
 def replace_risk_findings(
     connection: psycopg.Connection,
     contract_id: UUID,

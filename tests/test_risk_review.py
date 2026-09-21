@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.answering.llm import ChatModelError
 from app.database import repository
+from app.database.session import get_connection
 from app.main import app
 from app.risk_analysis.review import review_contract
 from tests.conftest import FakeChatModel
@@ -113,6 +114,43 @@ def test_an_unreadable_batch_makes_the_review_incomplete_not_empty(db, fake_chat
     review = review_contract(contract_id, fake_chat_model, batch_size=1)
 
     assert (review.status, review.complete, review.chunks_checked, review.chunks_total) == ("done", False, 1, 2)
+
+
+def test_review_progress_is_visible_from_another_connection(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, FEES, UNLIMITED)
+    observed: list[tuple[str, int, int]] = []
+
+    def observe_progress(_: str) -> str:
+        with get_connection() as observer:
+            review = repository.get_risk_review(observer, contract_id)
+            assert review is not None
+            observed.append((review.status, review.chunks_checked, review.chunks_total))
+        return "[]"
+
+    fake_chat_model.risk_reply = observe_progress
+    review_contract(contract_id, fake_chat_model, batch_size=1)
+
+    # The second risk batch sees the first one's committed progress rather
+    # than the old pending row.
+    assert observed[0] == ("running", 0, 2)
+    assert observed[1] == ("running", 1, 2)
+
+
+def test_startup_recovery_makes_interrupted_reviews_retryable(db) -> None:
+    pending_id = _stored(db, FEES)
+    running_id = _stored(db, UNLIMITED)
+    repository.start_risk_review(db, pending_id)
+    repository.start_risk_review(db, running_id, status="running")
+    db.commit()
+
+    assert repository.fail_interrupted_risk_reviews(db) == 2
+    db.commit()
+
+    for contract_id in (pending_id, running_id):
+        recovered = repository.get_risk_review(db, contract_id)
+        assert recovered is not None
+        assert recovered.status == "failed" and recovered.complete is False
+        assert recovered.error == "Review interrupted by a server restart. Run it again."
 
 
 def test_rerunning_a_review_replaces_the_old_findings(db, fake_chat_model: FakeChatModel) -> None:

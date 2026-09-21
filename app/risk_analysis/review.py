@@ -51,6 +51,10 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             chunks_checked=0,
             chunks_withheld=0,
         )
+        # Repository transaction blocks are savepoints once the reads above
+        # have opened psycopg's implicit transaction. Commit explicitly so a
+        # polling request can see that work started before the model calls.
+        db.commit()
 
         findings: list[tuple[UUID, str, str, str, str]] = []
         terms: list[tuple[UUID, str, str, str, dict | None]] = []
@@ -114,6 +118,9 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 withheld_chunks=withheld_chunks,
                 redacted_chunks=redacted_chunks,
             )
+            # Publish progress after every completed batch. If the process is
+            # interrupted later, startup can recover this visible running row.
+            db.commit()
 
         repository.replace_risk_findings(db, contract_id, findings)
         repository.replace_key_terms(db, contract_id, terms)
