@@ -107,6 +107,11 @@ Since MAS-82 the same job also extracts nine financial key terms
 quote or dropped, typed fields kept only when their numbers are in the quote,
 `not_stated` only when the pass completed — otherwise `unchecked`. One more
 call per batch of 8 (Northwind: 4 calls per upload in total).
+Since MAS-107 every upload also gets a **document kind** by rule, no model
+call (`app/ingestion/document_type.py`: contract | uncertain | not_contract,
+with the markers that decided it): a clean review of an invoice must read
+"rubric may not apply", never "nothing found". It is a hint, never a gate —
+nothing is blocked on it.
 
 ## Agent skills (MAS-72)
 

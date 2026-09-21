@@ -8,12 +8,14 @@ interface Props {
   onShowSource?: (source: SourceRef) => void
   // Opens the coverage details above the card (the "n passages not graded" item).
   onShowCoverage?: () => void
+  // The file may not be a contract (MAS-107): "nothing needs attention" must not read as reassurance.
+  offRubric?: boolean
 }
 
 // "Before you sign" (MAS-105/106/111): the contract in five facts, then the
 // checklist of what needs attention — all derived by rule from the stored
 // review (`brief.ts`), each line one click from the passage it came from.
-export function BriefCard({ review, onShowSource, onShowCoverage }: Props) {
+export function BriefCard({ review, onShowSource, onShowCoverage, offRubric = false }: Props) {
   // Ticks are for the reader's own pass through the list: session-local, not stored.
   const [ticked, setTicked] = useState<Set<string>>(() => new Set())
   const running = review.status === 'pending' || review.status === 'running'
@@ -38,7 +40,7 @@ export function BriefCard({ review, onShowSource, onShowCoverage }: Props) {
           Before you sign
           {running && <span className="status running">Waiting for the review</span>}
           {review.status === 'failed' && <span className="status warn">No summary</span>}
-          {done && items.length === 0 && <span className="status ok">Nothing needs attention</span>}
+          {done && items.length === 0 && <span className={offRubric ? 'status warn' : 'status ok'}>{offRubric ? 'Rubric may not apply' : 'Nothing needs attention'}</span>}
           {done && items.length > 0 && (
             <span className={items.some((i) => i.severity === 'High') ? 'status warn' : 'status none'}>
               {open === 0 ? `${items.length} checked` : `${open} to check`}
@@ -72,7 +74,9 @@ export function BriefCard({ review, onShowSource, onShowCoverage }: Props) {
           <h3>Needs attention</h3>
           {items.length === 0 ? (
             <p className="brief-clean">
-              Nothing needs attention: no risks flagged, no deviations from your standard, and the important terms are stated.
+              {offRubric
+                ? 'No contract risks or deviations were flagged — but this file does not read as a commercial contract, so the rubric says little about it.'
+                : 'Nothing needs attention: no risks flagged, no deviations from your standard, and the important terms are stated.'}
             </p>
           ) : (
             <ul className="checklist" aria-label="Before you sign checklist">

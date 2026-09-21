@@ -17,6 +17,7 @@ from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vecto
 from app.database import repository
 from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
+from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import ExternalReference, find_external_references
 from app.key_terms.deadlines import compute_deadlines
@@ -129,6 +130,12 @@ class ContractSummary(BaseModel):
     risk_worst_severity: str | None = None
     # What ingestion could not read (MAS-84): shown as "Not reviewed: …".
     ingestion_notes: list[str] = []
+    # Is it a commercial contract at all (MAS-107)? contract | uncertain |
+    # not_contract, by rule; None for a row not yet classified. `looks_like`
+    # names the other document type the markers point to ("invoice").
+    document_kind: str | None = None
+    document_looks_like: str | None = None
+    document_kind_reasons: list[str] = []
 
     @classmethod
     def from_model(cls, contract: Contract, review: tuple[str, str | None] | None = None) -> "ContractSummary":
@@ -144,6 +151,9 @@ class ContractSummary(BaseModel):
             risk_status=review[0] if review else None,
             risk_worst_severity=review[1] if review else None,
             ingestion_notes=list(contract.ingestion_notes),
+            document_kind=contract.document_kind,
+            document_looks_like=contract.document_looks_like,
+            document_kind_reasons=list(contract.document_kind_reasons),
         )
 
 
@@ -258,10 +268,18 @@ class Coverage(BaseModel):
     ingestion_notes: list[str]
     # Documents the text depends on that are not part of the upload.
     external_references: list[ExternalReferenceOut]
+    # Whether the file reads as a commercial contract at all (MAS-107): the
+    # rubric's verdicts mean little on an invoice.
+    document_kind: str | None = None
+    document_looks_like: str | None = None
+    document_kind_reasons: list[str] = []
 
     @classmethod
     def build(cls, review: RiskReview, contract: Contract, references: list[ExternalReference]) -> "Coverage":
         return cls(
+            document_kind=contract.document_kind,
+            document_looks_like=contract.document_looks_like,
+            document_kind_reasons=list(contract.document_kind_reasons),
             chunks_total=review.chunks_total,
             chunks_checked=review.chunks_checked,
             unreadable_passages=sorted(review.unreadable_chunks),
@@ -433,6 +451,8 @@ async def upload_contract(
         character_count=len(text),
         chunks=chunks,
         ingestion_notes=document.notes,
+        # By rule, no model call: is this a contract at all (MAS-107)? Nothing is blocked on it.
+        document_kind=classify_document(text),
     )
 
     # A contract without vectors can never be searched, so if indexing fails

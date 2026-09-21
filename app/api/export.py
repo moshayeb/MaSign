@@ -29,6 +29,11 @@ def render_markdown(filename: str, review: RiskReviewResponse, terms: KeyTermsRe
     lines.append(f"- Reviewed: {_when(review.updated_at)}{f' by {review.model}' if review.model else ''}")
     lines.append(f"- Status: {review.status}{'' if review.complete else ' (incomplete)'} · {review.chunks_checked} of {review.chunks_total} passages graded"
                  + (f", {review.chunks_withheld} withheld" if review.chunks_withheld else ""))
+    if review.coverage and review.coverage.document_kind and review.coverage.document_kind != "contract":
+        what = "uncertain whether this is a commercial contract" if review.coverage.document_kind == "uncertain" else "likely not a commercial contract"
+        looks = f" — looks like {review.coverage.document_looks_like}" if review.coverage.document_looks_like else ""
+        lines.append(f"- Document type: {what}{looks}; the key terms and risk verdicts below use the contract rubric and may not be meaningful"
+                     + (f" ({'; '.join(review.coverage.document_kind_reasons)})" if review.coverage.document_kind_reasons else ""))
     if review.coverage:
         for note in review.coverage.ingestion_notes:
             lines.append(f"- Not reviewed: {note}")

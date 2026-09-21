@@ -6,6 +6,7 @@ import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
 import { SummaryStrip } from './SummaryStrip'
+import { rubricMayNotApply } from '../reviewStatus'
 
 interface Props {
   contract: Contract
@@ -94,15 +95,27 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const findings = review ? [...review.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.chunk_index - b.chunk_index) : []
   const clean = review ? review.categories.filter((c) => !c.worst_severity) : []
   const flagged = review ? review.categories.length - clean.length : 0
+  // An invoice graded with the contract rubric: say so, and never read a clean review as reassurance (MAS-107).
+  const offRubric = rubricMayNotApply(contract)
 
   return (
     <>
-      <SummaryStrip review={review} state={state} />
+      <SummaryStrip review={review} state={state} offRubric={offRubric} />
+      {offRubric && (
+        <p className="badge unverified document-kind-note" role="status" title="Keyword-based and English only: a hint, not a verdict.">
+          {contract.document_kind === 'not_contract'
+            ? `This file does not look like a commercial contract${contract.document_looks_like ? ` — it reads like ${aOrAn(contract.document_looks_like)}` : ''}`
+            : 'It is not clear whether this file is a commercial contract'}
+          {contract.document_kind_reasons && contract.document_kind_reasons.length > 0 ? ` (${contract.document_kind_reasons.join('; ')})` : ''}. The key terms
+          and risk review below are graded with the contract rubric and may not be meaningful here; you can still ask questions about the text.
+        </p>
+      )}
       {review?.coverage && <CoverageNotice coverage={review.coverage} onShowSource={onShowSource} ref={coverageRef} />}
       {/* The contract in five facts and the checklist (MAS-105/106/111), before the details. */}
       {review && (
         <BriefCard
           review={review}
+          offRubric={offRubric}
           onShowSource={onShowSource}
           onShowCoverage={() => {
             coverageRef.current?.setAttribute('open', '')
@@ -210,7 +223,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
                 <span className="categories-clean-lead">
                   {findings.length === 0 ? `Every passage was read against the rubric and nothing was flagged in any of the ${clean.length} categories` : `No issues found in the ${clean.length} other categor${clean.length === 1 ? 'y' : 'ies'}`}
                 </span>
-                : {clean.map((c) => c.name).join(', ')}.
+                : {clean.map((c) => c.name).join(', ')}.{offRubric ? ' The rubric is written for contracts, so this says little about this file.' : ''}
               </>
             ) : (
               <>
@@ -228,6 +241,10 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
       </section>
     </>
   )
+}
+
+function aOrAn(noun: string): string {
+  return `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`
 }
 
 function formatWhen(iso: string): string {

@@ -42,6 +42,8 @@ def production_like_env(monkeypatch: pytest.MonkeyPatch) -> tuple[_StubEmbedder,
         store.index_checked_with = (db, embedder)
 
     monkeypatch.setattr(main, "ensure_index_current", fake_ensure_index_current)
+    # The MAS-107 backfill needs a real connection; the fake one has none.
+    monkeypatch.setattr(main.repository, "classify_unclassified_contracts", lambda db: 0)
     return embedder, store
 
 

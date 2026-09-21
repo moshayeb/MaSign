@@ -6,6 +6,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from app.database.models import Chunk, Contract, KeyTermRow, RiskFindingRow, RiskReview, VectorIndex
+from app.ingestion.document_type import DocumentKind, classify_document
 
 
 def create_contract(
@@ -17,17 +18,29 @@ def create_contract(
     character_count: int,
     chunks: list[str],
     ingestion_notes: list[str] | None = None,
+    document_kind: DocumentKind | None = None,
 ) -> Contract:
     """Store a parsed contract together with its chunks in one transaction."""
     with connection.transaction():
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO contracts (filename, file_type, size_bytes, character_count, chunk_count, ingestion_notes)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO contracts (filename, file_type, size_bytes, character_count, chunk_count, ingestion_notes,
+                                       document_kind, document_looks_like, document_kind_reasons)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (filename, file_type, size_bytes, character_count, len(chunks), Jsonb(list(ingestion_notes or []))),
+                (
+                    filename,
+                    file_type,
+                    size_bytes,
+                    character_count,
+                    len(chunks),
+                    Jsonb(list(ingestion_notes or [])),
+                    document_kind.kind if document_kind else None,
+                    document_kind.looks_like if document_kind else None,
+                    Jsonb(list(document_kind.reasons) if document_kind else []),
+                ),
             )
             contract = Contract(**cursor.fetchone())
 
@@ -41,6 +54,23 @@ def create_contract(
                 )
 
     return contract
+
+
+def classify_unclassified_contracts(connection: psycopg.Connection) -> int:
+    """Give a document kind to every contract stored before MAS-107, from its chunks. Returns how many."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id FROM contracts WHERE document_kind IS NULL")
+        ids = [row["id"] for row in cursor.fetchall()]
+    for contract_id in ids:
+        text = "\n\n".join(chunk.chunk_text for chunk in list_chunks(connection, contract_id))
+        kind = classify_document(text)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE contracts SET document_kind = %s, document_looks_like = %s, document_kind_reasons = %s WHERE id = %s",
+                (kind.kind, kind.looks_like, Jsonb(list(kind.reasons)), contract_id),
+            )
+    connection.commit()
+    return len(ids)
 
 
 def get_contract(connection: psycopg.Connection, contract_id: UUID) -> Contract | None:
