@@ -76,6 +76,17 @@ class RiskReview:
 
 
 @dataclass(frozen=True)
+class RiskSummary:
+    """Small review projection returned with each contract list row."""
+
+    status: str
+    worst_severity: str | None
+    complete: bool
+    chunks_checked: int
+    chunks_total: int
+
+
+@dataclass(frozen=True)
 class RiskFindingRow:
     """One verified rubric finding stored for a contract (MAS-81)."""
 

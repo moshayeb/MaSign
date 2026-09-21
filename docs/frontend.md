@@ -105,6 +105,8 @@ hash as `#<contract_id>/<tab>`: a refresh or a pasted link restores both
 (applied when the first contract list arrives; an unknown id is ignored).
 Selecting a different contract resets to Overview and clears the answer
 (MAS-86). The header has no "API docs" link any more; `/docs` still works.
+The contract list uses amber **Partly reviewed** when the backend reports a
+done but incomplete review; only complete clean reviews receive green.
 Card titles are `white-space: nowrap` with `flex-wrap`, so a long status
 pill drops under the title whole at phone width instead of breaking the
 title.

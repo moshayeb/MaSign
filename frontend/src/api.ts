@@ -15,6 +15,9 @@ export interface Contract {
   // The whole-contract risk review (MAS-81); null for contracts uploaded before it existed.
   risk_status?: 'pending' | 'running' | 'done' | 'failed' | null
   risk_worst_severity?: 'Low' | 'Medium' | 'High' | null
+  risk_complete?: boolean | null
+  risk_chunks_checked?: number | null
+  risk_chunks_total?: number | null
   // What ingestion could not read, as sentences (MAS-84).
   ingestion_notes?: string[]
   // Is it a commercial contract at all (MAS-107)? By rule; null for a row not yet classified.

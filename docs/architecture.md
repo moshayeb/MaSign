@@ -136,8 +136,9 @@ because the request's one is closed by the time it runs. `GET
 /api/contracts/{id}/risks` returns the findings grouped by the seven
 categories; `POST .../review` atomically claims the review row before it
 schedules the background task, so concurrent requests produce one 202 and
-one 409 rather than two model jobs; the
-contract list carries `risk_status` and `risk_worst_severity`.
+one 409 rather than two model jobs; the contract list carries `risk_status`,
+`risk_worst_severity`, `risk_complete` and checked/total passage counts, so
+an incomplete result cannot look clean.
 
 ## Key terms (MAS-82)
 
