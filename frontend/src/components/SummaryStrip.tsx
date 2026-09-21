@@ -3,7 +3,7 @@ import type { RiskReview } from '../api'
 interface Props {
   review: RiskReview | null
   // 'never' = no review row yet; 'error' = the review could not be loaded.
-  state: 'loading' | 'ready' | 'never' | 'error'
+  state: 'loading' | 'ready' | 'never' | 'error' | 'retrying'
   // The file may not be a contract (MAS-107): a clean Risks tile must not read as reassurance.
   offRubric?: boolean
 }
