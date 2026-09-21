@@ -72,9 +72,8 @@ wordmark from Illustrator in Anurati, and the one letter Illustrator left as
 live text (the S) was outlined with fontTools. `frontend/public/brand/` holds
 the font-free colour and white versions for documents.
 Two-column layout: a sticky sidebar and the main column, stacking under
-960 px. Since MAS-104 the sidebar is a **+ New contract** button (the drop
-zone opens under it, or when a file is dropped on the closed card, and closes
-after a successful upload), a search box once there is more than one
+960 px. Since MAS-104 the sidebar is the upload card (the dashed drop zone —
+the owner kept it over a "+ New contract" button, 2026-09-21), a search box once there is more than one
 contract, and one line per contract: file-type tag, name, and the review
 state in words (Reviewed · High risk / Not reviewed / Reviewing… / Review
 failed, `reviewStatus.ts`) — size, passage count and date moved to the

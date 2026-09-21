@@ -55,8 +55,8 @@ Run `npx vite --port 5199 --strictPort` from `frontend/` (kill node afterwards:
   Reviewed / Not reviewed pill, "Ask MaSign about this contract") over the
   tabs Overview · Ask MaSign · Contract text (MAS-104); in tests, click
   `getByRole('tab', { name: 'Ask MaSign' })` before looking for the composer,
-  and pass a hash like `#nw/text` to open a tab. The upload dropzone is behind
-  "+ New contract": click `getByRole('button', { name: 'New contract' })` first.
+  and pass a hash like `#nw/text` to open a tab. The upload dropzone card is
+  always visible (owner decision 2026-09-21: keep the rectangle).
 - The brand: `components/Wordmark.tsx` (outlined, font-free); never reintroduce
   a font-dependent SVG. Header logo height is the owner's call (currently 22).
 - Phone width ≈ 400 px must not scroll horizontally: `min-width: 0` on flex

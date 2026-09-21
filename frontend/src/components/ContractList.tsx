@@ -40,7 +40,7 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
       {contracts === null ? (
         <p className="muted">Loading…</p>
       ) : contracts.length === 0 ? (
-        <p className="muted">No contracts yet — add one with + New contract.</p>
+        <p className="muted">No contracts yet — upload one above.</p>
       ) : shown!.length === 0 ? (
         <p className="muted small">No contract matches “{query.trim()}”.</p>
       ) : (
