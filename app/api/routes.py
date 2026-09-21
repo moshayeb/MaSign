@@ -625,10 +625,9 @@ def review_contract_risks(
     """(Re)run the whole-contract risk review; poll GET .../risks for the result."""
     if repository.get_contract(db, contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    current = repository.get_risk_review(db, contract_id)
-    if current is not None and current.status in ("pending", "running"):
+    review = repository.claim_risk_review(db, contract_id)
+    if review is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A risk review of this contract is already running.")
-    review = repository.start_risk_review(db, contract_id)
     db.commit()  # the task's own connection must see the pending row
     background_tasks.add_task(run_review_in_background, contract_id, chat_model)
     return _review_response(db, review)
