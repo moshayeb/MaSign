@@ -131,6 +131,25 @@ review is complete, "5 other categories: unable to determine — the review
 did not cover every passage" when it is not, "… still being graded…" while
 it runs. There are no green "Nothing found" cards.
 
+### Document kind (MAS-107)
+
+`kindBadge()` / `rubricMayNotApply()` in `reviewStatus.ts`. The contract
+header gets a pill — grey *Commercial contract*, amber *Document type
+uncertain* or *Likely not a contract — invoice* — whose tooltip is the
+markers behind it; the sidebar row a small *Not a contract?* / *Type
+uncertain* tag; a row not yet classified shows nothing. For the two
+non-contract kinds the Overview opens with an amber note ("This file does
+not look like a commercial contract — it reads like an invoice (Invoice
+markers: …). The key terms and risk review below are graded with the
+contract rubric and may not be meaningful here; you can still ask questions
+about the text.") and the clean states stop reassuring: the Risks tile says
+"rubric may not apply" in amber, the Before-you-sign pill reads *Rubric may
+not apply* with "No contract risks or deviations were flagged — but this
+file does not read as a commercial contract, so the rubric says little
+about it", and the categories line ends "The rubric is written for
+contracts, so this says little about this file." Nothing is hidden or
+blocked.
+
 ### Before you sign (MAS-105/106/111)
 
 `BriefCard` is derived by rule in `src/brief.ts` from the stored review — no

@@ -24,6 +24,25 @@ export function reviewBadge(contract: Contract): ReviewBadge {
   }
 }
 
+// The document-kind pill (MAS-107): quiet for a contract, amber otherwise; nothing for an unclassified row.
+export function kindBadge(contract: Contract): ReviewBadge | null {
+  switch (contract.document_kind) {
+    case 'contract':
+      return { label: 'Commercial contract', tone: 'none' }
+    case 'uncertain':
+      return { label: contract.document_looks_like ? `Document type uncertain — ${contract.document_looks_like}?` : 'Document type uncertain', tone: 'warn' }
+    case 'not_contract':
+      return { label: contract.document_looks_like ? `Likely not a contract — ${contract.document_looks_like}` : 'Likely not a contract', tone: 'warn' }
+    default:
+      return null
+  }
+}
+
+// True when the contract rubric's verdicts may not mean much for this file.
+export function rubricMayNotApply(contract: Pick<Contract, 'document_kind'>): boolean {
+  return contract.document_kind === 'uncertain' || contract.document_kind === 'not_contract'
+}
+
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} kB`

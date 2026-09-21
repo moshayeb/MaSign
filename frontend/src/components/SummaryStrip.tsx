@@ -4,12 +4,14 @@ interface Props {
   review: RiskReview | null
   // 'never' = no review row yet; 'error' = the review could not be loaded.
   state: 'loading' | 'ready' | 'never' | 'error'
+  // The file may not be a contract (MAS-107): a clean Risks tile must not read as reassurance.
+  offRubric?: boolean
 }
 
 // Four numbers at the top of the Overview (MAS-104): what the stored review
 // established, and nothing it did not. A running review shows "…", a missing
 // one "—" — never a zero that could read as "nothing wrong".
-export function SummaryStrip({ review, state }: Props) {
+export function SummaryStrip({ review, state, offRubric = false }: Props) {
   const running = review !== null && (review.status === 'pending' || review.status === 'running')
   const done = review !== null && review.status === 'done'
   const stated = review ? review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting').length : 0
@@ -42,12 +44,14 @@ export function SummaryStrip({ review, state }: Props) {
       value: done ? (review.findings.length === 0 ? (review.complete ? 'None' : '0') : parts({ High: high, Medium: medium, Low: low })) : pending,
       note: done
         ? review.findings.length === 0
-          ? review.complete
-            ? `found in ${review.categories.length} categories`
-            : 'in the passages graded'
+          ? offRubric
+            ? 'rubric may not apply'
+            : review.complete
+              ? `found in ${review.categories.length} categories`
+              : 'in the passages graded'
           : 'graded from your side'
         : absent,
-      tone: done ? (high > 0 ? 'high' : medium > 0 || !review.complete ? 'warn' : 'ok') : undefined,
+      tone: done ? (high > 0 ? 'high' : medium > 0 || !review.complete || offRubric ? 'warn' : 'ok') : undefined,
     },
     {
       id: 'coverage',

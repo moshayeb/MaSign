@@ -1602,6 +1602,11 @@ a.link:hover {
   color: var(--muted);
 }
 
+/* Document kind (MAS-107): the rubric may not apply to this file */
+.document-kind-note {
+  margin: 0;
+}
+
 /* Coverage / security notice (MAS-104): one line, details on demand */
 .coverage-notice {
   border-radius: 12px;

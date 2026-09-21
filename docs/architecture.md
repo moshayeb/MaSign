@@ -170,4 +170,18 @@ present). The API assembles these into `coverage` on the review and
 key-terms responses; nothing is stored for references — they are computed
 from the chunks on each read.
 
+## Document kind (MAS-107)
+
+`ingestion/document_type.py` — `classify_document(text) -> DocumentKind(kind,
+looks_like, reasons)` — runs on the extracted text in the upload route, by
+rule (regex marker lists, distinct hits counted, thresholds 4 / 3 / 40
+words), and the result is stored on `contracts` as `document_kind`,
+`document_looks_like`, `document_kind_reasons` (migration 009).
+`repository.classify_unclassified_contracts()` runs in `lifespan` after
+`ensure_index_current` and classifies rows with `document_kind IS NULL`
+from their chunks, once. The kind travels on `ContractSummary` (list and
+upload), on `Coverage` (review and key-terms responses) and into the
+Markdown export. Nothing branches on it server-side: it is information for
+the reader, never a gate.
+
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

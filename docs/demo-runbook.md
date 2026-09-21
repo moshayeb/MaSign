@@ -33,7 +33,8 @@ preparation below was done the day before.
 | 10 | Select **Harbor** → Overview | "Different contract, different story: no auto-renewal, net 45 meets our standard, but a three-month termination charge and uncapped customer liability." | 0 |
 | 11 | **Download → Markdown**, open it; then **Print** | "Everything you saw, as a file — same data, nothing added." | 0 |
 | 12 | Show `docs/evaluation/README.md` results table | "Measured, not claimed: retrieval hit@1 0.94 on Qwen3, 0.88 on ModernBERT, 16 Northwind questions, zero calls to compute. Faithfulness and correctness come in Sprint 3 with the judge." | 0 |
-| 13 | Optional, if asked about a scanned PDF | Select **scan-mix.pdf**-style contract: "Not reviewed: page 3 has no text layer" and "Depends on a document not uploaded: Order Form". | 0 |
+| 13 | Optional, if asked "what if I upload something that isn't a contract?" | Select the invoice sample (upload `tests` INVOICE text as `august-invoice.txt` the day before, ≈ 1 call): header says *Likely not a contract — invoice*, the Overview note names the markers, and the clean review reads "rubric may not apply", not "nothing needs attention". "Detected by rule, no model call — and nothing is blocked; you can still ask it questions." | 0 |
+| 14 | Optional, if asked about a scanned PDF | Select **scan-mix.pdf**-style contract: "Not reviewed: page 3 has no text layer" and "Depends on a document not uploaded: Order Form". | 0 |
 
 Steps 6, 7 and 9 are the only paid ones on the day (6 calls). If the budget
 is tight, use the **Ask MaSign** tab's canned questions on a contract that was
