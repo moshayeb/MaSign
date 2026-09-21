@@ -1,7 +1,9 @@
 """MAS-81: every uploaded contract gets a whole-contract risk review."""
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 
 import pytest
 from fastapi.testclient import TestClient
@@ -224,6 +226,33 @@ def test_review_can_be_rerun_for_a_contract_and_is_refused_while_running(db, fak
     refused = client.post(f"/api/contracts/{contract_id}/review")
     assert refused.status_code == 409
     assert "already running" in refused.json()["detail"]
+
+
+def test_concurrent_review_starts_schedule_only_one_job(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, UNLIMITED)
+    entered = Event()
+    release = Event()
+    risk_calls = 0
+
+    def hold_first_job(_: str) -> str:
+        nonlocal risk_calls
+        risk_calls += 1
+        entered.set()
+        assert release.wait(timeout=5), "test did not release the review job"
+        return "[]"
+
+    fake_chat_model.risk_reply = hold_first_job
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, f"/api/contracts/{contract_id}/review")
+        assert entered.wait(timeout=5), "first review did not start"
+        second = pool.submit(client.post, f"/api/contracts/{contract_id}/review")
+        refused = second.result(timeout=5)
+        release.set()
+        accepted = first.result(timeout=5)
+
+    assert accepted.status_code == 202
+    assert refused.status_code == 409
+    assert risk_calls == 1
 
 
 def test_a_contract_uploaded_before_reviews_existed_reports_no_review(db) -> None:

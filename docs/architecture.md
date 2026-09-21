@@ -133,7 +133,9 @@ background task sends all of the contract's chunks through the same
 | failed, model, passages checked, `complete`). It opens its own connection
 because the request's one is closed by the time it runs. `GET
 /api/contracts/{id}/risks` returns the findings grouped by the seven
-categories; `POST .../review` re-runs it (409 while one is running); the
+categories; `POST .../review` atomically claims the review row before it
+schedules the background task, so concurrent requests produce one 202 and
+one 409 rather than two model jobs; the
 contract list carries `risk_status` and `risk_worst_severity`.
 
 ## Key terms (MAS-82)

@@ -200,6 +200,28 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
             return RiskReview(**cursor.fetchone())
 
 
+def claim_risk_review(connection: psycopg.Connection, contract_id: UUID) -> RiskReview | None:
+    """Atomically claim the right to start a review, or return None if active."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO risk_reviews (contract_id, status)
+                VALUES (%s, 'pending')
+                ON CONFLICT (contract_id) DO UPDATE SET
+                    status = 'pending', error = NULL, chunks_checked = 0,
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
+                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
+                    redacted_chunks = '[]'::jsonb, updated_at = now()
+                WHERE risk_reviews.status NOT IN ('pending', 'running')
+                RETURNING *
+                """,
+                (contract_id,),
+            )
+            row = cursor.fetchone()
+    return RiskReview(**row) if row else None
+
+
 def update_risk_review(
     connection: psycopg.Connection,
     contract_id: UUID,
