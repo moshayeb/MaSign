@@ -178,6 +178,18 @@ def test_rebuild_splits_stored_chunks_that_exceed_the_token_limit(
     contract = repository.create_contract(
         db, filename="old.txt", file_type="txt", size_bytes=1, character_count=1, chunks=["0. Intro short.", oversized]
     )
+    old_chunks = repository.list_chunks(db, contract.id)
+    repository.start_risk_review(db, contract.id, status="running")
+    repository.update_risk_review(
+        db, contract.id, status="done", chunks_total=2, chunks_checked=2, complete=True, key_terms_complete=True
+    )
+    repository.replace_risk_findings(
+        db, contract.id, [(old_chunks[1].id, "payment_terms", "Medium", "Late payment risk", "term1")]
+    )
+    repository.replace_key_terms(
+        db, contract.id, [(old_chunks[1].id, "recurring_fee", "EUR 100", "term1", {"amount": 100})]
+    )
+    db.commit()
 
     with caplog.at_level("WARNING"):
         indexed = ensure_index_current(db, fake_embedder, vector_store)
@@ -191,6 +203,13 @@ def test_rebuild_splits_stored_chunks_that_exceed_the_token_limit(
     assert all(c.embedding_id == str(c.id) for c in chunks)
     assert vector_store.count(contract_id=contract.id) == len(chunks)
     assert "exceed" in caplog.text and "old.txt" in caplog.text
+    assert repository.list_risk_findings(db, contract.id) == []
+    assert repository.list_key_terms(db, contract.id) == []
+    review = repository.get_risk_review(db, contract.id)
+    assert review is not None
+    assert (review.status, review.complete, review.key_terms_complete) == ("failed", False, False)
+    assert (review.chunks_total, review.chunks_checked) == (len(chunks), 0)
+    assert review.error == "Contract passages changed. Run the review again."
 
 
 def test_interrupted_rebuild_is_redone_on_the_next_start(
