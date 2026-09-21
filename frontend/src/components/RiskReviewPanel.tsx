@@ -14,6 +14,8 @@ interface Props {
   onSettled?: () => void
   // Opens the contract text at a finding's or key term's passage (MAS-83).
   onShowSource?: (source: SourceRef) => void
+  // Every review this panel reads, so the Ask tab can rank its suggestions (MAS-108).
+  onReview?: (review: RiskReview | null) => void
 }
 
 const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
@@ -22,7 +24,7 @@ const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
 // summary strip, one coverage notice, the key terms and the risk findings.
 // A clean category reads as "reviewed, nothing found" only when every
 // passage was graded — never "not looked at".
-export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource }: Props) {
+export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview }: Props) {
   const [review, setReview] = useState<RiskReview | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error'>('loading')
   const [starting, setStarting] = useState(false)
@@ -34,13 +36,15 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
     try {
       const next = await getContractRisks(contract.contract_id)
       setReview(next)
+      onReview?.(next)
       setState('ready')
     } catch (error) {
       // 404 = uploaded before reviews existed (or the row was removed): offer to run one.
       setState(error instanceof ApiError && error.status === 404 ? 'never' : 'error')
       setReview(null)
+      onReview?.(null)
     }
-  }, [contract.contract_id])
+  }, [contract.contract_id, onReview])
 
   // Read the review once per mount; App keys the panel by contract, so a
   // new contract is a fresh panel rather than stale state to reset.

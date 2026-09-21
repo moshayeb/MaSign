@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Toaster, toast } from 'sonner'
-import { listContracts, type Contract } from './api'
+import { listContracts, type Contract, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
 import { ContractList } from './components/ContractList'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
@@ -10,6 +10,7 @@ import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
 import { Wordmark } from './components/Wordmark'
 import { formatSize, reviewBadge } from './reviewStatus'
+import { suggestQuestions } from './suggestions'
 
 type Tab = 'overview' | 'ask' | 'text'
 const TABS: Tab[] = ['overview', 'ask', 'text']
@@ -68,6 +69,8 @@ export default function App() {
   // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
   const [source, setSource] = useState<SourceRef | null>(null)
   const [draft, setDraft] = useState('')
+  // The selected contract's stored review, as the Overview last read it (MAS-108).
+  const [review, setReview] = useState<RiskReview | null>(null)
   const [tab, setTabState] = useState<Tab>(() => parseHash().tab)
   const setTab = useCallback((next: Tab) => {
     setTabState(next)
@@ -143,6 +146,7 @@ export default function App() {
     })
     setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
     setSource(null)
+    setReview(null)
   }, [setTab])
 
   // A finding or key term was clicked: show the text at that passage (MAS-83/95).
@@ -278,16 +282,26 @@ export default function App() {
                 />
               </div>
               <TabPanel id="overview" active={tab}>
-                <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} onShowSource={showSource} />
+                <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} onShowSource={showSource} onReview={setReview} />
               </TabPanel>
               <TabPanel id="ask" active={tab}>
                 <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
+                {/* Suggested questions, ranked by the review (MAS-108); a click fills the composer, Ask sends it. */}
                 {!asked && (
-                  <div className="examples">
+                  <div className="examples" aria-label="Suggested questions">
                     <span className="muted">Try:</span>
-                    {EXAMPLES.map((example) => (
-                      <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
-                        {example}
+                    {suggestQuestions(review).map((suggestion) => (
+                      <button
+                        key={suggestion.text}
+                        type="button"
+                        className={suggestion.reason ? 'chip ranked' : 'chip'}
+                        title={suggestion.reason ?? undefined}
+                        onClick={() => {
+                          setDraft(suggestion.text)
+                          document.getElementById('question-text')?.focus()
+                        }}
+                      >
+                        {suggestion.text}
                       </button>
                     ))}
                   </div>

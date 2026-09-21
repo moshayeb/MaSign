@@ -95,8 +95,15 @@ the active tab is in the tab order):
 
 - **Overview** — the summary strip, the coverage notice, the Key terms card
   and the Risk review (default).
-- **Ask MaSign** — the composer, example chips, and the answer with
-  citations and per-question flags. Asking a question switches here.
+- **Ask MaSign** — the composer, five suggested questions, and the answer
+  with citations and per-question flags. Asking a question switches here.
+  The suggestions (`src/suggestions.ts`, MAS-108) are a fixed Customer-side
+  set ranked by the stored review — a term the review could not find first
+  (the chip's title says the answer should say "not found"), then terms that
+  deviate from the standard and categories with a High finding; without a
+  finished review the base order shows. A click fills the composer and
+  focuses it; Ask sends it — a chip never spends a call by itself. The chips
+  go once an answer is shown and return when another contract is selected.
 - **Contract text** — the passage reader, always expanded. "Show in
   contract" and passage links switch here with the passage highlighted.
 
