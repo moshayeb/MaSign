@@ -61,7 +61,7 @@ export function AnswerView({ asked, contracts }: Props) {
             <span className="status none">Not in the text</span>
           ) : response.grounded ? (
             <span className="status ok">
-              Grounded · {response.citations.length} passage{response.citations.length === 1 ? '' : 's'}
+              Citations attached · {response.citations.length} passage{response.citations.length === 1 ? '' : 's'}
             </span>
           ) : (
             <span className="status warn">Unverified</span>

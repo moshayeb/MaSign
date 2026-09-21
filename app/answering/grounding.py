@@ -94,15 +94,16 @@ def answer_question(
         )
 
     labels, invalid = _cited_labels(reply, len(hits))
-    # The answer is shown either way; it is only *trusted* (grounded) when it
-    # is complete, cites something, and every reference names a real passage.
-    # Anything else is marked unverified so the UI can flag it and MAS-32 can
-    # count it.
-    grounded = bool(labels) and not invalid and not completion.truncated
+    cited_passages = [hits[label - 1].text for label in labels]
+    unsupported_values = _unsupported_financial_values(reply, cited_passages)
+    # Citation syntax alone cannot prove arbitrary prose. For the concrete
+    # financial values MaSign highlights, require the written value to occur
+    # in a cited passage; otherwise keep showing the answer as unverified.
+    grounded = bool(labels) and not invalid and not completion.truncated and not unsupported_values
     if not grounded:
         logger.warning(
-            "Unverified answer from %s for %r (cited=%s, invalid=%s, truncated=%s): %.120r",
-            model.model_name, question, labels, invalid, completion.truncated, reply,
+            "Unverified answer from %s for %r (cited=%s, invalid=%s, truncated=%s, unsupported_values=%s): %.120r",
+            model.model_name, question, labels, invalid, completion.truncated, unsupported_values, reply,
         )
     return Answer(
         reply,
@@ -139,6 +140,19 @@ def _says_not_found(reply: str) -> bool:
 
 _CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
+# Deterministic claims that can be compared without asking a second model.
+# These deliberately cover the contract values most dangerous to misstate;
+# natural-language entailment remains part of the evaluation suite.
+_FINANCIAL_VALUE = re.compile(
+    r"(?ix)"
+    r"(?:\b(?:EUR|USD|GBP|SEK)\s*\d[\d.,]*|[$€£]\s*\d[\d.,]*|\d[\d.,]*\s*(?:EUR|USD|GBP|SEK)\b)"
+    r"|(?:\b\d+(?:[.,]\d+)?\s*%)"
+    r"|(?:\b\d+(?:[.,]\d+)?\)?\s+(?:business\s+)?(?:days?|weeks?|months?|years?)\b)"
+    r"|(?:\b\d{4}-\d{2}-\d{2}\b)"
+    r"|(?:\b\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b)"
+    r"|(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}\b)"
+)
+
 
 def _cited_labels(reply: str, passages: int) -> tuple[list[int], list[int]]:
     """The [n] labels in the reply, split into real passages (in order of first use) and invalid ones."""
@@ -153,3 +167,10 @@ def _cited_labels(reply: str, passages: int) -> tuple[list[int], list[int]]:
             elif label not in labels:
                 labels.append(label)
     return labels, invalid
+
+
+def _unsupported_financial_values(reply: str, cited_passages: list[str]) -> list[str]:
+    """Return concrete values in the answer that do not occur in a cited passage."""
+    answer_without_citations = _CITATION.sub("", reply)
+    cited_text = "\n".join(cited_passages).casefold()
+    return [match.group(0) for match in _FINANCIAL_VALUE.finditer(answer_without_citations) if match.group(0).casefold() not in cited_text]
