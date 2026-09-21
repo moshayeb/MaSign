@@ -102,15 +102,33 @@ def list_chunks(connection: psycopg.Connection, contract_id: UUID) -> list[Chunk
 
 
 def replace_chunks(connection: psycopg.Connection, contract_id: UUID, texts: list[str]) -> list[Chunk]:
-    """Swap a contract's chunk rows for `texts`, renumbered from 0 (MAS-55)."""
+    """Swap chunk rows and invalidate analysis derived from the old rows."""
     with connection.transaction():
         with connection.cursor() as cursor:
+            # Findings and key terms point at specific chunk rows. Remove them
+            # deliberately before the chunks (their FKs would also cascade),
+            # then make the surviving contract-level review honestly retryable.
+            cursor.execute("DELETE FROM risk_findings WHERE contract_id = %s", (contract_id,))
+            cursor.execute("DELETE FROM key_terms WHERE contract_id = %s", (contract_id,))
             cursor.execute("DELETE FROM chunks WHERE contract_id = %s", (contract_id,))
             cursor.executemany(
                 "INSERT INTO chunks (contract_id, chunk_index, chunk_text) VALUES (%s, %s, %s)",
                 [(contract_id, index, text) for index, text in enumerate(texts)],
             )
             cursor.execute("UPDATE contracts SET chunk_count = %s WHERE id = %s", (len(texts), contract_id))
+            cursor.execute(
+                """
+                UPDATE risk_reviews SET
+                    status = 'failed', chunks_total = %s, chunks_checked = 0,
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
+                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
+                    redacted_chunks = '[]'::jsonb,
+                    error = 'Contract passages changed. Run the review again.',
+                    updated_at = now()
+                WHERE contract_id = %s
+                """,
+                (len(texts), contract_id),
+            )
     return list_chunks(connection, contract_id)
 
 
