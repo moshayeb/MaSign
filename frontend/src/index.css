@@ -35,7 +35,7 @@
   --low: #059669;
   --radius: 16px;
   --radius-sm: 10px;
-  --shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 14px 32px -20px rgba(15, 23, 42, 0.25);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -20px rgba(15, 23, 42, 0.18);
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.55;
@@ -199,8 +199,12 @@ a {
 .content {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
   min-width: 0;
+}
+
+.sidebar {
+  gap: 14px;
 }
 
 .sidebar {
@@ -235,7 +239,7 @@ a {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px 20px;
+  padding: 20px 22px;
 }
 
 .card-header {
@@ -363,12 +367,42 @@ button.chip:hover:not(:disabled) {
 
 /* --- upload ------------------------------------------------------------- */
 
+.card.upload {
+  padding: 12px;
+}
+
+.new-contract {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.new-contract span {
+  font-size: 1.15rem;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.upload-form {
+  margin-top: 10px;
+}
+
+.upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 22px 12px 18px;
+  padding: 18px 12px 14px;
   border: 1.5px dashed var(--line-2);
   border-radius: 12px;
   background: var(--inset);
@@ -468,8 +502,43 @@ button.contract.selected {
 }
 
 .contract-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 6px;
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+.contract-status.ok {
+  color: var(--ok);
+}
+
+.contract-status.warn {
+  color: var(--warn);
+}
+
+.contract-status.running {
+  color: var(--accent);
+}
+
+.contract-search {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--ink);
+  background: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.contract-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 159, 227, 0.16);
 }
 
 .filetype {
@@ -899,65 +968,12 @@ details.others summary {
   min-width: 0;
 }
 
-.review-grid {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
-}
-
-.review-cat {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--inset);
-  border-top-width: 3px;
-}
-
-.review-cat.clean {
-  border-top-color: rgba(16, 185, 129, 0.55);
-}
-
-.review-cat.severity-high {
-  border-top-color: var(--high);
-}
-
-.review-cat.severity-medium {
-  border-top-color: var(--medium);
-}
-
-.review-cat.severity-low {
-  border-top-color: var(--low);
-}
-
-.review-cat-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.review-cat .severity {
-  align-self: flex-start;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 5px;
-  color: #fff;
-}
-
 .risk-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 7px;
+  margin-right: 1px;
   vertical-align: 1px;
   background: var(--muted);
 }
@@ -988,14 +1004,13 @@ details.others summary {
 .risks {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 8px 0 0;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 li.risk {
-  border: 1px solid var(--line);
-  border-left-width: 3px;
+  border-left: 3px solid var(--line-2);
   border-radius: 12px;
   padding: 12px 14px;
   background: var(--inset);
@@ -1060,35 +1075,39 @@ li.risk blockquote {
   white-space: pre-wrap;
 }
 
-/* Key terms card (MAS-82) */
+/* Key terms card (MAS-82, tiles since MAS-104) */
 .terms {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
 }
 
 .term {
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
+  padding: 12px 14px;
   border-radius: 12px;
   background: var(--inset);
-  border-top-width: 3px;
-}
-
-.term.found {
-  border-top-color: rgba(56, 189, 248, 0.6);
+  border-left: 3px solid var(--accent-bright);
 }
 
 .term.conflicting {
-  border-top-color: var(--medium);
+  border-left-color: var(--medium);
+}
+
+.term.deviates {
+  border-left-color: var(--warn);
 }
 
 .term dt {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
   margin: 0 0 4px;
 }
 
@@ -1098,15 +1117,32 @@ li.risk blockquote {
 }
 
 .term-value {
-  font-weight: 600;
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.term-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.term-meta .link {
+  margin-left: 0;
 }
 
 .term-quote {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   padding: 0 0 0 10px;
   border-left: 2px solid var(--line);
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   overflow-wrap: anywhere;
 }
 
@@ -1116,8 +1152,40 @@ li.risk blockquote {
   list-style: none;
 }
 
-.term .status {
-  margin-left: 6px;
+.term .status.tiny {
+  margin-left: 0;
+  letter-spacing: 0.02em;
+}
+
+/* The terms that were not stated (or not checked): one line each, not a tile per term (MAS-104). */
+.terms-missing {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.88rem;
+}
+
+.terms-missing li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.terms-missing-label {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.terms-missing-label::after {
+  content: ':';
+}
+
+.terms-missing-names {
+  color: var(--muted);
 }
 
 /* Contract text reader (MAS-83) */
@@ -1225,6 +1293,7 @@ li.risk blockquote {
 .workspace-title {
   margin: 0;
   font-size: 1.15rem;
+  min-width: 0;
   font-weight: 700;
   color: var(--ink);
   overflow: hidden;
@@ -1297,27 +1366,59 @@ li.risk blockquote {
 
 /* Standard verdicts on key-term tiles (MAS-96) */
 .term-standard {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
+}
+
+.term-standard.deviates {
+  color: var(--warn);
+}
+
+/* Contract header (MAS-104) and download links (MAS-97) */
+.contract-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  min-width: 0;
+  flex-wrap: wrap;
+  padding: 4px 0 6px;
+}
+
+.contract-head-main {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.contract-head .workspace-title {
+  font-size: 1.45rem;
+  letter-spacing: -0.01em;
+}
+
+.contract-meta-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
+  gap: 8px 10px;
+  margin-top: 8px;
 }
 
-.term.found .term-standard.deviates ~ *,
-.term .term-standard.deviates .status {
-  border-color: var(--warn-line);
-}
-
-/* Download links (MAS-97) */
-.workspace-titlebar {
+.contract-head-actions {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.ask-cta {
+  padding: 9px 16px;
+}
+
+@media (max-width: 720px) {
+  .contract-head-actions {
+    align-items: flex-start;
+    width: 100%;
+  }
 }
 
 .downloads {
@@ -1395,8 +1496,8 @@ a.link:hover {
   }
 
   .term,
-  .review-cat,
-  li.risk {
+  li.risk,
+  .summary-tile {
     break-inside: avoid;
   }
 
@@ -1425,7 +1526,7 @@ a.link:hover {
 /* Deadlines strip on the Key terms card (MAS-100) */
 .deadlines {
   list-style: none;
-  margin: 0 0 10px;
+  margin: 14px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1438,7 +1539,6 @@ a.link:hover {
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
   border-left: 3px solid var(--accent-bright);
   border-radius: 12px;
   background: var(--inset);
@@ -1468,4 +1568,154 @@ a.link:hover {
 
 .deadline .status {
   align-self: flex-start;
+}
+
+/* Overview summary strip (MAS-104) */
+.summary-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.summary-tile {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-top: 3px solid var(--accent-bright);
+}
+
+.summary-tile.ok {
+  border-top-color: var(--ok);
+}
+
+.summary-tile.warn {
+  border-top-color: var(--warn);
+}
+
+.summary-tile.high {
+  border-top-color: var(--high);
+}
+
+.summary-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.summary-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.summary-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Coverage / security notice (MAS-104): one line, details on demand */
+.coverage-notice {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 0.88rem;
+}
+
+.coverage-notice.security {
+  border-color: var(--warn-line);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.coverage-notice > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+}
+
+.coverage-notice > summary::-webkit-details-marker {
+  display: none;
+}
+
+.coverage-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+.coverage-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.coverage-line::first-letter {
+  text-transform: uppercase;
+}
+
+.coverage-toggle {
+  flex: none;
+  font-weight: 600;
+  text-decoration: underline;
+  font-size: 0.82rem;
+}
+
+.coverage-notice[open] .coverage-toggle {
+  text-decoration: none;
+}
+
+.coverage-notice .coverage {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--warn-line);
+  border-radius: 0 0 12px 12px;
+  background: transparent;
+}
+
+.coverage-notice:not(.security) .coverage {
+  border-top-color: var(--line);
+  color: var(--text-2);
+}
+
+/* The categories without a finding, as one line (MAS-104) */
+.categories-clean {
+  margin: 14px 0 0;
+}
+
+.categories-clean-lead {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.review .disclaimer {
+  margin-top: 14px;
+}
+
+.downloads .link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-left: 0;
 }

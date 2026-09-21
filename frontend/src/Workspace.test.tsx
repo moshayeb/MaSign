@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -67,7 +67,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask', 'Contract text'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Contract text'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByText('Risk review')).toBeVisible()
     expect(screen.getByLabelText('Ask about the contract')).not.toBeVisible() // mounted, hidden
@@ -92,10 +92,10 @@ describe('contract workspace tabs (MAS-95)', () => {
   it('moves between tabs with the keyboard and keeps the draft question', async () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('tab', { name: 'Ask' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await userEvent.type(screen.getByLabelText('Ask about the contract'), 'What is the fee?')
 
-    screen.getByRole('tab', { name: 'Ask' }).focus()
+    screen.getByRole('tab', { name: 'Ask MaSign' }).focus()
     await userEvent.keyboard('{ArrowRight}')
     expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Contract text' }))
@@ -105,7 +105,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     await userEvent.keyboard('{ArrowRight}') // wraps around
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Ask' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     expect(screen.getByLabelText('Ask about the contract')).toHaveValue('What is the fee?')
   })
 
@@ -116,7 +116,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(await screen.findByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Ask' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     expect(window.location.hash).toBe('#nw/ask')
   })
 
@@ -138,6 +138,21 @@ describe('contract workspace tabs (MAS-95)', () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
     await userEvent.click(within(nav).getByRole('button', { name: 'Print' }))
     expect(print).toHaveBeenCalled()
+  })
+
+  it('shows the contract header with file facts and review state, and the CTA opens the composer (MAS-104)', async () => {
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+
+    const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
+    expect(within(head).getByRole('heading', { level: 1 })).toHaveTextContent('northwind.txt')
+    expect(head).toHaveTextContent('TXT')
+    expect(head).toHaveTextContent('1 B · 2 passages · uploaded')
+    expect(within(head).getByText('Reviewed · High risk')).toHaveClass('status', 'warn')
+
+    await userEvent.click(within(head).getByRole('button', { name: 'Ask MaSign about this contract' }))
+    expect(screen.getByRole('tab', { name: 'Ask MaSign' })).toHaveAttribute('aria-selected', 'true')
+    await waitFor(() => expect(screen.getByLabelText('Ask about the contract')).toHaveFocus())
   })
 
   it('has no API docs link in the header any more', async () => {

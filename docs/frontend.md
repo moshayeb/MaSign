@@ -71,21 +71,32 @@ and no font is needed: every letter is an outline — the owner exported the
 wordmark from Illustrator in Anurati, and the one letter Illustrator left as
 live text (the S) was outlined with fontTools. `frontend/public/brand/` holds
 the font-free colour and white versions for documents.
-Two-column layout: a sticky sidebar (upload drop zone, compact contract rows
-with a file-type tag) and the main column, stacking under 960 px. With no
+Two-column layout: a sticky sidebar and the main column, stacking under
+960 px. Since MAS-104 the sidebar is a **+ New contract** button (the drop
+zone opens under it, or when a file is dropped on the closed card, and closes
+after a successful upload), a search box once there is more than one
+contract, and one line per contract: file-type tag, name, and the review
+state in words (Reviewed · High risk / Not reviewed / Reviewing… / Review
+failed, `reviewStatus.ts`) — size, passage count and date moved to the
+contract header. With no
 contract selected the main column is a landing: headline, the question
 composer (scope pills and Ask inside one bordered box), example questions
 as chips and three feature tiles.
 
 ### Contract workspace tabs (MAS-95)
 
-Selecting a contract replaces the landing with the file name and a tab bar
-(`components/Tabs.tsx`, WAI-ARIA `tablist`/`tab`/`tabpanel`; arrow keys,
-Home and End move, only the active tab is in the tab order):
+Selecting a contract replaces the landing with the contract header
+(MAS-104: file name, type tag, size · passages · upload date, the
+Reviewed / Not reviewed pill read from the contract list, the **Ask MaSign
+about this contract** button that opens the Ask tab with the cursor in the
+composer, and the Download links) and a tab bar (`components/Tabs.tsx`,
+WAI-ARIA `tablist`/`tab`/`tabpanel`; arrow keys, Home and End move, only
+the active tab is in the tab order):
 
-- **Overview** — the Key terms card and the Risk review (default).
-- **Ask** — the composer, example chips, and the answer with citations and
-  per-question flags. Asking a question switches here.
+- **Overview** — the summary strip, the coverage notice, the Key terms card
+  and the Risk review (default).
+- **Ask MaSign** — the composer, example chips, and the answer with
+  citations and per-question flags. Asking a question switches here.
 - **Contract text** — the passage reader, always expanded. "Show in
   contract" and passage links switch here with the passage highlighted.
 
@@ -106,21 +117,39 @@ Verified with headless-Edge screenshots at 1280 px and inside a 400 px
 iframe (headless Edge clamps its own viewport to 492 px, so narrow widths
 must be checked through an iframe).
 
+## Overview (MAS-104)
+
+`RiskReviewPanel` is the Overview: it loads and polls the stored review and
+renders, top to bottom, `SummaryStrip`, `CoverageNotice`, `KeyTermsCard`
+and the Risk review card. The strip is four tiles — Key terms `n of 10`,
+Deviations `n`, Risks `2 High · 1 Medium` (or `None` only when the review
+is complete), Coverage `n of m` passages read (+ withheld) — with "…" while
+the review runs and "—" / "Not reviewed" before one exists, so the strip
+never shows a zero that could read as "nothing wrong". Findings come first
+in the Risk review, worst first, and the categories without a finding are
+one muted line: "No issues found in the 5 other categories: …" when the
+review is complete, "5 other categories: unable to determine — the review
+did not cover every passage" when it is not, "… still being graded…" while
+it runs. There are no green "Nothing found" cards.
+
 ## Key terms (MAS-82)
 
 `KeyTermsCard` renders above the Risk review from the same `RiskReview`
 response (`key_terms`, `key_terms_complete`), so it shares the panel's load
-and polling. One tile per term, always all nine: the value in bold, `·
-passage n`, the verbatim quote, and for `conflicting` an amber pill plus
-"Also stated in passage m" lines. `not_stated` reads "Not stated in the
-reviewed text" and is only sent when the pass completed; `unchecked` reads
-"Not checked" with an amber notice that some passages could not be checked
-— never present absence as a fact the contract states. Pill: `n of 9 stated
-· k of m passages read` (green), `Partly checked` (amber) or `Extracting…`.
+and polling. Since MAS-104 only stated terms get a tile: name in small
+caps, the value prominent, `passage n` link and the standard pill inline,
+the verbatim quote under it, and for `conflicting` an amber tag plus "Also
+stated in passage m" lines. The terms that are `not_stated` share one line
+("Not stated in the reviewed text: One-off fees, Price changes") — only sent
+when the pass completed — and `unchecked` terms another ("Not checked: …")
+with an amber notice that some passages could not be checked — never
+present absence as a fact the contract states. Pill: `n of 10 stated`
+(green, `· k deviate(s)` amber), `n of 10 stated · partly checked` (amber)
+or `Extracting…`.
 
 ### Download and print (MAS-97)
 
-The workspace title bar has plain `<a download>` links to
+The contract header has plain `<a download>` links to
 `/api/contracts/{id}/export.md` and `.csv` (the browser shows the download;
 no toast) and a Print button (`window.print()`). `@media print` in
 `index.css` hides the sidebar, tabs, composer, download links and action
@@ -129,8 +158,7 @@ passage numbers as plain text, and breaks the page between cards.
 
 ### Deadlines (MAS-100)
 
-A `Deadlines` strip at the top of the Key terms card (once the review is
-done): three tiles — Initial term ends · Give notice by · First renewal runs
+A `Deadlines` strip under the key-term tiles (once the review is done): three tiles — Initial term ends · Give notice by · First renewal runs
 to — with the date, the formula (`how`) and, on hover, the terms it was
 computed from; a notice deadline within 90 days gets an amber "in n days"
 pill, a past one "passed"; a tile that cannot be computed shows the reason.
@@ -138,23 +166,29 @@ Dates are compared at local midnight so "in 30 days" is exact.
 
 ### Standard verdicts (MAS-96)
 
-A stated term with a standard shows a pill under its quote — green "Meets
-standard", amber "Deviates" with the detail and the standard, grey "Can't
-compare" when the value is text-only — from `term.standard`; terms without
-a standard show nothing. The card pill adds "· n deviate(s) from your
-standard" and turns amber when n > 0.
+A stated term with a standard shows a pill next to its passage link — green
+"Meets standard", amber "Deviates" with the detail and the standard under
+the quote, grey "Can't compare" when the value is text-only — from
+`term.standard`; terms without a standard show nothing. The card pill adds
+"· n deviate(s)" and turns amber when n > 0; the count is also the
+Deviations tile of the summary strip.
 
 ## Coverage (MAS-84)
 
-`CoverageNote` renders `review.coverage` as an amber list on both the Key
-terms card and the Risk review: "Not reviewed: <ingestion note>", "Not
-graded for risks/key terms — … passages 5, 6", "Withheld from the model —
-passage 12 …", "Depends on a document not uploaded: Order Form (referred to
-in passage 2)". Every passage number is a link into the reader
+`CoverageNotice` (MAS-104) renders `review.coverage` once for the whole
+Overview as one line — "AI instructions detected · 1 passage withheld · 1
+passage read in part · 2 passages not graded · part of the file not
+readable · depends on Order Form (not uploaded) — View details" (amber
+with a shield when the guardrail was involved, grey otherwise) — and the
+`<details>` open to `CoverageNote`, the per-passage list: "Not reviewed:
+<ingestion note>", "Not graded — … passages 5, 6", "Withheld from the
+model — passage 12 …", "Depends on a document not uploaded: Order Form
+(referred to in passage 2)". Every passage number is a link into the reader
 (`onShowSource`, accessible name `Show passage n in contract`). The review
-shows "Reviewed <date> by <model> · n of m passages graded"; a `not_stated`
-key term adds "— may be in <document> (not uploaded)"; the contract list
-shows a *Partly readable* badge whose title is the ingestion notes.
+shows "Reviewed <date> by <model> · n of m passages graded"; the
+"Not stated" line of the key terms adds "— may be in <document> (not
+uploaded)"; the contract list shows a *Partly readable* badge whose title
+is the ingestion notes.
 
 ## Contract text reader (MAS-83)
 

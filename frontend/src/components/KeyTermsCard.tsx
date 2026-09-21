@@ -1,29 +1,27 @@
 import type { Deadline, KeyTermValue, RiskReview } from '../api'
 import type { SourceRef } from './PassageReader'
-import { CoverageNote } from './CoverageNote'
 
 interface Props {
   review: RiskReview
-  filename: string
   onShowSource?: (source: SourceRef) => void
 }
 
 // The financial key terms of the selected contract (MAS-82): what is paid,
 // when, what late payment and leaving cost, how long it binds — each value
-// with the passage that states it. Absence is only called "not stated" when
-// every passage was read; otherwise it is "not checked" (honest-outcomes).
-export function KeyTermsCard({ review, filename, onShowSource }: Props) {
+// with the passage that states it. Since MAS-104 only stated terms get a
+// tile; the terms that are not stated share one line, so an absence costs a
+// few words, not a card. Absence is only called "not stated" when every
+// passage was read; otherwise it is "not checked" (honest-outcomes).
+export function KeyTermsCard({ review, onShowSource }: Props) {
   const running = review.status === 'pending' || review.status === 'running'
-  const found = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
+  const stated = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
+  const notStated = review.key_terms.filter((t) => t.status === 'not_stated')
+  const unchecked = review.key_terms.filter((t) => t.status === 'unchecked')
   const conflicting = review.key_terms.filter((t) => t.status === 'conflicting')
   const deviations = review.key_terms.filter((t) => t.standard?.status === 'deviates').length
   // Documents the text points to but that were not uploaded: a "not stated"
-  // term may live there, so say so next to it (MAS-84).
+  // term may live there, so say so next to the group (MAS-84).
   const external = (review.coverage?.external_references ?? []).map((r) => r.name)
-  const coverage =
-    review.chunks_withheld > 0
-      ? `${review.chunks_checked} of ${review.chunks_total} passages read, ${review.chunks_withheld} withheld`
-      : `${review.chunks_checked} of ${review.chunks_total} passages read`
 
   return (
     <section className="card key-terms" aria-live="polite">
@@ -33,16 +31,18 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
           {running && <span className="status running">Extracting…</span>}
           {!running && review.status === 'done' && review.key_terms_complete && (
             <span className={deviations > 0 ? 'status warn' : 'status ok'}>
-              {found.length} of {review.key_terms.length} stated · {coverage}
-              {deviations > 0 ? ` · ${deviations} deviate${deviations === 1 ? 's' : ''} from your standard` : ''}
+              {stated.length} of {review.key_terms.length} stated
+              {deviations > 0 ? ` · ${deviations} deviate${deviations === 1 ? 's' : ''}` : ''}
             </span>
           )}
-          {!running && review.status === 'done' && !review.key_terms_complete && <span className="status warn">Partly checked · {coverage}</span>}
+          {!running && review.status === 'done' && !review.key_terms_complete && (
+            <span className="status warn">
+              {stated.length} of {review.key_terms.length} stated · partly checked
+            </span>
+          )}
           {review.status === 'failed' && <span className="status warn">Not extracted</span>}
         </h2>
-        {review.model && <span className="muted answer-scope">{review.model}</span>}
       </div>
-      <p className="answer-question muted">{filename}</p>
 
       {review.status === 'done' && !review.key_terms_complete && (
         <p className="badge unverified" role="status">
@@ -62,13 +62,36 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
         </p>
       )}
 
-      {review.coverage && <CoverageNote coverage={review.coverage} subject="key terms" onShowSource={onShowSource} />}
+      {running && stated.length === 0 && <p className="muted small">Reading the passages for fees, deadlines and terms…</p>}
+
+      {stated.length > 0 && (
+        <dl className="terms">
+          {stated.map((term) => (
+            <TermTile key={term.id} term={term} onShowSource={onShowSource} />
+          ))}
+        </dl>
+      )}
+
+      {!running && (notStated.length > 0 || unchecked.length > 0) && (
+        <ul className="terms-missing">
+          {notStated.length > 0 && (
+            <li className="not_stated">
+              <span className="terms-missing-label">Not stated in the reviewed text</span>
+              <span className="terms-missing-names">{notStated.map((t) => t.name).join(', ')}</span>
+              {external.length > 0 && <span className="muted small"> — may be in {external.join(' or ')} (not uploaded)</span>}
+            </li>
+          )}
+          {unchecked.length > 0 && (
+            <li className="unchecked">
+              <span className="terms-missing-label">Not checked</span>
+              <span className="terms-missing-names">{unchecked.map((t) => t.name).join(', ')}</span>
+            </li>
+          )}
+        </ul>
+      )}
+
       {review.deadlines && review.deadlines.length > 0 && review.status === 'done' && <Deadlines deadlines={review.deadlines} />}
-      <dl className="terms">
-        {review.key_terms.map((term) => (
-          <TermRow key={term.id} term={term} running={running} onShowSource={onShowSource} external={external} />
-        ))}
-      </dl>
+
       <p className="muted disclaimer">
         Each value is quoted from the passage named beside it; nothing is inferred. Deadlines are date arithmetic over those values, standards are
         the Customer-side defaults from the rubric (docs/risk-rubric.md), compared by rule — a first read, not legal advice.
@@ -77,76 +100,55 @@ export function KeyTermsCard({ review, filename, onShowSource }: Props) {
   )
 }
 
-function TermRow({
-  term,
-  running,
-  onShowSource,
-  external,
-}: {
-  term: KeyTermValue
-  running: boolean
-  onShowSource?: (source: SourceRef) => void
-  external: string[]
-}) {
-  const stated = term.status === 'found' || term.status === 'conflicting'
+function TermTile({ term, onShowSource }: { term: KeyTermValue; onShowSource?: (source: SourceRef) => void }) {
+  const source = term.source!
+  const verdict = term.standard && term.standard.status !== 'none' ? term.standard : null
   return (
-    <div className={`term ${term.status}`}>
-      <dt>{term.name}</dt>
+    <div className={`term ${term.status}${verdict?.status === 'deviates' ? ' deviates' : ''}`}>
+      <dt>
+        {term.name}
+        {term.status === 'conflicting' && <span className="status warn tiny">Conflicting</span>}
+      </dt>
       <dd>
-        {running && !stated ? (
-          <span className="muted small">…</span>
-        ) : stated && term.source ? (
-          <>
-            <span className="term-value">{term.value}</span>
-            <span className="muted small">
-              {' '}
-              ·{' '}
-              {onShowSource ? (
-                <button
-                  type="button"
-                  className="link"
-                  onClick={() => onShowSource({ chunk_index: term.source!.chunk_index, quote: term.source!.quote })}
-                  aria-label={`Show ${term.name} in contract`}
-                >
-                  passage {term.source.chunk_index + 1}
-                </button>
-              ) : (
-                <>passage {term.source.chunk_index + 1}</>
-              )}
-              {term.status === 'conflicting' && <span className="status warn">Conflicting</span>}
+        <span className="term-value">{term.value}</span>
+        <span className="term-meta muted small">
+          {onShowSource ? (
+            <button
+              type="button"
+              className="link"
+              onClick={() => onShowSource({ chunk_index: source.chunk_index, quote: source.quote })}
+              aria-label={`Show ${term.name} in contract`}
+            >
+              passage {source.chunk_index + 1}
+            </button>
+          ) : (
+            <>passage {source.chunk_index + 1}</>
+          )}
+          {verdict && (
+            <span
+              className={`status ${verdict.status === 'meets' ? 'ok' : verdict.status === 'deviates' ? 'warn' : 'none'}`}
+              title={`Your standard: ${verdict.standard ?? ''}`}
+            >
+              {verdict.status === 'meets' ? 'Meets standard' : verdict.status === 'deviates' ? 'Deviates' : "Can't compare"}
             </span>
-            <blockquote className="term-quote">“{term.source.quote}”</blockquote>
-            {term.standard && term.standard.status !== 'none' && (
-              <p className={`term-standard ${term.standard.status}`} title={`Your standard: ${term.standard.standard ?? ''}`}>
-                <span className={`status ${term.standard.status === 'meets' ? 'ok' : term.standard.status === 'deviates' ? 'warn' : 'none'}`}>
-                  {term.standard.status === 'meets' ? 'Meets standard' : term.standard.status === 'deviates' ? 'Deviates' : "Can't compare"}
-                </span>{' '}
-                <span className="muted small">
-                  {term.standard.status === 'deviates' && term.standard.detail
-                    ? `${term.standard.detail} — your standard: ${term.standard.standard}`
-                    : term.standard.status === 'unknown'
-                      ? `stated, but not as a number the text confirms — your standard: ${term.standard.standard}`
-                      : `your standard: ${term.standard.standard}`}
-                </span>
-              </p>
-            )}
-            {term.others.length > 0 && (
-              <ul className="term-others">
-                {term.others.map((other) => (
-                  <li key={other.chunk_id} className="muted small">
-                    Also stated in passage {other.chunk_index + 1}: “{other.value}”
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : term.status === 'unchecked' ? (
-          <span className="muted small">Not checked</span>
-        ) : (
-          <span className="muted small">
-            Not stated in the reviewed text
-            {external.length > 0 ? ` — may be in ${external.join(' or ')} (not uploaded)` : ''}
-          </span>
+          )}
+        </span>
+        <blockquote className="term-quote">“{source.quote}”</blockquote>
+        {verdict && verdict.status !== 'meets' && (
+          <p className={`term-standard ${verdict.status} muted small`}>
+            {verdict.status === 'deviates' && verdict.detail
+              ? `${verdict.detail} — your standard: ${verdict.standard}`
+              : `stated, but not as a number the text confirms — your standard: ${verdict.standard}`}
+          </p>
+        )}
+        {term.others.length > 0 && (
+          <ul className="term-others">
+            {term.others.map((other) => (
+              <li key={other.chunk_id} className="muted small">
+                Also stated in passage {other.chunk_index + 1}: “{other.value}”
+              </li>
+            ))}
+          </ul>
         )}
       </dd>
     </div>

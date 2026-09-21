@@ -51,9 +51,12 @@ Run `npx vite --port 5199 --strictPort` from `frontend/` (kill node afterwards:
   MAS-79 choice) — colours are `:root` tokens in `index.css`, text-on-white
   uses `--accent #0077b3`, never the raw logo cyan. Do not change the palette
   without the owner's explicit decision.
-- With a contract selected the main column is tabbed (Overview · Ask ·
-  Contract text); in tests, click `getByRole('tab', { name: 'Ask' })` before
-  looking for the composer, and pass a hash like `#nw/text` to open a tab.
+- With a contract selected the main column is a contract header (file facts,
+  Reviewed / Not reviewed pill, "Ask MaSign about this contract") over the
+  tabs Overview · Ask MaSign · Contract text (MAS-104); in tests, click
+  `getByRole('tab', { name: 'Ask MaSign' })` before looking for the composer,
+  and pass a hash like `#nw/text` to open a tab. The upload dropzone is behind
+  "+ New contract": click `getByRole('button', { name: 'New contract' })` first.
 - The brand: `components/Wordmark.tsx` (outlined, font-free); never reintroduce
   a font-dependent SVG. Header logo height is the owner's call (currently 22).
 - Phone width ≈ 400 px must not scroll horizontally: `min-width: 0` on flex

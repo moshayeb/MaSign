@@ -9,6 +9,7 @@ import { PassageReader, type SourceRef } from './components/PassageReader'
 import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
 import { Wordmark } from './components/Wordmark'
+import { formatSize, reviewBadge } from './reviewStatus'
 
 type Tab = 'overview' | 'ask' | 'text'
 const TABS: Tab[] = ['overview', 'ask', 'text']
@@ -54,6 +55,11 @@ const FEATURES = [
     ),
   },
 ]
+
+function formatUploaded(iso: string): string {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
 
 export default function App() {
   const [contracts, setContracts] = useState<Contract[] | null>(null)
@@ -147,6 +153,13 @@ export default function App() {
     },
     [setTab],
   )
+  // The header's CTA (MAS-104): open the Ask tab with the cursor in the composer.
+  const askAbout = useCallback(() => {
+    setTab('ask')
+    requestAnimationFrame(() => document.getElementById('question-text')?.focus())
+  }, [setTab])
+  // The list is what refreshes when a review settles; the selected object may be older.
+  const current = selected ? (contracts?.find((c) => c.contract_id === selected.contract_id) ?? selected) : null
   const answered = useCallback(
     (next: Asked | null) => {
       setAsked(next)
@@ -221,21 +234,37 @@ export default function App() {
           ) : (
             <>
               <div className="workspace-head">
-                <div className="workspace-titlebar">
-                  <h1 className="workspace-title">{selected.filename}</h1>
-                  {/* Plain links: the browser shows the download itself (MAS-97). */}
-                  <nav className="downloads" aria-label="Download the review">
-                    <span className="muted small">Download</span>
-                    <a className="link" href={`/api/contracts/${selected.contract_id}/export.md`} download>
-                      Markdown
-                    </a>
-                    <a className="link" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
-                      CSV
-                    </a>
-                    <button type="button" className="link" onClick={() => window.print()}>
-                      Print
+                {/* The contract header (MAS-104): what this file is and whether it was reviewed. */}
+                <div className="contract-head">
+                  <div className="contract-head-main">
+                    <h1 className="workspace-title">{current!.filename}</h1>
+                    <p className="contract-meta-line">
+                      <span className={`filetype ${current!.file_type.toLowerCase()}`}>{current!.file_type.toUpperCase()}</span>
+                      <span className="muted small">
+                        {formatSize(current!.size_bytes)} · {current!.chunk_count} passage{current!.chunk_count === 1 ? '' : 's'} · uploaded{' '}
+                        {formatUploaded(current!.created_at)}
+                      </span>
+                      <span className={`status ${reviewBadge(current!).tone}`}>{reviewBadge(current!).label}</span>
+                    </p>
+                  </div>
+                  <div className="contract-head-actions">
+                    <button type="button" className="primary ask-cta" onClick={askAbout}>
+                      Ask MaSign about this contract
                     </button>
-                  </nav>
+                    {/* Plain links: the browser shows the download itself (MAS-97). */}
+                    <nav className="downloads" aria-label="Download the review">
+                      <span className="muted small">Download</span>
+                      <a className="link" href={`/api/contracts/${selected.contract_id}/export.md`} download>
+                        Markdown
+                      </a>
+                      <a className="link" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
+                        CSV
+                      </a>
+                      <button type="button" className="link" onClick={() => window.print()}>
+                        Print
+                      </button>
+                    </nav>
+                  </div>
                 </div>
                 <Tabs
                   label="Contract workspace"
@@ -243,7 +272,7 @@ export default function App() {
                   onChange={setTab}
                   tabs={[
                     { id: 'overview', label: 'Overview' },
-                    { id: 'ask', label: 'Ask', hint: asked ? '· answered' : undefined },
+                    { id: 'ask', label: 'Ask MaSign', hint: asked ? '· answered' : undefined },
                     { id: 'text', label: 'Contract text' },
                   ]}
                 />
