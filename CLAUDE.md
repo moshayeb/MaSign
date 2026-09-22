@@ -91,6 +91,12 @@ the passage is read (`redact_passage`); a passage that is nothing but injection
 is withheld whole. Tests wrap the fake model in the same guardrail. Every answer must carry `[n]` citations; uncited answers are
 returned with `grounded: false`, never silently accepted.
 
+The UI follows the same budget rule as the agent (MAS-122): a control that
+reaches the paid model states its cost first (`frontend/src/cost.ts`), a
+re-review asks before re-spending, and a failed *read* of a review is
+recovered with a free retry — never by offering the paid job as the only
+way out.
+
 ## Risk rubric (MAS-15/16)
 
 Seven categories, Customer perspective, High/Medium/Low thresholds live in

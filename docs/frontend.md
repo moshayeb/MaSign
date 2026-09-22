@@ -133,6 +133,24 @@ review is complete, "5 other categories: unable to determine — the review
 did not cover every passage" when it is not, "… still being graded…" while
 it runs. There are no green "Nothing found" cards.
 
+### What costs money (MAS-122)
+
+`src/cost.ts` holds the estimates — `2 * ceil(chunks / 8)` for a review (one
+call per batch of 8 for the risks, one for the key terms), 2 for a question —
+so no number is written twice. Every paid control names its cost before it is
+pressed: the review button reads "Review risks"/"Review again" with
+"≈ 4 model calls" beside it and in its accessible name, and the composer
+says "Each question uses about 2 model calls". **Review again** takes two
+clicks: the first opens an amber confirm ("Run the review again? It grades all
+12 passages from scratch and costs ≈ 4 model calls." / Yes, run it /
+Cancel), because a second review re-spends what the first one cost; a first
+review does not, since nothing has been paid for yet.
+
+When the review cannot be **read** (any failure that is not 404), the panel
+offers **Try again**, which re-reads and costs nothing — never the paid
+button. A transient 503 must not be recoverable only by spending money. 404
+still means "never reviewed" and offers the first, paid review.
+
 ### Document kind (MAS-107)
 
 `kindBadge()` / `rubricMayNotApply()` in `reviewStatus.ts`. The contract
