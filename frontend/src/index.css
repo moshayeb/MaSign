@@ -1602,6 +1602,11 @@ a.link:hover {
   color: var(--muted);
 }
 
+/* A document referenced but never uploaded (MAS-123) */
+.check.missing_document {
+  border-left: 3px solid var(--warn);
+}
+
 /* What a paid action costs, before it is pressed (MAS-122) */
 .cost-hint {
   white-space: nowrap;

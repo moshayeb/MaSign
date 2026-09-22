@@ -22,6 +22,11 @@ export function CoverageNotice({ coverage, onShowSource, ref }: Props) {
   const external = coverage.external_references.map((r) => r.name)
 
   const items: string[] = []
+  // A document the contract leans on but that was never uploaded is a hole in
+  // the review, not a footnote: it leads, and it turns the notice amber (MAS-123).
+  if (external.length > 0) {
+    items.push(`Review may be incomplete — ${joinNames(external)} ${external.length === 1 ? 'was' : 'were'} referenced but not uploaded`)
+  }
   if (withheld + redacted > 0) {
     items.push('AI instructions detected')
     if (withheld > 0) items.push(`${withheld} passage${withheld === 1 ? '' : 's'} withheld`)
@@ -29,15 +34,16 @@ export function CoverageNotice({ coverage, onShowSource, ref }: Props) {
   }
   if (unreadable > 0) items.push(`${unreadable} passage${unreadable === 1 ? '' : 's'} not graded`)
   if (notes > 0) items.push(notes === 1 ? 'part of the file not readable' : `${notes} parts of the file not readable`)
-  if (external.length > 0) items.push(`depends on ${external.join(', ')} (not uploaded)`)
   if (items.length === 0) return null
 
   const security = withheld + redacted > 0
+  // Amber whenever the review is provably incomplete, not only for the guardrail.
+  const warn = security || external.length > 0
   return (
-    <details className={`coverage-notice${security ? ' security' : ''}`} ref={ref}>
+    <details className={`coverage-notice${warn ? ' security' : ''}`} ref={ref}>
       <summary>
         <span className="coverage-icon" aria-hidden="true">
-          {security ? (
+          {warn ? (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
@@ -54,4 +60,10 @@ export function CoverageNotice({ coverage, onShowSource, ref }: Props) {
       <CoverageNote coverage={coverage} onShowSource={onShowSource} />
     </details>
   )
+}
+
+// "Order Form", "Order Form and Schedule 2", "A, B and C".
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join('')
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 }

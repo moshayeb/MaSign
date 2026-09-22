@@ -375,7 +375,10 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(await screen.findByText(/Reviewed .* by claude-sonnet-5 · 9 of 12 passages graded, 1 withheld/)).toBeInTheDocument()
     // One compact notice for the whole Overview (MAS-104), the per-passage list behind "View details".
     const notice = screen.getByText(/AI instructions detected/).closest('details')!
-    expect(notice).toHaveTextContent('AI instructions detected · 1 passage withheld · 1 passage read in part · 2 passages not graded · part of the file not readable · depends on Order Form (not uploaded)')
+    // A missing document leads and makes the notice amber (MAS-123).
+    expect(notice).toHaveTextContent(
+      'Review may be incomplete — Order Form was referenced but not uploaded · AI instructions detected · 1 passage withheld · 1 passage read in part · 2 passages not graded · part of the file not readable',
+    )
     expect(notice).not.toHaveAttribute('open')
     await userEvent.click(within(notice).getByText('View details'))
     expect(notice).toHaveAttribute('open')
