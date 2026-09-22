@@ -319,7 +319,7 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText(/stated, but not as a number the text confirms/)).toBeInTheDocument()
   })
 
-  it('shows the computed deadlines with their formula, and says why one cannot be computed (MAS-100)', async () => {
+  it('shows the computed dates on the timeline, with the formula and the reason one is missing (MAS-100/110)', async () => {
     const soon = new Date()
     soon.setDate(soon.getDate() + 30)
     const iso = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}` // local date
@@ -332,14 +332,21 @@ describe('whole-contract risk review (MAS-81)', () => {
 
     render(<RiskReviewPanel contract={northwind} />)
 
-    const list = await screen.findByRole('list', { name: 'Deadlines' })
+    // The line runs in the order the contract is lived, not the order the review produced.
+    const list = await screen.findByRole('list', { name: 'Contract timeline' })
     const items = within(list).getAllByRole('listitem')
-    expect(items).toHaveLength(3)
-    expect(items[0]).toHaveTextContent('Initial term ends')
-    expect(items[0]).toHaveTextContent('1 Mar 2026 + 36 months − 1 day')
-    expect(items[0]).toHaveAttribute('title', expect.stringContaining('from effective_date, initial_term'))
+    expect(items.map((li) => within(li).getByText(/^(Signed \/ effective|Give notice by|Initial term ends|First renewal runs to|Notice was due)$/).textContent)).toEqual([
+      'Signed / effective',
+      'Give notice by',
+      'Initial term ends',
+      'First renewal runs to',
+    ])
+    expect(items[2]).toHaveTextContent('1 Mar 2026 + 36 months − 1 day')
+    expect(items[2]).toHaveAttribute('title', expect.stringContaining('arithmetic over the key terms, not a quote'))
     expect(within(items[1]).getByText(/in 30 days/)).toBeInTheDocument() // amber: notice within 90 days
-    expect(items[2]).toHaveTextContent('cannot compute: the renewal is stated, but not as a period the text confirms')
+    expect(items[3]).toHaveTextContent('cannot compute: the renewal is stated, but not as a period the text confirms')
+    // The fixture states no effective date, and the timeline says so rather than inventing one.
+    expect(items[0]).toHaveTextContent('cannot compute: not checked') // the fixture's term list has no effective_date at all
   })
 
   it('says "Not checked", never "Not stated", when the key-terms pass did not complete (MAS-82)', async () => {

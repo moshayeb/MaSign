@@ -1,5 +1,6 @@
-import type { Deadline, KeyTermValue, RiskReview } from '../api'
+import type { KeyTermValue, RiskReview } from '../api'
 import type { SourceRef } from './PassageReader'
+import { Timeline } from './Timeline'
 
 interface Props {
   review: RiskReview
@@ -90,7 +91,7 @@ export function KeyTermsCard({ review, onShowSource }: Props) {
         </ul>
       )}
 
-      {review.deadlines && review.deadlines.length > 0 && review.status === 'done' && <Deadlines deadlines={review.deadlines} />}
+      {review.status === 'done' && <Timeline review={review} onShowSource={onShowSource} />}
 
       <p className="muted disclaimer">
         Each value is quoted from the passage named beside it; nothing is inferred. Deadlines are date arithmetic over those values, standards are
@@ -153,45 +154,4 @@ function TermTile({ term, onShowSource }: { term: KeyTermValue; onShowSource?: (
       </dd>
     </div>
   )
-}
-
-const NOTICE_SOON_DAYS = 90
-
-// The dates that follow from the typed terms (MAS-100): arithmetic, shown with
-// the formula and the terms it came from; "cannot compute" says which input
-// is missing rather than leaving a blank.
-function Deadlines({ deadlines }: { deadlines: Deadline[] }) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0) // compare dates, not times
-  return (
-    <ul className="deadlines" aria-label="Deadlines">
-      {deadlines.map((d) => {
-        if (!d.date) {
-          return (
-            <li key={d.id} className="deadline none">
-              <span className="deadline-name">{d.name}</span>
-              <span className="muted small">cannot compute: {d.reason}</span>
-            </li>
-          )
-        }
-        const when = new Date(`${d.date}T00:00:00`)
-        const days = Math.round((when.getTime() - today.getTime()) / 86_400_000)
-        const past = days < 0
-        const soon = d.id === 'notice_deadline' && !past && days <= NOTICE_SOON_DAYS
-        return (
-          <li key={d.id} className={`deadline ${past ? 'past' : soon ? 'soon' : ''}`} title={`${d.how ?? ''} — from ${d.computed_from.join(', ')}`}>
-            <span className="deadline-name">{past ? `${d.name.replace('Give notice by', 'Notice was due')}` : d.name}</span>
-            <strong className="deadline-date">{formatDate(when)}</strong>
-            {soon && <span className="status warn">in {days} day{days === 1 ? '' : 's'}</span>}
-            {past && d.id !== 'term_end' && <span className="status none">passed</span>}
-            <span className="muted small deadline-how">{d.how}</span>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-function formatDate(when: Date): string {
-  return when.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
