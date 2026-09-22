@@ -225,7 +225,9 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(await screen.findByText('Review failed', { selector: '.status' })).toBeInTheDocument()
     expect(screen.getAllByText(/set ANTHROPIC_API_KEY/).length).toBeGreaterThan(0)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Review again' }))
+    // Re-reviewing re-spends what the first run cost, so it is asked for twice (MAS-122).
+    await userEvent.click(screen.getByRole('button', { name: 'Review again — ≈ 4 model calls' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, run it' }))
 
     await waitFor(() => expect(shown).toEqual([['success', 'Risk review started — 12 passages to grade']]))
     expect(fetchMock).toHaveBeenCalledWith('/api/contracts/nw/review', expect.objectContaining({ method: 'POST' }))
@@ -238,7 +240,7 @@ describe('whole-contract risk review (MAS-81)', () => {
     render(<RiskReviewPanel contract={{ ...northwind, risk_status: null }} />)
 
     expect(await screen.findByText('Not reviewed', { selector: '.status' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Review risks' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Review risks — ≈ 4 model calls' })).toBeInTheDocument()
     expect(screen.getByText(/uploaded before whole-contract reviews existed/)).toBeInTheDocument()
   })
 

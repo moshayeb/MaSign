@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { askQuestion, type Contract, type QueryResponse } from '../api'
+import { CALLS_PER_QUESTION } from '../cost'
 
 export interface Asked {
   question: string
@@ -82,6 +83,7 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Pr
             All contracts
           </label>
         </fieldset>
+        <span className="muted small cost-hint ask-cost">Each question uses about {CALLS_PER_QUESTION} model calls</span>
         <button type="submit" className="primary ask" disabled={busy || !draft.trim()}>
           {busy ? 'Asking…' : 'Ask'}
           {!busy && (

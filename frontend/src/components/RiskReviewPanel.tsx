@@ -7,6 +7,7 @@ import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
 import { SummaryStrip } from './SummaryStrip'
 import { rubricMayNotApply } from '../reviewStatus'
+import { reviewCostLabel } from '../cost'
 
 interface Props {
   contract: Contract
@@ -29,6 +30,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error' | 'retrying'>('loading')
   const [pollFailures, setPollFailures] = useState(0)
   const [starting, setStarting] = useState(false)
+  // A second review re-spends what the first one cost, so it is asked for twice (MAS-122).
+  const [confirming, setConfirming] = useState(false)
   // Whether this panel saw the review in flight: only then does settling
   // mean "something changed" for the contract list.
   const sawRunning = useRef(false)
@@ -86,6 +89,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   }, [running, review, load, pollMs, pollFailures, onSettled])
 
   async function start() {
+    setConfirming(false)
     setStarting(true)
     try {
       const started = await toast
@@ -116,6 +120,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const flagged = review ? review.categories.length - clean.length : 0
   // An invoice graded with the contract rubric: say so, and never read a clean review as reassurance (MAS-107).
   const offRubric = rubricMayNotApply(contract)
+  // What pressing the paid button would spend (MAS-122).
+  const cost = reviewCostLabel(review?.chunks_total || contract.chunk_count)
 
   return (
     <>
@@ -167,18 +173,49 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
             {review && review.status === 'failed' && <span className="status warn">Review failed</span>}
           </h2>
           <div className="review-tools">
-            {!running && state !== 'loading' && (
-              <button type="button" className="ghost" onClick={() => void start()} disabled={starting}>
-                {review ? 'Review again' : 'Review risks'}
+            {/* The recovery from a failed read is a re-read, never a paid job (MAS-122). */}
+            {state === 'error' && (
+              <button type="button" className="ghost" onClick={() => void load()}>
+                Try again
               </button>
+            )}
+            {!running && state !== 'loading' && state !== 'error' && !confirming && (
+              <>
+                <span className="muted small cost-hint">{cost}</span>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => (review ? setConfirming(true) : void start())}
+                  disabled={starting}
+                  aria-label={review ? `Review again — ${cost}` : `Review risks — ${cost}`}
+                >
+                  {review ? 'Review again' : 'Review risks'}
+                </button>
+              </>
             )}
           </div>
         </div>
 
+        {confirming && (
+          <p className="badge unverified review-confirm" role="status">
+            Run the review again? It grades all {review?.chunks_total || contract.chunk_count} passages from scratch and costs {cost}.
+            <button type="button" className="ghost" onClick={() => void start()} disabled={starting}>
+              Yes, run it
+            </button>
+            <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </p>
+        )}
         {state === 'never' && (
           <p className="muted">This contract was uploaded before whole-contract reviews existed. Run one to grade every passage with the rubric.</p>
         )}
-        {state === 'error' && <p className="muted">The review could not be loaded. Refresh, or check that the API is running.</p>}
+        {state === 'error' && (
+          <p className="muted">
+            The review could not be read — the API may be down or restarting. <strong>Try again</strong> re-reads it; it does not start a new review, so
+            it costs nothing. Whatever was already graded is still stored.
+          </p>
+        )}
         {state === 'retrying' && review && (
           <p className="badge unverified" role="status">
             Connection interrupted — retrying. Last seen at {review.chunks_checked}/{review.chunks_total || contract.chunk_count} passages.
