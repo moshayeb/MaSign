@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Contract } from '../api'
-import { reviewBadge } from '../reviewStatus'
+import { reviewBadge, rubricMayNotApply } from '../reviewStatus'
 
 interface Props {
   contracts: Contract[] | null // null while the first load is in flight
@@ -63,10 +63,17 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
                         <span className="risk-dot running" />
                       ) : contract.risk_worst_severity && contract.risk_status === 'done' ? (
                         <span className={`risk-dot severity-${contract.risk_worst_severity.toLowerCase()}`} />
+                      ) : contract.risk_status === 'done' && contract.risk_complete === false ? (
+                        <span className="risk-dot severity-medium" />
                       ) : contract.risk_status === 'done' ? (
                         <span className="risk-dot clean" />
                       ) : null}
                       <span className={`contract-status ${badge.tone}`}>{badge.label}</span>
+                      {rubricMayNotApply(contract) && (
+                        <span className="status warn tiny" title={contract.document_kind_reasons?.join(' · ') || 'The file does not read as a commercial contract'}>
+                          {contract.document_kind === 'not_contract' ? 'Not a contract?' : 'Type uncertain'}
+                        </span>
+                      )}
                       {(contract.ingestion_notes?.length ?? 0) > 0 && (
                         <span className="status warn tiny" title={contract.ingestion_notes!.join(' ')}>
                           Partly readable

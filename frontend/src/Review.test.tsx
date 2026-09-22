@@ -170,6 +170,29 @@ describe('whole-contract risk review (MAS-81)', () => {
     ])
   })
 
+  it('keeps polling after a temporary API error and settles once (MAS-118)', async () => {
+    let releaseDone: () => void = () => undefined
+    const doneReady = new Promise<void>((resolve) => (releaseDone = resolve))
+    let calls = 0
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      calls += 1
+      if (calls === 1) return json(200, review({ status: 'running', chunks_checked: 4, complete: false }))
+      if (calls === 2) return json(503, { detail: 'Database temporarily unavailable' })
+      await doneReady
+      return json(200, done)
+    })
+    const onSettled = vi.fn()
+
+    render(<RiskReviewPanel contract={northwind} pollMs={5} onSettled={onSettled} />)
+
+    expect(await screen.findByText(/Reviewing… 4\/12 passages/)).toBeInTheDocument()
+    expect(await screen.findByText(/Connection interrupted — retrying/)).toBeInTheDocument()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    releaseDone()
+    expect(await screen.findByText(/Reviewed · 12 passages/)).toBeInTheDocument()
+    await waitFor(() => expect(onSettled).toHaveBeenCalledTimes(1))
+  })
+
   it('shows "…" in the summary strip while the review runs and "—" before any review (MAS-104)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'running', chunks_checked: 3, complete: false })))
     const { unmount } = render(<RiskReviewPanel contract={northwind} pollMs={100000} />)
@@ -202,7 +225,9 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(await screen.findByText('Review failed', { selector: '.status' })).toBeInTheDocument()
     expect(screen.getAllByText(/set ANTHROPIC_API_KEY/).length).toBeGreaterThan(0)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Review again' }))
+    // Re-reviewing re-spends what the first run cost, so it is asked for twice (MAS-122).
+    await userEvent.click(screen.getByRole('button', { name: 'Review again — ≈ 4 model calls' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, run it' }))
 
     await waitFor(() => expect(shown).toEqual([['success', 'Risk review started — 12 passages to grade']]))
     expect(fetchMock).toHaveBeenCalledWith('/api/contracts/nw/review', expect.objectContaining({ method: 'POST' }))
@@ -215,7 +240,7 @@ describe('whole-contract risk review (MAS-81)', () => {
     render(<RiskReviewPanel contract={{ ...northwind, risk_status: null }} />)
 
     expect(await screen.findByText('Not reviewed', { selector: '.status' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Review risks' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Review risks — ≈ 4 model calls' })).toBeInTheDocument()
     expect(screen.getByText(/uploaded before whole-contract reviews existed/)).toBeInTheDocument()
   })
 

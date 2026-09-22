@@ -1602,6 +1602,45 @@ a.link:hover {
   color: var(--muted);
 }
 
+/* What a paid action costs, before it is pressed (MAS-122) */
+.cost-hint {
+  white-space: nowrap;
+}
+
+.ask-cost {
+  margin-left: auto;
+  padding-right: 10px;
+}
+
+.review-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.review-confirm button {
+  border-color: var(--warn-line);
+  color: var(--warn);
+}
+
+.review-confirm button:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.16);
+}
+
+@media (max-width: 720px) {
+  .ask-cost {
+    margin-left: 0;
+    width: 100%;
+    padding: 0 0 4px;
+  }
+}
+
+/* Document kind (MAS-107): the rubric may not apply to this file */
+.document-kind-note {
+  margin: 0;
+}
+
 /* Coverage / security notice (MAS-104): one line, details on demand */
 .coverage-notice {
   border-radius: 12px;

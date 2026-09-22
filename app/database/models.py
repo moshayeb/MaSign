@@ -17,6 +17,10 @@ class Contract:
     created_at: datetime
     # What ingestion could not read, as sentences for the user (MAS-84).
     ingestion_notes: list[str] = field(default_factory=list)
+    # contract | uncertain | not_contract, by rule (MAS-107); None until classified.
+    document_kind: str | None = None
+    document_looks_like: str | None = None
+    document_kind_reasons: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -69,6 +73,17 @@ class RiskReview:
     withheld_chunks: list[int] = field(default_factory=list)
     # Passages graded minus their injected sentences (MAS-99).
     redacted_chunks: list[int] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RiskSummary:
+    """Small review projection returned with each contract list row."""
+
+    status: str
+    worst_severity: str | None
+    complete: bool
+    chunks_checked: int
+    chunks_total: int
 
 
 @dataclass(frozen=True)

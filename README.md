@@ -86,7 +86,8 @@ curl http://localhost:8000/health
 Then open **http://localhost:8000** — the web UI (built into the image from
 `frontend/`) lets you upload a contract, pick it, and ask questions: the
 answer cites the passages it came from (click a `[n]` to see the quote) and
-is marked *Unverified* when it is not fully backed by them. Every action
+is marked *Unverified* when citations are missing or a concrete financial
+value does not appear in a cited passage. Every action
 reports its outcome in a toast, errors with the API's own message. The
 interactive API docs stay at `/docs`.
 
@@ -119,15 +120,15 @@ Interactive docs at `http://localhost:8000/docs`.
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. |
-| `GET`  | `/api/contracts` | List stored contracts, newest first. |
+| `GET`  | `/api/contracts` | List stored contracts, newest first, with review status, worst severity, completeness, checked/total passage counts, `ingestion_notes`, and the MAS-107 `document_kind` evidence. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
-| `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`). Runs automatically after upload. |
+| `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`, and the `document_kind` of MAS-107). Runs automatically after upload. |
 | `GET`  | `/api/contracts/{contract_id}/search` | `?q=<question>&limit=5` → the passages the question would be answered from, best first, with scores. Retrieval only, no model call (MAS-91). |
 | `GET`  | `/api/contracts/{contract_id}/passages` | Every stored passage of the contract in order (`chunk_id`, `chunk_index`, `text`) — the text behind each citation, finding and key term (MAS-83). |
 | `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
 | `GET`  | `/api/contracts/{contract_id}/export.md` · `export.csv` | The review as a file (MAS-97): Markdown with coverage, the key-terms table (value, standard verdict, passage, quote) and the findings by severity; or CSV with one row per finding and key term. Same data as `/risks` + `/key-terms`; 404 before a review. |
-| `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction (202; 409 while one is running). |
-| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` written only from the retrieved passages, with `[n]` citations resolved in `citations`; `grounded` is false when the answer is "Not found in contract." or cites nothing. `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
+| `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction. The start is atomic: one request gets 202; concurrent attempts get 409 while it runs. |
+| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` with `[n]` citations resolved in `citations`; `grounded` requires valid citations, a complete reply, and every detected money amount, percentage, date and duration to occur in a cited passage. It is false for "Not found in contract.". `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |
 | `GET`  | `/ready` | Readiness: Postgres and Qdrant answer (200) or the failing one is named (503); also reports which chat model is configured. Use this, not `/health`, to know whether requests will succeed. |
 
@@ -242,6 +243,35 @@ of the whole document, so coverage is part of every result:
   are shown as "Depends on a document not uploaded" on both cards, and a key
   term that is *not stated* says "may be in Order Form (not uploaded)". This
   is an unable-to-determine state, not "the contract does not say".
+
+### Is it a contract at all? (MAS-107)
+
+An invoice, a quotation or a requirements document goes through the same
+pipeline and would come back with a clean risk review — reassurance the
+rubric never earned. At upload, `app/ingestion/document_type.py` classifies
+the extracted text **by rule, with no model call**: distinct *contract
+markers* (agreement/contract, parties named, party roles, "shall",
+termination, liability, confidentiality, governing law, effective date,
+signature block, numbered clauses, fees, renewal/notice, warranties) against
+groups of *non-contract markers* (invoice, quotation, requirements document,
+correspondence or notes, CV). ≥ 4 contract markers that outnumber the
+strongest other group → `contract`; ≥ 3 markers of one other group with ≤ 2
+contract markers → `not_contract` (with `document_looks_like`, e.g.
+`invoice`); anything else, including texts under 40 words → `uncertain`.
+The markers that decided it are returned as `document_kind_reasons`
+("Invoice markers: 'Invoice number', 'Amount due', 'Bill to'"), so the UI
+never says "looks like an invoice" without saying why. Stored on the
+contract (migration 009); rows from before the ticket are classified from
+their chunks at the next startup.
+
+**It is a hint, not a gate**: upload, indexing, the background review and
+Q&A all run as before. The UI shows the kind in the contract header and as
+a *Not a contract?* / *Type uncertain* tag in the list, puts a note on the
+Overview that the key terms and risk review may not be meaningful, and
+words a clean review of such a file as "rubric may not apply" rather than
+"nothing needs attention". Limitations, by design: keyword-based and
+English only; a contract pasted into an email, or a quotation with contract
+terms attached, reads as `uncertain`.
 
 ## Prompt-injection guardrail (MAS-90)
 

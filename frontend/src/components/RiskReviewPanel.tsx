@@ -6,6 +6,8 @@ import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
 import { SummaryStrip } from './SummaryStrip'
+import { rubricMayNotApply } from '../reviewStatus'
+import { reviewCostLabel } from '../cost'
 
 interface Props {
   contract: Contract
@@ -27,24 +29,44 @@ const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
 // passage was graded — never "not looked at".
 export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview }: Props) {
   const [review, setReview] = useState<RiskReview | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error' | 'retrying'>('loading')
+  const [pollFailures, setPollFailures] = useState(0)
   const [starting, setStarting] = useState(false)
+  // A second review re-spends what the first one cost, so it is asked for twice (MAS-122).
+  const [confirming, setConfirming] = useState(false)
   // Whether this panel saw the review in flight: only then does settling
   // mean "something changed" for the contract list.
   const sawRunning = useRef(false)
+  const reviewRef = useRef<RiskReview | null>(null)
   const coverageRef = useRef<HTMLDetailsElement>(null)
 
   const load = useCallback(async () => {
     try {
       const next = await getContractRisks(contract.contract_id)
+      reviewRef.current = next
       setReview(next)
       onReview?.(next)
+      setPollFailures(0)
       setState('ready')
     } catch (error) {
       // 404 = uploaded before reviews existed (or the row was removed): offer to run one.
-      setState(error instanceof ApiError && error.status === 404 ? 'never' : 'error')
-      setReview(null)
-      onReview?.(null)
+      if (error instanceof ApiError && error.status === 404) {
+        reviewRef.current = null
+        setReview(null)
+        onReview?.(null)
+        setState('never')
+      } else if (reviewRef.current && ['pending', 'running'].includes(reviewRef.current.status)) {
+        // Keep the last known progress and keep polling. A brief 503 or lost
+        // connection must not make a still-running server job look stopped.
+        // The parent keeps the review it already has (MAS-108 suggestions).
+        setPollFailures((failures) => failures + 1)
+        setState('retrying')
+      } else {
+        reviewRef.current = null
+        setReview(null)
+        onReview?.(null)
+        setState('error')
+      }
     }
   }, [contract.contract_id, onReview])
 
@@ -61,7 +83,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   useEffect(() => {
     if (running) {
       sawRunning.current = true
-      const timer = setTimeout(() => void load(), pollMs)
+      const retryDelay = Math.min(pollMs * 2 ** pollFailures, 30_000)
+      const timer = setTimeout(() => void load(), retryDelay)
       return () => clearTimeout(timer)
     }
     if (review && sawRunning.current) {
@@ -69,9 +92,10 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
       onSettled?.()
     }
     return undefined
-  }, [running, review, load, pollMs, onSettled])
+  }, [running, review, load, pollMs, pollFailures, onSettled])
 
   async function start() {
+    setConfirming(false)
     setStarting(true)
     try {
       const started = await toast
@@ -81,7 +105,9 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           error: (e: Error) => e.message,
         })
         .unwrap()
+      reviewRef.current = started
       setReview(started) // pending: the polling effect takes over
+      setPollFailures(0)
       setState('ready')
     } catch {
       // Already reported by the toast.
@@ -98,15 +124,29 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const findings = review ? [...review.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.chunk_index - b.chunk_index) : []
   const clean = review ? review.categories.filter((c) => !c.worst_severity) : []
   const flagged = review ? review.categories.length - clean.length : 0
+  // An invoice graded with the contract rubric: say so, and never read a clean review as reassurance (MAS-107).
+  const offRubric = rubricMayNotApply(contract)
+  // What pressing the paid button would spend (MAS-122).
+  const cost = reviewCostLabel(review?.chunks_total || contract.chunk_count)
 
   return (
     <>
-      <SummaryStrip review={review} state={state} />
+      <SummaryStrip review={review} state={state} offRubric={offRubric} />
+      {offRubric && (
+        <p className="badge unverified document-kind-note" role="status" title="Keyword-based and English only: a hint, not a verdict.">
+          {contract.document_kind === 'not_contract'
+            ? `This file does not look like a commercial contract${contract.document_looks_like ? ` — it reads like ${aOrAn(contract.document_looks_like)}` : ''}`
+            : 'It is not clear whether this file is a commercial contract'}
+          {contract.document_kind_reasons && contract.document_kind_reasons.length > 0 ? ` (${contract.document_kind_reasons.join('; ')})` : ''}. The key terms
+          and risk review below are graded with the contract rubric and may not be meaningful here; you can still ask questions about the text.
+        </p>
+      )}
       {review?.coverage && <CoverageNotice coverage={review.coverage} onShowSource={onShowSource} ref={coverageRef} />}
       {/* The contract in five facts and the checklist (MAS-105/106/111), before the details. */}
       {review && (
         <BriefCard
           review={review}
+          offRubric={offRubric}
           onShowSource={onShowSource}
           onShowCoverage={() => {
             coverageRef.current?.setAttribute('open', '')
@@ -123,7 +163,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
             {state === 'loading' && <span className="status none">Loading…</span>}
             {state === 'never' && <span className="status none">Not reviewed</span>}
             {state === 'error' && <span className="status warn">Unavailable</span>}
-            {review && running && (
+            {state === 'retrying' && <span className="status warn">Connection interrupted · retrying</span>}
+            {review && running && state !== 'retrying' && (
               <span className="status running">
                 Reviewing… {review.chunks_checked}/{review.chunks_total || contract.chunk_count} passages
               </span>
@@ -138,18 +179,54 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
             {review && review.status === 'failed' && <span className="status warn">Review failed</span>}
           </h2>
           <div className="review-tools">
-            {!running && state !== 'loading' && (
-              <button type="button" className="ghost" onClick={() => void start()} disabled={starting}>
-                {review ? 'Review again' : 'Review risks'}
+            {/* The recovery from a failed read is a re-read, never a paid job (MAS-122). */}
+            {state === 'error' && (
+              <button type="button" className="ghost" onClick={() => void load()}>
+                Try again
               </button>
+            )}
+            {!running && state !== 'loading' && state !== 'error' && !confirming && (
+              <>
+                <span className="muted small cost-hint">{cost}</span>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => (review ? setConfirming(true) : void start())}
+                  disabled={starting}
+                  aria-label={review ? `Review again — ${cost}` : `Review risks — ${cost}`}
+                >
+                  {review ? 'Review again' : 'Review risks'}
+                </button>
+              </>
             )}
           </div>
         </div>
 
+        {confirming && (
+          <p className="badge unverified review-confirm" role="status">
+            Run the review again? It grades all {review?.chunks_total || contract.chunk_count} passages from scratch and costs {cost}.
+            <button type="button" className="ghost" onClick={() => void start()} disabled={starting}>
+              Yes, run it
+            </button>
+            <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </p>
+        )}
         {state === 'never' && (
           <p className="muted">This contract was uploaded before whole-contract reviews existed. Run one to grade every passage with the rubric.</p>
         )}
-        {state === 'error' && <p className="muted">The review could not be loaded. Refresh, or check that the API is running.</p>}
+        {state === 'error' && (
+          <p className="muted">
+            The review could not be read — the API may be down or restarting. <strong>Try again</strong> re-reads it; it does not start a new review, so
+            it costs nothing. Whatever was already graded is still stored.
+          </p>
+        )}
+        {state === 'retrying' && review && (
+          <p className="badge unverified" role="status">
+            Connection interrupted — retrying. Last seen at {review.chunks_checked}/{review.chunks_total || contract.chunk_count} passages.
+          </p>
+        )}
         {review?.status === 'failed' && (
           <p className="badge unverified" role="status">
             The review stopped: {review.error ?? 'unknown error'}. {review.chunks_checked > 0 ? `${review.chunks_checked} of ${review.chunks_total} passages were graded before it failed.` : ''} Run it again.
@@ -214,7 +291,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
                 <span className="categories-clean-lead">
                   {findings.length === 0 ? `Every passage was read against the rubric and nothing was flagged in any of the ${clean.length} categories` : `No issues found in the ${clean.length} other categor${clean.length === 1 ? 'y' : 'ies'}`}
                 </span>
-                : {clean.map((c) => c.name).join(', ')}.
+                : {clean.map((c) => c.name).join(', ')}.{offRubric ? ' The rubric is written for contracts, so this says little about this file.' : ''}
               </>
             ) : (
               <>
@@ -232,6 +309,10 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
       </section>
     </>
   )
+}
+
+function aOrAn(noun: string): string {
+  return `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`
 }
 
 function formatWhen(iso: string): string {

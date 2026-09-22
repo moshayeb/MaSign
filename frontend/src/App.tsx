@@ -9,7 +9,7 @@ import { PassageReader, type SourceRef } from './components/PassageReader'
 import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
 import { Wordmark } from './components/Wordmark'
-import { formatSize, reviewBadge } from './reviewStatus'
+import { formatSize, kindBadge, reviewBadge } from './reviewStatus'
 import { suggestQuestions } from './suggestions'
 
 type Tab = 'overview' | 'ask' | 'text'
@@ -249,6 +249,11 @@ export default function App() {
                         {formatUploaded(current!.created_at)}
                       </span>
                       <span className={`status ${reviewBadge(current!).tone}`}>{reviewBadge(current!).label}</span>
+                      {kindBadge(current!) && (
+                        <span className={`status ${kindBadge(current!)!.tone}`} title={current!.document_kind_reasons?.join(' · ') || undefined}>
+                          {kindBadge(current!)!.label}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="contract-head-actions">

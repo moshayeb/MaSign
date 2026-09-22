@@ -15,8 +15,9 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview
+from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
+from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import ExternalReference, find_external_references
 from app.key_terms.deadlines import compute_deadlines
@@ -127,11 +128,20 @@ class ContractSummary(BaseModel):
     # failed, or None for a contract uploaded before reviews existed.
     risk_status: str | None = None
     risk_worst_severity: str | None = None
+    risk_complete: bool | None = None
+    risk_chunks_checked: int | None = None
+    risk_chunks_total: int | None = None
     # What ingestion could not read (MAS-84): shown as "Not reviewed: …".
     ingestion_notes: list[str] = []
+    # Is it a commercial contract at all (MAS-107)? contract | uncertain |
+    # not_contract, by rule; None for a row not yet classified. `looks_like`
+    # names the other document type the markers point to ("invoice").
+    document_kind: str | None = None
+    document_looks_like: str | None = None
+    document_kind_reasons: list[str] = []
 
     @classmethod
-    def from_model(cls, contract: Contract, review: tuple[str, str | None] | None = None) -> "ContractSummary":
+    def from_model(cls, contract: Contract, review: RiskSummary | None = None) -> "ContractSummary":
         return cls(
             contract_id=contract.id,
             filename=contract.filename,
@@ -141,9 +151,15 @@ class ContractSummary(BaseModel):
             chunk_count=contract.chunk_count,
             status=contract.status,
             created_at=contract.created_at,
-            risk_status=review[0] if review else None,
-            risk_worst_severity=review[1] if review else None,
+            risk_status=review.status if review else None,
+            risk_worst_severity=review.worst_severity if review else None,
+            risk_complete=review.complete if review else None,
+            risk_chunks_checked=review.chunks_checked if review else None,
+            risk_chunks_total=review.chunks_total if review else None,
             ingestion_notes=list(contract.ingestion_notes),
+            document_kind=contract.document_kind,
+            document_looks_like=contract.document_looks_like,
+            document_kind_reasons=list(contract.document_kind_reasons),
         )
 
 
@@ -258,10 +274,18 @@ class Coverage(BaseModel):
     ingestion_notes: list[str]
     # Documents the text depends on that are not part of the upload.
     external_references: list[ExternalReferenceOut]
+    # Whether the file reads as a commercial contract at all (MAS-107): the
+    # rubric's verdicts mean little on an invoice.
+    document_kind: str | None = None
+    document_looks_like: str | None = None
+    document_kind_reasons: list[str] = []
 
     @classmethod
     def build(cls, review: RiskReview, contract: Contract, references: list[ExternalReference]) -> "Coverage":
         return cls(
+            document_kind=contract.document_kind,
+            document_looks_like=contract.document_looks_like,
+            document_kind_reasons=list(contract.document_kind_reasons),
             chunks_total=review.chunks_total,
             chunks_checked=review.chunks_checked,
             unreadable_passages=sorted(review.unreadable_chunks),
@@ -433,6 +457,8 @@ async def upload_contract(
         character_count=len(text),
         chunks=chunks,
         ingestion_notes=document.notes,
+        # By rule, no model call: is this a contract at all (MAS-107)? Nothing is blocked on it.
+        document_kind=classify_document(text),
     )
 
     # A contract without vectors can never be searched, so if indexing fails
@@ -453,7 +479,10 @@ async def upload_contract(
     background_tasks.add_task(run_review_in_background, contract.id, chat_model)
 
     return UploadContractResponse(
-        **ContractSummary.from_model(contract, ("pending", None)).model_dump(),
+        **ContractSummary.from_model(
+            contract,
+            RiskSummary("pending", None, False, 0, contract.chunk_count),
+        ).model_dump(),
         content_type=upload.content_type,
         max_size_bytes=MAX_UPLOAD_BYTES,
     )
@@ -605,10 +634,9 @@ def review_contract_risks(
     """(Re)run the whole-contract risk review; poll GET .../risks for the result."""
     if repository.get_contract(db, contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    current = repository.get_risk_review(db, contract_id)
-    if current is not None and current.status in ("pending", "running"):
+    review = repository.claim_risk_review(db, contract_id)
+    if review is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A risk review of this contract is already running.")
-    review = repository.start_risk_review(db, contract_id)
     db.commit()  # the task's own connection must see the pending row
     background_tasks.add_task(run_review_in_background, contract_id, chat_model)
     return _review_response(db, review)

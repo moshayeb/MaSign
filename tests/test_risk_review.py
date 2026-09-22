@@ -1,13 +1,16 @@
 """MAS-81: every uploaded contract gets a whole-contract risk review."""
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.answering.llm import ChatModelError
 from app.database import repository
+from app.database.session import get_connection
 from app.main import app
 from app.risk_analysis.review import review_contract
 from tests.conftest import FakeChatModel
@@ -115,6 +118,43 @@ def test_an_unreadable_batch_makes_the_review_incomplete_not_empty(db, fake_chat
     assert (review.status, review.complete, review.chunks_checked, review.chunks_total) == ("done", False, 1, 2)
 
 
+def test_review_progress_is_visible_from_another_connection(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, FEES, UNLIMITED)
+    observed: list[tuple[str, int, int]] = []
+
+    def observe_progress(_: str) -> str:
+        with get_connection() as observer:
+            review = repository.get_risk_review(observer, contract_id)
+            assert review is not None
+            observed.append((review.status, review.chunks_checked, review.chunks_total))
+        return "[]"
+
+    fake_chat_model.risk_reply = observe_progress
+    review_contract(contract_id, fake_chat_model, batch_size=1)
+
+    # The second risk batch sees the first one's committed progress rather
+    # than the old pending row.
+    assert observed[0] == ("running", 0, 2)
+    assert observed[1] == ("running", 1, 2)
+
+
+def test_startup_recovery_makes_interrupted_reviews_retryable(db) -> None:
+    pending_id = _stored(db, FEES)
+    running_id = _stored(db, UNLIMITED)
+    repository.start_risk_review(db, pending_id)
+    repository.start_risk_review(db, running_id, status="running")
+    db.commit()
+
+    assert repository.fail_interrupted_risk_reviews(db) == 2
+    db.commit()
+
+    for contract_id in (pending_id, running_id):
+        recovered = repository.get_risk_review(db, contract_id)
+        assert recovered is not None
+        assert recovered.status == "failed" and recovered.complete is False
+        assert recovered.error == "Review interrupted by a server restart. Run it again."
+
+
 def test_rerunning_a_review_replaces_the_old_findings(db, fake_chat_model: FakeChatModel) -> None:
     contract_id = _upload(UNLIMITED)
     fake_chat_model.risk_reply = json.dumps([_finding("liability", "High", 1, "shall be unlimited")])
@@ -168,6 +208,24 @@ def test_upload_starts_a_review_and_the_result_is_readable(db, fake_chat_model: 
 
     listed = {c["contract_id"]: c for c in client.get("/api/contracts").json()}[contract_id]
     assert (listed["risk_status"], listed["risk_worst_severity"]) == ("done", "High")
+    assert (listed["risk_complete"], listed["risk_chunks_checked"], listed["risk_chunks_total"]) == (
+        True,
+        body["chunks_checked"],
+        body["chunks_total"],
+    )
+
+
+def test_contract_list_reports_an_incomplete_review(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, FEES, UNLIMITED)
+    repository.start_risk_review(db, contract_id, status="running")
+    repository.update_risk_review(db, contract_id, status="done", chunks_total=2, chunks_checked=1, complete=False)
+    db.commit()
+
+    listed = {c["contract_id"]: c for c in client.get("/api/contracts").json()}[str(contract_id)]
+
+    assert listed["risk_status"] == "done"
+    assert listed["risk_complete"] is False
+    assert (listed["risk_chunks_checked"], listed["risk_chunks_total"]) == (1, 2)
 
 
 def test_review_can_be_rerun_for_a_contract_and_is_refused_while_running(db, fake_chat_model: FakeChatModel) -> None:
@@ -186,6 +244,33 @@ def test_review_can_be_rerun_for_a_contract_and_is_refused_while_running(db, fak
     refused = client.post(f"/api/contracts/{contract_id}/review")
     assert refused.status_code == 409
     assert "already running" in refused.json()["detail"]
+
+
+def test_concurrent_review_starts_schedule_only_one_job(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, UNLIMITED)
+    entered = Event()
+    release = Event()
+    risk_calls = 0
+
+    def hold_first_job(_: str) -> str:
+        nonlocal risk_calls
+        risk_calls += 1
+        entered.set()
+        assert release.wait(timeout=5), "test did not release the review job"
+        return "[]"
+
+    fake_chat_model.risk_reply = hold_first_job
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, f"/api/contracts/{contract_id}/review")
+        assert entered.wait(timeout=5), "first review did not start"
+        second = pool.submit(client.post, f"/api/contracts/{contract_id}/review")
+        refused = second.result(timeout=5)
+        release.set()
+        accepted = first.result(timeout=5)
+
+    assert accepted.status_code == 202
+    assert refused.status_code == 409
+    assert risk_calls == 1
 
 
 def test_a_contract_uploaded_before_reviews_existed_reports_no_review(db) -> None:

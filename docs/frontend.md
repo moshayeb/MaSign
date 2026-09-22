@@ -112,12 +112,14 @@ hash as `#<contract_id>/<tab>`: a refresh or a pasted link restores both
 (applied when the first contract list arrives; an unknown id is ignored).
 Selecting a different contract resets to Overview and clears the answer
 (MAS-86). The header has no "API docs" link any more; `/docs` still works.
+The contract list uses amber **Partly reviewed** when the backend reports a
+done but incomplete review; only complete clean reviews receive green.
 Card titles are `white-space: nowrap` with `flex-wrap`, so a long status
 pill drops under the title whole at phone width instead of breaking the
 title.
 Cards are `.card` (never bare `section`, so the toast container stays
 invisible); section titles are small uppercase labels. The answer card
-carries a status pill — green "Grounded · n passages", amber "Unverified",
+carries a status pill — green "Citations attached · n passages", amber "Unverified",
 grey "Not in the text" — and citation cards with a numbered bubble.
 Verified with headless-Edge screenshots at 1280 px and inside a 400 px
 iframe (headless Edge clamps its own viewport to 492 px, so narrow widths
@@ -137,6 +139,43 @@ one muted line: "No issues found in the 5 other categories: …" when the
 review is complete, "5 other categories: unable to determine — the review
 did not cover every passage" when it is not, "… still being graded…" while
 it runs. There are no green "Nothing found" cards.
+
+### What costs money (MAS-122)
+
+`src/cost.ts` holds the estimates — `2 * ceil(chunks / 8)` for a review (one
+call per batch of 8 for the risks, one for the key terms), 2 for a question —
+so no number is written twice. Every paid control names its cost before it is
+pressed: the review button reads "Review risks"/"Review again" with
+"≈ 4 model calls" beside it and in its accessible name, and the composer
+says "Each question uses about 2 model calls". **Review again** takes two
+clicks: the first opens an amber confirm ("Run the review again? It grades all
+12 passages from scratch and costs ≈ 4 model calls." / Yes, run it /
+Cancel), because a second review re-spends what the first one cost; a first
+review does not, since nothing has been paid for yet.
+
+When the review cannot be **read** (any failure that is not 404), the panel
+offers **Try again**, which re-reads and costs nothing — never the paid
+button. A transient 503 must not be recoverable only by spending money. 404
+still means "never reviewed" and offers the first, paid review.
+
+### Document kind (MAS-107)
+
+`kindBadge()` / `rubricMayNotApply()` in `reviewStatus.ts`. The contract
+header gets a pill — grey *Commercial contract*, amber *Document type
+uncertain* or *Likely not a contract — invoice* — whose tooltip is the
+markers behind it; the sidebar row a small *Not a contract?* / *Type
+uncertain* tag; a row not yet classified shows nothing. For the two
+non-contract kinds the Overview opens with an amber note ("This file does
+not look like a commercial contract — it reads like an invoice (Invoice
+markers: …). The key terms and risk review below are graded with the
+contract rubric and may not be meaningful here; you can still ask questions
+about the text.") and the clean states stop reassuring: the Risks tile says
+"rubric may not apply" in amber, the Before-you-sign pill reads *Rubric may
+not apply* with "No contract risks or deviations were flagged — but this
+file does not read as a commercial contract, so the rubric says little
+about it", and the categories line ends "The rubric is written for
+contracts, so this says little about this file." Nothing is hidden or
+blocked.
 
 ### Before you sign (MAS-105/106/111)
 
@@ -238,10 +277,13 @@ Selecting a contract mounts `RiskReviewPanel` (keyed by contract id) which
 reads `GET /api/contracts/{id}/risks` and, while the status is pending or
 running, re-reads it every 2 s (`pollMs`, shortened in tests). It shows a
 status pill (Reviewing… n/m passages · Reviewed · Partly reviewed · Review
-failed · Not reviewed), the seven categories with their worst severity or
-"Nothing found", the findings with reason and quoted clause, and a
+failed · Not reviewed), each category's result or an explicit
+unable-to-determine state, the findings with reason and quoted clause, and a
 Review risks / Review again button that posts to `.../review` inside
 `toast.promise` (rule 1). A failed review shows the API's `error` verbatim.
+A temporary polling failure keeps the last progress visible, says
+**Connection interrupted — retrying**, and retries with exponential backoff
+capped at 30 seconds; only a 404 becomes Not reviewed.
 When a review settles after being seen running, the panel calls `onSettled`
 so the contract list refreshes its coloured dot (worst severity, pulsing
 while running, green when reviewed clean).

@@ -81,8 +81,9 @@ system prompt allows only those passages and demands a `[n]` after every
 factual sentence, and the model must answer `NOT_FOUND` when they do not
 cover the question — which the API returns as the fixed "Not found in
 contract." An empty retrieval never reaches the model. Citations in the reply
-are parsed and resolved to the chunks; an answer that cites nothing is still
-returned but `grounded: false`, so the UI can flag it and MAS-32 can count it.
+are parsed and resolved to the chunks. `grounded` also requires each detected
+money amount, percentage, date and duration in the answer to occur in a cited
+passage; an answer that fails either check is returned as unverified.
 
 ## Model calls and the prompt-injection guardrail (MAS-90)
 
@@ -133,8 +134,11 @@ background task sends all of the contract's chunks through the same
 | failed, model, passages checked, `complete`). It opens its own connection
 because the request's one is closed by the time it runs. `GET
 /api/contracts/{id}/risks` returns the findings grouped by the seven
-categories; `POST .../review` re-runs it (409 while one is running); the
-contract list carries `risk_status` and `risk_worst_severity`.
+categories; `POST .../review` atomically claims the review row before it
+schedules the background task, so concurrent requests produce one 202 and
+one 409 rather than two model jobs; the contract list carries `risk_status`,
+`risk_worst_severity`, `risk_complete` and checked/total passage counts, so
+an incomplete result cannot look clean.
 
 ## Key terms (MAS-82)
 
@@ -169,5 +173,19 @@ Statement of Work, SLA, Purchase Order; a heading at a line start counts as
 present). The API assembles these into `coverage` on the review and
 key-terms responses; nothing is stored for references — they are computed
 from the chunks on each read.
+
+## Document kind (MAS-107)
+
+`ingestion/document_type.py` — `classify_document(text) -> DocumentKind(kind,
+looks_like, reasons)` — runs on the extracted text in the upload route, by
+rule (regex marker lists, distinct hits counted, thresholds 4 / 3 / 40
+words), and the result is stored on `contracts` as `document_kind`,
+`document_looks_like`, `document_kind_reasons` (migration 009).
+`repository.classify_unclassified_contracts()` runs in `lifespan` after
+`ensure_index_current` and classifies rows with `document_kind IS NULL`
+from their chunks, once. The kind travels on `ContractSummary` (list and
+upload), on `Coverage` (review and key-terms responses) and into the
+Markdown export. Nothing branches on it server-side: it is information for
+the reader, never a gate.
 
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

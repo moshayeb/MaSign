@@ -15,7 +15,9 @@ from app.answering.llm import ChatModel, ChatModelError, UnconfiguredChatModel, 
 from app.api.routes import router as api_router
 from app.guardrails.prompt_injection import PromptInjectionError
 from app.api import dependencies
+from app.database import repository
 from app.database.migrations import run_migrations
+from app.database import repository
 from app.database.session import get_connection
 from app.retrieval.embeddings import EmbeddingServiceError, get_embedder
 from app.retrieval.indexing import ensure_index_current
@@ -41,6 +43,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         applied = run_migrations()
         logger.info("Database ready (%d migration(s) applied)", len(applied))
 
+        # BackgroundTasks live only in this server process. Any active review
+        # row found during startup belongs to a process that can no longer
+        # finish it, so make it visibly failed and retryable (MAS-114).
+        with get_connection() as db:
+            interrupted = repository.fail_interrupted_risk_reviews(db)
+        if interrupted:
+            logger.warning("Recovered %d interrupted risk review(s)", interrupted)
+
         # Load the embedding model now (first load downloads it; the HTTP
         # backend contacts its service) and make sure the Qdrant collection
         # was built by this very embedder — rebuilding it from the stored
@@ -55,6 +65,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             raise
         with get_connection() as db:
             ensure_index_current(db, embedder, get_vector_store())
+            # Rows from before MAS-107 get their document kind from the stored chunks: by rule, free.
+            classified = repository.classify_unclassified_contracts(db)
+            if classified:
+                logger.info("Document kind set for %d contract(s) uploaded before it existed", classified)
         logger.info("Embeddings ready: %s (%d dims)", embedder.model_name, embedder.dimension)
         # Only reads the configuration (and warns if no API key is set); the
         # first real call to the model happens on the first question.

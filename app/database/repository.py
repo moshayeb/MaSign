@@ -5,7 +5,8 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import Chunk, Contract, KeyTermRow, RiskFindingRow, RiskReview, VectorIndex
+from app.database.models import Chunk, Contract, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
+from app.ingestion.document_type import DocumentKind, classify_document
 
 
 def create_contract(
@@ -17,17 +18,29 @@ def create_contract(
     character_count: int,
     chunks: list[str],
     ingestion_notes: list[str] | None = None,
+    document_kind: DocumentKind | None = None,
 ) -> Contract:
     """Store a parsed contract together with its chunks in one transaction."""
     with connection.transaction():
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO contracts (filename, file_type, size_bytes, character_count, chunk_count, ingestion_notes)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO contracts (filename, file_type, size_bytes, character_count, chunk_count, ingestion_notes,
+                                       document_kind, document_looks_like, document_kind_reasons)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (filename, file_type, size_bytes, character_count, len(chunks), Jsonb(list(ingestion_notes or []))),
+                (
+                    filename,
+                    file_type,
+                    size_bytes,
+                    character_count,
+                    len(chunks),
+                    Jsonb(list(ingestion_notes or [])),
+                    document_kind.kind if document_kind else None,
+                    document_kind.looks_like if document_kind else None,
+                    Jsonb(list(document_kind.reasons) if document_kind else []),
+                ),
             )
             contract = Contract(**cursor.fetchone())
 
@@ -41,6 +54,23 @@ def create_contract(
                 )
 
     return contract
+
+
+def classify_unclassified_contracts(connection: psycopg.Connection) -> int:
+    """Give a document kind to every contract stored before MAS-107, from its chunks. Returns how many."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id FROM contracts WHERE document_kind IS NULL")
+        ids = [row["id"] for row in cursor.fetchall()]
+    for contract_id in ids:
+        text = "\n\n".join(chunk.chunk_text for chunk in list_chunks(connection, contract_id))
+        kind = classify_document(text)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE contracts SET document_kind = %s, document_looks_like = %s, document_kind_reasons = %s WHERE id = %s",
+                (kind.kind, kind.looks_like, Jsonb(list(kind.reasons)), contract_id),
+            )
+    connection.commit()
+    return len(ids)
 
 
 def get_contract(connection: psycopg.Connection, contract_id: UUID) -> Contract | None:
@@ -72,15 +102,33 @@ def list_chunks(connection: psycopg.Connection, contract_id: UUID) -> list[Chunk
 
 
 def replace_chunks(connection: psycopg.Connection, contract_id: UUID, texts: list[str]) -> list[Chunk]:
-    """Swap a contract's chunk rows for `texts`, renumbered from 0 (MAS-55)."""
+    """Swap chunk rows and invalidate analysis derived from the old rows."""
     with connection.transaction():
         with connection.cursor() as cursor:
+            # Findings and key terms point at specific chunk rows. Remove them
+            # deliberately before the chunks (their FKs would also cascade),
+            # then make the surviving contract-level review honestly retryable.
+            cursor.execute("DELETE FROM risk_findings WHERE contract_id = %s", (contract_id,))
+            cursor.execute("DELETE FROM key_terms WHERE contract_id = %s", (contract_id,))
             cursor.execute("DELETE FROM chunks WHERE contract_id = %s", (contract_id,))
             cursor.executemany(
                 "INSERT INTO chunks (contract_id, chunk_index, chunk_text) VALUES (%s, %s, %s)",
                 [(contract_id, index, text) for index, text in enumerate(texts)],
             )
             cursor.execute("UPDATE contracts SET chunk_count = %s WHERE id = %s", (len(texts), contract_id))
+            cursor.execute(
+                """
+                UPDATE risk_reviews SET
+                    status = 'failed', chunks_total = %s, chunks_checked = 0,
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
+                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
+                    redacted_chunks = '[]'::jsonb,
+                    error = 'Contract passages changed. Run the review again.',
+                    updated_at = now()
+                WHERE contract_id = %s
+                """,
+                (len(texts), contract_id),
+            )
     return list_chunks(connection, contract_id)
 
 
@@ -170,6 +218,28 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
             return RiskReview(**cursor.fetchone())
 
 
+def claim_risk_review(connection: psycopg.Connection, contract_id: UUID) -> RiskReview | None:
+    """Atomically claim the right to start a review, or return None if active."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO risk_reviews (contract_id, status)
+                VALUES (%s, 'pending')
+                ON CONFLICT (contract_id) DO UPDATE SET
+                    status = 'pending', error = NULL, chunks_checked = 0,
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
+                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
+                    redacted_chunks = '[]'::jsonb, updated_at = now()
+                WHERE risk_reviews.status NOT IN ('pending', 'running')
+                RETURNING *
+                """,
+                (contract_id,),
+            )
+            row = cursor.fetchone()
+    return RiskReview(**row) if row else None
+
+
 def update_risk_review(
     connection: psycopg.Connection,
     contract_id: UUID,
@@ -225,6 +295,22 @@ def get_risk_review(connection: psycopg.Connection, contract_id: UUID) -> RiskRe
         cursor.execute("SELECT * FROM risk_reviews WHERE contract_id = %s", (contract_id,))
         row = cursor.fetchone()
     return RiskReview(**row) if row else None
+
+
+def fail_interrupted_risk_reviews(connection: psycopg.Connection) -> int:
+    """Make reviews left active by a previous server process retryable."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE risk_reviews SET
+                    status = 'failed', complete = FALSE,
+                    error = 'Review interrupted by a server restart. Run it again.',
+                    updated_at = now()
+                WHERE status IN ('pending', 'running')
+                """
+            )
+            return cursor.rowcount
 
 
 def replace_risk_findings(
@@ -291,15 +377,24 @@ def list_key_terms(connection: psycopg.Connection, contract_id: UUID) -> list[Ke
         return [KeyTermRow(**row) for row in cursor.fetchall()]
 
 
-def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, tuple[str, str | None]]:
-    """Per contract: review status and the worst severity found, for the contract list."""
+def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, RiskSummary]:
+    """Review status, severity and coverage for each contract list row."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT r.contract_id, r.status,
+            SELECT r.contract_id, r.status, r.complete, r.chunks_checked, r.chunks_total,
                    (SELECT severity FROM risk_findings f WHERE f.contract_id = r.contract_id
                     ORDER BY CASE severity WHEN 'High' THEN 3 WHEN 'Medium' THEN 2 ELSE 1 END DESC LIMIT 1) AS worst
             FROM risk_reviews r
             """
         )
-        return {row["contract_id"]: (row["status"], row["worst"]) for row in cursor.fetchall()}
+        return {
+            row["contract_id"]: RiskSummary(
+                status=row["status"],
+                worst_severity=row["worst"],
+                complete=row["complete"],
+                chunks_checked=row["chunks_checked"],
+                chunks_total=row["chunks_total"],
+            )
+            for row in cursor.fetchall()
+        }
