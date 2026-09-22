@@ -140,6 +140,33 @@ review is complete, "5 other categories: unable to determine — the review
 did not cover every passage" when it is not, "… still being graded…" while
 it runs. There are no green "Nothing found" cards.
 
+### The shell (MAS-125)
+
+The permanent header carries the wordmark alone (height 26); the tagline it
+used to repeat on every screen lives on the landing page, where it is a
+claim rather than furniture. There is no header navigation yet, and the
+`Footer` links only to things that exist — the disclaimer "AI-assisted
+contract review. Verify important terms before signing.", the repository,
+and the version from `src/version.ts` (a test fails if it drifts from
+`package.json`). About / Privacy / Documentation links arrive with those
+pages (MAS-126); a link to a page that does not exist reads as less
+finished than no link.
+
+The engineering-grid background is gone and the blue tint behind the page is
+softer: the app should read as a legal workspace, not a developer tool.
+
+A selected contract has **one** primary button, *Ask MaSign about this
+contract*. Download Markdown, Download CSV and Print sit in an **Actions**
+menu (a `<details>`, so it opens by keyboard and closes on Escape without
+any focus-trap code). *Review again* deliberately stayed in the risk review
+card: it belongs beside the review it re-runs, and moving it would mean
+lifting the review state into `App` — structural work that belongs to
+MAS-126. The third tab is **Sources** (the hash keeps the id `text`, so
+older links still open it); the card inside it is still "Contract text".
+
+The upload card keeps its rectangle (owner decision, twice) with less
+padding and a smaller icon, so it sits quietly above the contract list.
+
 ### Getting around the workspace (MAS-124)
 
 Selecting a contract moves focus to the contract heading (`tabIndex={-1}`,

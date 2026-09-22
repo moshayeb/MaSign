@@ -67,21 +67,21 @@ describe('contract workspace tabs (MAS-95)', () => {
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Contract text'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Sources'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByText('Risk review')).toBeVisible()
     expect(screen.getByLabelText('Ask about the contract')).not.toBeVisible() // mounted, hidden
     expect(window.location.hash).toBe('#nw/overview')
   })
 
-  it('"Show in contract" switches to the Contract text tab at the passage', async () => {
+  it('"Show in contract" switches to the Sources tab at the passage', async () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
     await screen.findByText('Half the fees.')
 
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
 
-    expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
     const panel = screen.getByRole('tabpanel')
     expect(within(panel).getByText('Contract text')).toBeVisible()
     expect(document.getElementById('passage-1')).toHaveClass('highlighted')
@@ -97,8 +97,8 @@ describe('contract workspace tabs (MAS-95)', () => {
 
     screen.getByRole('tab', { name: 'Ask MaSign' }).focus()
     await userEvent.keyboard('{ArrowRight}')
-    expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
-    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Contract text' }))
+    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Sources' }))
     await userEvent.keyboard('{Home}')
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
     await userEvent.keyboard('{End}')
@@ -113,7 +113,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     window.location.hash = '#nw/text'
     render(<App />)
 
-    expect(await screen.findByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
 
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
@@ -127,14 +127,20 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
-  it('offers the review as Markdown and CSV downloads for the selected contract (MAS-97)', async () => {
+  it('keeps the downloads and Print in one Actions menu, leaving Ask MaSign the only primary button (MAS-97/125)', async () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
 
-    const nav = screen.getByRole('navigation', { name: 'Download the review' })
-    expect(within(nav).getByRole('link', { name: 'Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
-    expect(within(nav).getByRole('link', { name: 'CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
-    expect(within(nav).getByRole('link', { name: 'Markdown' })).toHaveAttribute('download')
+    // The links live behind Actions now; the details element is closed until asked.
+    const menu = screen.getByText('Actions').closest('details')!
+    expect(menu).not.toHaveAttribute('open')
+    await userEvent.click(within(menu).getByText('Actions'))
+    expect(menu).toHaveAttribute('open')
+
+    const nav = within(menu).getByRole('navigation', { name: 'Actions for this contract' })
+    expect(within(nav).getByRole('link', { name: 'Download Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
+    expect(within(nav).getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
+    expect(within(nav).getByRole('link', { name: 'Download Markdown' })).toHaveAttribute('download')
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
     await userEvent.click(within(nav).getByRole('button', { name: 'Print' }))
     expect(print).toHaveBeenCalled()
