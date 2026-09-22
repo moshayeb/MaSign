@@ -218,7 +218,14 @@ Deviations tile of the summary strip.
 ## Coverage (MAS-84)
 
 `CoverageNotice` (MAS-104) renders `review.coverage` once for the whole
-Overview as one line — "AI instructions detected · 1 passage withheld · 1
+Overview as one line. Since MAS-123 a document the contract refers to but
+that nobody uploaded **leads** that line and turns the notice amber —
+"Review may be incomplete — Service Level Schedule was referenced but not
+uploaded" — because it is a hole in the review, not a footnote; the same
+document also becomes a "Before you sign" item ("Get Service Level Schedule
+before signing — referred to in passages 4, 8 but not uploaded"), once per
+document however many passages name it. The notice stays quiet grey when the
+only note is an unreadable page. In full, the line reads — "AI instructions detected · 1 passage withheld · 1
 passage read in part · 2 passages not graded · part of the file not
 readable · depends on Order Form (not uploaded) — View details" (amber
 with a shield when the guardrail was involved, grey otherwise) — and the

@@ -146,6 +146,34 @@ describe('buildChecklist (MAS-106/111)', () => {
     expect(items.find((i) => i.kind === 'missing')).toMatchObject({ text: 'Recurring fee not stated', detail: 'may be in Order Form (not uploaded) — ask where it is agreed' })
   })
 
+  it('puts a referenced but not uploaded document on the checklist, once per document (MAS-123)', () => {
+    const clean = TERMS.map((t) => (t.id === 'late_payment' || t.id === 'termination_cost' ? found(t.id, t.name, t.value, 1, 'q') : t))
+    const items = buildChecklist(
+      review({
+        key_terms: clean,
+        deadlines: [],
+        coverage: {
+          chunks_total: 12,
+          chunks_checked: 12,
+          unreadable_passages: [],
+          withheld_passages: [],
+          ingestion_notes: [],
+          external_references: [
+            { name: 'Service Level Schedule', chunk_indexes: [3, 7] },
+            { name: 'Order Form', chunk_indexes: [1] },
+          ],
+        },
+      }),
+      TODAY,
+    )
+    expect(items.map((i) => [i.kind, i.text, i.source?.chunk_index])).toEqual([
+      ['missing_document', 'Get Service Level Schedule before signing', 3],
+      ['missing_document', 'Get Order Form before signing', 1],
+    ])
+    expect(items[0].detail).toBe('referred to in passages 4, 8 but not uploaded, so what it says could not be reviewed')
+    expect(items[1].detail).toBe('referred to in passage 2 but not uploaded, so what it says could not be reviewed')
+  })
+
   it('is empty for a clean, complete review', () => {
     const clean = TERMS.map((t) => (t.id === 'late_payment' || t.id === 'termination_cost' ? found(t.id, t.name, t.value, 1, 'q') : t))
     expect(buildChecklist(review({ key_terms: clean, deadlines: [] }), TODAY)).toEqual([])
@@ -180,7 +208,7 @@ describe('BriefCard', () => {
     const clean = TERMS.map((t) => (t.id === 'late_payment' || t.id === 'termination_cost' ? found(t.id, t.name, t.value, 1, 'q') : t))
     const { unmount } = render(<BriefCard review={review({ key_terms: clean, deadlines: [] })} />)
     expect(screen.getByText('Nothing needs attention')).toHaveClass('status', 'ok')
-    expect(screen.getByText(/no risks flagged, no deviations from your standard, and the important terms are stated/)).toBeInTheDocument()
+    expect(screen.getByText(/no risks flagged, no deviations from your standard, the important terms are stated, and nothing is missing from the upload/)).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Before you sign checklist' })).not.toBeInTheDocument()
     unmount()
 

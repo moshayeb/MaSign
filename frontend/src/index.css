@@ -1602,6 +1602,11 @@ a.link:hover {
   color: var(--muted);
 }
 
+/* A document referenced but never uploaded (MAS-123) */
+.check.missing_document {
+  border-left: 3px solid var(--warn);
+}
+
 /* Document kind (MAS-107): the rubric may not apply to this file */
 .document-kind-note {
   margin: 0;
