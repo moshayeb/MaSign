@@ -140,6 +140,27 @@ review is complete, "5 other categories: unable to determine — the review
 did not cover every passage" when it is not, "… still being graded…" while
 it runs. There are no green "Nothing found" cards.
 
+### Getting around the workspace (MAS-124)
+
+Selecting a contract moves focus to the contract heading (`tabIndex={-1}`,
+no ring for mouse users, a ring under `:focus-visible`), so the keyboard
+follows the selection; when `matchMedia('(max-width: 960px)')` matches — the
+one-column layout, where the sidebar sits above the workspace — the heading
+is also scrolled into view. On a wide screen the page deliberately does not
+move: the workspace is already visible and a page that jumps under the mouse
+is worse than one that stays still.
+
+The heading spells the filename out over as many lines as it needs
+(`overflow-wrap: anywhere`); truncation belongs in the sidebar row, where the
+name is a label rather than the subject of the page.
+
+The four summary tiles are buttons once there is a review to jump into: Key
+terms and Deviations scroll to the key-terms card, Risks to the risk review,
+Coverage to the coverage notice (opening its details) or to the review when
+there is no notice. Each target card takes focus as well as the scroll. A
+tile with nothing behind it yet stays plain text — a dead button is worse
+than no button.
+
 ### What costs money (MAS-122)
 
 `src/cost.ts` holds the estimates — `2 * ceil(chunks / 8)` for a review (one

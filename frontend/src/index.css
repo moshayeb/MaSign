@@ -1266,9 +1266,21 @@ li.risk blockquote {
   min-width: 0;
   font-weight: 700;
   color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* The contract's own heading spells its name out, however long, over as many
+     lines as it needs (MAS-124); the sidebar row is where truncation belongs. */
+  overflow-wrap: anywhere;
+}
+
+/* The heading takes focus after a selection so the keyboard follows; that is
+   not a click target, so only keyboard users see a ring. */
+.workspace-title:focus {
+  outline: none;
+}
+
+.workspace-title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 .tabs {
@@ -1600,6 +1612,35 @@ a.link:hover {
 .summary-note {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+/* The summary tiles are the way into the sections they count (MAS-124) */
+.summary-tile.jump {
+  padding: 0;
+}
+
+.summary-tile.jump button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.summary-tile.jump button:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.summary-tile.jump button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* What a paid action costs, before it is pressed (MAS-122) */

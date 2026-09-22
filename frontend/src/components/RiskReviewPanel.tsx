@@ -5,7 +5,7 @@ import { BriefCard } from './BriefCard'
 import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
-import { SummaryStrip } from './SummaryStrip'
+import { SummaryStrip, type SummaryTarget } from './SummaryStrip'
 import { rubricMayNotApply } from '../reviewStatus'
 import { reviewCostLabel } from '../cost'
 
@@ -39,6 +39,9 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const sawRunning = useRef(false)
   const reviewRef = useRef<RiskReview | null>(null)
   const coverageRef = useRef<HTMLDetailsElement>(null)
+  // Where a summary tile jumps to (MAS-124).
+  const keyTermsRef = useRef<HTMLElement>(null)
+  const reviewCardRef = useRef<HTMLElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -129,9 +132,18 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   // What pressing the paid button would spend (MAS-122).
   const cost = reviewCostLabel(review?.chunks_total || contract.chunk_count)
 
+  // A tile's number is the way into the section that produced it.
+  function jumpTo(target: SummaryTarget) {
+    const element = target === 'key-terms' ? keyTermsRef.current : target === 'coverage' ? coverageRef.current : reviewCardRef.current
+    if (!element) return
+    if (target === 'coverage') element.setAttribute('open', '')
+    element.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    element.focus?.({ preventScroll: true })
+  }
+
   return (
     <>
-      <SummaryStrip review={review} state={state} offRubric={offRubric} />
+      <SummaryStrip review={review} state={state} offRubric={offRubric} onJump={jumpTo} />
       {offRubric && (
         <p className="badge unverified document-kind-note" role="status" title="Keyword-based and English only: a hint, not a verdict.">
           {contract.document_kind === 'not_contract'
@@ -155,8 +167,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
         />
       )}
       {/* The key terms come from the same review row, so the card shares this panel's load and polling (MAS-82). */}
-      {review && <KeyTermsCard review={review} onShowSource={onShowSource} />}
-      <section className="card review" aria-live="polite">
+      {review && <KeyTermsCard review={review} onShowSource={onShowSource} ref={keyTermsRef} />}
+      <section className="card review" aria-live="polite" tabIndex={-1} ref={reviewCardRef}>
         <div className="answer-header">
           <h2>
             Risk review

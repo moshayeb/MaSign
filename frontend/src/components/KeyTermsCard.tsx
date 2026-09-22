@@ -1,9 +1,12 @@
+import type { Ref } from 'react'
 import type { Deadline, KeyTermValue, RiskReview } from '../api'
 import type { SourceRef } from './PassageReader'
 
 interface Props {
   review: RiskReview
   onShowSource?: (source: SourceRef) => void
+  // Lets a summary tile scroll to this card (MAS-124).
+  ref?: Ref<HTMLElement>
 }
 
 // The financial key terms of the selected contract (MAS-82): what is paid,
@@ -12,7 +15,7 @@ interface Props {
 // tile; the terms that are not stated share one line, so an absence costs a
 // few words, not a card. Absence is only called "not stated" when every
 // passage was read; otherwise it is "not checked" (honest-outcomes).
-export function KeyTermsCard({ review, onShowSource }: Props) {
+export function KeyTermsCard({ review, onShowSource, ref }: Props) {
   const running = review.status === 'pending' || review.status === 'running'
   const stated = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
   const notStated = review.key_terms.filter((t) => t.status === 'not_stated')
@@ -24,7 +27,7 @@ export function KeyTermsCard({ review, onShowSource }: Props) {
   const external = (review.coverage?.external_references ?? []).map((r) => r.name)
 
   return (
-    <section className="card key-terms" aria-live="polite">
+    <section className="card key-terms" aria-live="polite" tabIndex={-1} ref={ref}>
       <div className="answer-header">
         <h2>
           Key terms
