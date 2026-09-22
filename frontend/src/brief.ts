@@ -18,7 +18,7 @@ export interface BriefFact {
 
 export interface CheckItem {
   id: string
-  kind: 'finding' | 'deviation' | 'missing' | 'deadline' | 'coverage'
+  kind: 'finding' | 'deviation' | 'missing' | 'missing_document' | 'deadline' | 'coverage'
   severity?: Severity
   text: string
   detail?: string
@@ -201,6 +201,22 @@ export function buildChecklist(review: RiskReview, today = new Date()): CheckIte
         })
       }
     }
+  }
+
+  // A document the text depends on that nobody uploaded: something to fetch
+  // before signing, not only a note above the card (MAS-123). One item per
+  // document, however many passages refer to it.
+  for (const reference of review.coverage?.external_references ?? []) {
+    const [first] = reference.chunk_indexes
+    items.push({
+      id: `document-${reference.name}`,
+      kind: 'missing_document',
+      text: `Get ${reference.name} before signing`,
+      detail: `referred to in ${reference.chunk_indexes.length === 1 ? 'passage' : 'passages'} ${reference.chunk_indexes
+        .map((index) => index + 1)
+        .join(', ')} but not uploaded, so what it says could not be reviewed`,
+      source: first === undefined ? undefined : { chunk_index: first },
+    })
   }
 
   const noticeBy = review.deadlines?.find((d) => d.id === 'notice_deadline')

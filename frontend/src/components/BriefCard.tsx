@@ -76,7 +76,7 @@ export function BriefCard({ review, onShowSource, onShowCoverage, offRubric = fa
             <p className="brief-clean">
               {offRubric
                 ? 'No contract risks or deviations were flagged — but this file does not read as a commercial contract, so the rubric says little about it.'
-                : 'Nothing needs attention: no risks flagged, no deviations from your standard, and the important terms are stated.'}
+                : 'Nothing needs attention: no risks flagged, no deviations from your standard, the important terms are stated, and nothing is missing from the upload.'}
             </p>
           ) : (
             <ul className="checklist" aria-label="Before you sign checklist">
