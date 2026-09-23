@@ -18,3 +18,5 @@ Contract_Analysis_Project_Plan.docx
 .claude/*
 !.claude/skills/
 !.claude/commands/
+!.claude/hooks/
+.claude/hooks/*.log

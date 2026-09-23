@@ -121,19 +121,70 @@ nothing is blocked on it.
 
 ## Agent skills (MAS-72)
 
-`.claude/skills/` holds seven MaSign-specific skills that load in every
+`.claude/skills/` holds eight MaSign-specific skills that load in every
 session here; `.claude/skills/README.md` is the index and
 `docs/agent-skills-hw03/` keeps the five generic Homework-03 originals they
 grew from. Their `description` fields are the triggers, written as this
 project's concrete situations: `masign-ticket-flow` (Jira/git procedure,
-owner's files never staged, connector timeouts → read before retry),
+owner's files never staged, connector timeouts -> read before retry),
 `masign-done` (the exact commands and docs map before "done"),
 `api-spend-guard` (ask before any paid call, with the cost table),
-`honest-outcomes` (unavailable ≠ empty; verify quotes or drop),
+`honest-outcomes` (unavailable != empty; verify quotes or drop),
 `ui-preview` (canned-API screenshots, zero spend), `masign-handoff`
-(`docs/handoffs/`, read the latest at session start) and `decide-carefully`
-(spec into the ticket before code; confirm → attack → conclude for costly
-decisions). When a skill and this file disagree, this file wins; fix the skill.
+(`docs/handoffs/`, read the latest at session start), `decide-carefully`
+(spec into the ticket before code; confirm -> attack -> conclude for costly
+decisions) and `sanity-check` (`/sanity-check`, MAS-127, Homework 4: six
+process/goal questions, each answered in <=80 characters of checkable
+evidence -- a file, a MAS key, a count -- never an adjective; unknown counts
+as a warning, not a pass). When a skill and this file disagree, this file
+wins; fix the skill. `.claude/commands/` mirrors the slash-command-shaped
+ones (currently `sanity-check`) so they also appear in the `/` menu.
+
+## Safety hooks (MAS-127a, Homework 6)
+
+`.claude/hooks/` holds three `PreToolUse` scripts, registered locally in
+`.claude/settings.json` (never committed -- each teammate wires their own
+absolute interpreter/script paths) but the scripts themselves are tracked,
+tested and documented like any other code. Every hook reads one JSON tool
+call on stdin and fails closed: a crash, malformed stdin, or missing
+`tool_name` all become **ask**, never a silent allow (`_common.py`
+`run_hook`). `ask` prints a `permissionDecision` JSON and exits 0 (forces
+the normal approval prompt); `deny` writes to stderr and exits 2 (no way
+through at all).
+
+- `protect_sensitive_files.py` -- asks before `rm`/`mv`/a truncating `>`/
+  `git checkout --`/`git restore`/`git clean -f` touches `CLAUDE.md`,
+  `.gitignore`, `.dockerignore`, `.env`, `.env.example`, or an *existing*
+  `app/database/migrations/*.sql` file (a brand new migration is exempt),
+  and before a Write/Edit/NotebookEdit targets any of them directly. Built
+  after a real incident: a `git reset --hard` once wiped uncommitted
+  CLAUDE.md/.gitignore/.dockerignore edits, recovered only from a dangling
+  stash. Disclosed gap: a one-line interpreter script that opens and
+  overwrites a protected file directly is not pattern-matched -- including
+  this project's own habit of editing CLAUDE.md that way.
+- `block_destructive_sql.py` -- **denies** (hard, exit 2) an unbounded
+  DELETE, or the two whole-table statements this file avoids spelling
+  out verbatim in its own prose (see the hook's docstring for why), when
+  either appears in a Bash command segment whose own program is a database
+  client (psql, python, mysql, sqlite3, or `docker exec ... psql`) or in
+  content a Write/Edit is about to put into a non-documentation file.
+  Documented gap, not a hidden one: SQL built and executed *inside* a
+  program the agent merely runs is invisible to a PreToolUse hook.
+- `block_history_rewrite.py` -- asks before `git push` straight to `main`
+  (explicit, via refspec, or a bare `push` while `main` is checked out),
+  any `--force`/`-f` push to any branch, `reset --hard`, `commit --amend`,
+  `rebase`, `filter-branch`, `reflog expire`, or `gc --prune`.
+
+Every ask/deny is appended to `.claude/hooks/blocked.log` (git-ignored,
+local audit trail). `tests/test_safety_hooks.py` runs each script as a real
+subprocess with the same stdin protocol Claude Code uses -- not just the
+pattern-matching functions in isolation -- and asserts the block actually
+happens; several of its own tests build their SQL fixtures by string
+concatenation rather than as literal text, because once these hooks are
+registered they also govern editing their own test file. Hooks are read at
+session start: a hook added or changed mid-session needs a restart before
+it reliably takes effect everywhere, though this project's own build of
+them took hold immediately in the session that wrote them.
 
 ## Frontend Decision
 
