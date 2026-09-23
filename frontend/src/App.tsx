@@ -8,6 +8,7 @@ import { RiskReviewPanel } from './components/RiskReviewPanel'
 import { PassageReader, type SourceRef } from './components/PassageReader'
 import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
+import { Footer } from './components/Footer'
 import { Wordmark } from './components/Wordmark'
 import { formatSize, kindBadge, reviewBadge } from './reviewStatus'
 import { suggestQuestions } from './suggestions'
@@ -162,6 +163,27 @@ export default function App() {
     setTab('ask')
     requestAnimationFrame(() => document.getElementById('question-text')?.focus())
   }, [setTab])
+  // After a selection the workspace must be where the reader is looking: the
+  // heading takes focus (so the keyboard follows the eye), and on a phone —
+  // where the sidebar sits above the workspace — it is scrolled into view.
+  // On a wide screen the workspace is already visible and the page stays put:
+  // a page that jumps under the mouse is worse than one that does not move.
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  // Seeded with the contract the URL hash names, so a page opened on a link
+  // does not start with a focus ring on its heading: focus follows a
+  // selection the reader made, not the act of arriving.
+  const focused = useRef<string | null>(parseHash().contractId)
+  useEffect(() => {
+    if (!selected || focused.current === selected.contract_id) return
+    focused.current = selected.contract_id
+    const heading = headingRef.current
+    if (!heading) return
+    heading.focus({ preventScroll: true })
+    if (window.matchMedia?.('(max-width: 960px)')?.matches) {
+      heading.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    }
+  }, [selected])
+
   // The list is what refreshes when a review settles; the selected object may be older.
   const current = selected ? (contracts?.find((c) => c.contract_id === selected.contract_id) ?? selected) : null
   const answered = useCallback(
@@ -178,11 +200,8 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/" aria-label="MaSign home">
-            <Wordmark height={22} />
+            <Wordmark height={26} />
           </a>
-          <nav className="topnav">
-            <span className="tagline">Answers from the contract itself — with the clause to prove it.</span>
-          </nav>
         </div>
       </header>
 
@@ -241,7 +260,10 @@ export default function App() {
                 {/* The contract header (MAS-104): what this file is and whether it was reviewed. */}
                 <div className="contract-head">
                   <div className="contract-head-main">
-                    <h1 className="workspace-title">{current!.filename}</h1>
+                    {/* tabIndex -1: focusable from code after a selection, never in the tab order. */}
+                    <h1 className="workspace-title" tabIndex={-1} ref={headingRef}>
+                      {current!.filename}
+                    </h1>
                     <p className="contract-meta-line">
                       <span className={`filetype ${current!.file_type.toLowerCase()}`}>{current!.file_type.toUpperCase()}</span>
                       <span className="muted small">
@@ -260,19 +282,22 @@ export default function App() {
                     <button type="button" className="primary ask-cta" onClick={askAbout}>
                       Ask MaSign about this contract
                     </button>
-                    {/* Plain links: the browser shows the download itself (MAS-97). */}
-                    <nav className="downloads" aria-label="Download the review">
-                      <span className="muted small">Download</span>
-                      <a className="link" href={`/api/contracts/${selected.contract_id}/export.md`} download>
-                        Markdown
-                      </a>
-                      <a className="link" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
-                        CSV
-                      </a>
-                      <button type="button" className="link" onClick={() => window.print()}>
-                        Print
-                      </button>
-                    </nav>
+                    {/* One primary button per screen (MAS-125): the rest live here.
+                        Plain links inside, so the browser shows the download itself (MAS-97). */}
+                    <details className="actions-menu">
+                      <summary aria-label="Actions for this contract">Actions</summary>
+                      <nav className="actions-list" aria-label="Actions for this contract">
+                        <a className="link" href={`/api/contracts/${selected.contract_id}/export.md`} download>
+                          Download Markdown
+                        </a>
+                        <a className="link" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
+                          Download CSV
+                        </a>
+                        <button type="button" className="link" onClick={() => window.print()}>
+                          Print
+                        </button>
+                      </nav>
+                    </details>
                   </div>
                 </div>
                 <Tabs
@@ -282,7 +307,7 @@ export default function App() {
                   tabs={[
                     { id: 'overview', label: 'Overview' },
                     { id: 'ask', label: 'Ask MaSign', hint: asked ? '· answered' : undefined },
-                    { id: 'text', label: 'Contract text' },
+                    { id: 'text', label: 'Sources' },
                   ]}
                 />
               </div>
@@ -320,6 +345,7 @@ export default function App() {
           )}
         </main>
       </div>
+      <Footer />
     </>
   )
 }

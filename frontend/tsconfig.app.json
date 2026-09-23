@@ -6,6 +6,8 @@
     "module": "esnext",
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
+    /* The footer's version test reads package.json (MAS-125). */
+    "resolveJsonModule": true,
     "skipLibCheck": true,
 
     /* Bundler mode */
