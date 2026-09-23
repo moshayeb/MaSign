@@ -1505,51 +1505,144 @@ a.link:hover {
   margin-top: 6px;
 }
 
-/* Deadlines strip on the Key terms card (MAS-100) */
-.deadlines {
-  list-style: none;
-  margin: 14px 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+/* Contract timeline on the Key terms card (MAS-110, replacing the MAS-100
+   deadlines strip): the same computed dates read as a sequence. Horizontal on
+   a laptop, a vertical rule on a phone — one component, one media query. */
+.timeline-wrap h3 {
+  margin: 16px 0 10px;
 }
 
-.deadline {
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  position: relative;
+}
+
+/* The rule the markers sit on. */
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  height: 2px;
+  background: var(--line);
+}
+
+.timeline.undated::before {
+  background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px);
+}
+
+.milestone {
+  position: relative;
+  padding: 18px 10px 0 0;
   min-width: 0;
+}
+
+.milestone-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--line-2);
+}
+
+.milestone.past .milestone-dot {
+  background: var(--line-2);
+  border-color: var(--line-2);
+}
+
+.milestone.next .milestone-dot {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.milestone.soon .milestone-dot {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 4px var(--warn-bg);
+}
+
+.milestone.undated .milestone-dot {
+  border-style: dashed;
+}
+
+.milestone-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--accent-bright);
-  border-radius: 12px;
-  background: var(--inset);
+  min-width: 0;
 }
 
-.deadline.soon {
-  border-left-color: var(--warn);
-}
-
-.deadline.past,
-.deadline.none {
-  border-left-color: var(--line-2);
-}
-
-.deadline-name {
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--muted);
+.milestone-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--muted);
 }
 
-.deadline-date {
-  font-size: 1.05rem;
+.milestone-date {
+  font-size: 1rem;
   color: var(--ink);
+  line-height: 1.3;
 }
 
-.deadline .status {
+.milestone.past .milestone-date {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.milestone-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.milestone-how,
+.milestone-missing {
+  overflow-wrap: anywhere;
+}
+
+.milestone .link {
+  margin-left: 0;
   align-self: flex-start;
+}
+
+@media (max-width: 720px) {
+  .timeline {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    gap: 14px;
+  }
+
+  .timeline::before {
+    left: 5px;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    height: auto;
+  }
+
+  .timeline.undated::before {
+    background: repeating-linear-gradient(180deg, var(--line) 0 6px, transparent 6px 12px);
+  }
+
+  .milestone {
+    padding: 0 0 0 24px;
+  }
+
+  .milestone-dot {
+    top: 3px;
+  }
 }
 
 /* Overview summary strip (MAS-104) */
