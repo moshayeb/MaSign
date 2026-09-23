@@ -223,13 +223,31 @@ no toast) and a Print button (`window.print()`). `@media print` in
 buttons, forces the Overview panels visible in black on white, keeps
 passage numbers as plain text, and breaks the page between cards.
 
-### Deadlines (MAS-100)
+### Timeline (MAS-100 dates, MAS-110 shape)
 
-A `Deadlines` strip under the key-term tiles (once the review is done): three tiles — Initial term ends · Give notice by · First renewal runs
-to — with the date, the formula (`how`) and, on hover, the terms it was
-computed from; a notice deadline within 90 days gets an amber "in n days"
-pill, a past one "passed"; a tile that cannot be computed shows the reason.
-Dates are compared at local midnight so "in 30 days" is exact.
+`components/Timeline.tsx` over `src/timeline.ts`, inside the Key terms card
+(it replaced the flat deadlines strip: the same computed dates, read as a
+sequence). The milestones run in the order the contract is lived — *Signed /
+effective* (the `effective_date` key term, the only one with a passage link,
+because the rest are arithmetic rather than quotes) → *Give notice by* →
+*Initial term ends* → *First renewal runs to*.
+
+A milestone that could not be established keeps its place in the line and
+carries its reason, and the three reasons are kept apart: "not stated in the
+reviewed text" (the pass completed and found nothing), "not checked" (it did
+not complete, so absence proves nothing) and "stated, but not as a date the
+text confirms" (quoted, but the verifier could not read a date out of the
+quote). `buildTimeline` never invents a date, and when no date at all could
+be established the card says so instead of drawing an empty line.
+
+`standings()` compares at local midnight and marks what has passed, the first
+milestone still ahead (`next`), and how many days away each one is; a notice
+deadline within 90 days keeps MAS-100's amber "in n days". When every date is
+in the past the card says that too. The formula (`how`) is the marker's
+tooltip, worded as arithmetic over the key terms, not a quote.
+
+Horizontal on laptop widths (markers on a rule), a left-hand rule with the
+markers down it under 720 px — one component, one media query.
 
 ### Standard verdicts (MAS-96)
 
