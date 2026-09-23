@@ -15,6 +15,7 @@ the skill fire, so it is picked up by situation, not only by name.
 | `ui-preview` | any frontend change or visual check | new — canned-API harness, headless Edge, toast rules |
 | `masign-handoff` | session start, wrap up, /compact, before a demo | evolves `session-handoff` with the start-of-session routine |
 | `decide-carefully` | vague feature ideas; costly or trust-affecting decisions | merges `spec-from-brainstorm` + `dual-pass-thinking` with MaSign precedents |
+| `sanity-check` | `/sanity-check`; before "done", a demo or the freeze; a long or drifting session | new (Homework 4) — six questions, ≤80 chars of checkable evidence each, unknown is `⚠️` not `✅` |
 
 How they chain: `masign-handoff` (read) → `decide-carefully` (spec into the
 ticket) → `masign-ticket-flow` (branch, findings as tickets) → build with

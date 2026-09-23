@@ -17,3 +17,4 @@ Contract_Analysis_Project_Plan.docx
 # Claude Code local tool permissions
 .claude/*
 !.claude/skills/
+!.claude/commands/
