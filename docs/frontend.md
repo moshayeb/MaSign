@@ -199,7 +199,10 @@ for fills and decorative emphasis; `#087eac` is the darker companion used for
 interactive text on white. Shared surfaces are white, `#f5f5f5`, and
 `#f8f9fb`, with `#e8e8e8` borders. Inter is the shared `16px` base typeface;
 headings use `#111`, body text `#333`, secondary text `#555`, and muted text
-`#777`. Risk and status colours retain their existing meanings.
+`#777`. Hover states follow the same system: cyan buttons use `#0a9fd8`,
+outlined controls use a pale-cyan surface and cyan border, and public proof
+cards lift slightly with a cyan border and soft cyan shadow. Risk and status
+colours retain their existing meanings.
 
 `/workspace` is the existing working area. Before a contract is selected it
 leads with **Select a contract to get started**; the all-contract question
