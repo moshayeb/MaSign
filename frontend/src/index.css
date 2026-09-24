@@ -131,6 +131,7 @@ a {
   padding: 16px 28px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 24px;
 }
 
@@ -159,29 +160,90 @@ a {
   height: auto;
 }
 
+/* Header nav (MAS-133): the links it points to now exist, so the header
+   carries them. Desktop only -- .topnav-mobile below is its phone twin. */
 .topnav {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 22px;
   font-size: 0.88rem;
 }
 
-.topnav .tagline {
-  color: var(--muted);
-}
-
-.topnav a {
+.topnav-link {
   color: var(--text-2);
   text-decoration: none;
-  padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  transition: border-color 0.12s, color 0.12s;
 }
 
-.topnav a:hover {
+.topnav-link:hover {
   color: var(--ink);
-  border-color: var(--line-2);
+  text-decoration: underline;
+}
+
+.topnav-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #009fe3, #0077b3);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topnav-cta:hover {
+  filter: brightness(1.05);
+}
+
+.topnav-mobile {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .topnav {
+    display: none;
+  }
+
+  .topnav-mobile {
+    display: block;
+    position: relative;
+  }
+
+  .topnav-mobile > summary {
+    list-style: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    color: var(--text);
+  }
+
+  .topnav-mobile > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .topnav-mobile-list {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 200px;
+    padding: 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .topnav-mobile-list .topnav-cta {
+    margin-top: 4px;
+  }
 }
 
 /* --- layout ------------------------------------------------------------- */
@@ -532,6 +594,24 @@ button.contract.selected {
 .filetype.docx {
   color: #1d4ed8;
   background: rgba(59, 130, 246, 0.12);
+}
+
+/* Workspace empty state (MAS-133): calm, functional prompt before a
+   contract is picked -- the marketing pitch now lives on the home page,
+   this just says what to do here. */
+.empty-state {
+  text-align: center;
+  padding: 48px 28px;
+}
+
+.empty-state h1 {
+  font-size: 1.15rem;
+}
+
+.empty-state p {
+  margin: 10px auto 16px;
+  max-width: 46ch;
+  color: var(--text-2);
 }
 
 /* --- hero (before the first answer) ------------------------------------- */
@@ -2180,6 +2260,84 @@ button.chip.ranked {
 @media (max-width: 720px) {
   .staticpage {
     padding: 28px 16px 40px;
+  }
+}
+
+/* Public home page (MAS-133): centred, no sidebar, generous padding — a
+   landing page, not the workspace it sends visitors to. */
+.homepage {
+  flex: 1 0 auto;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 56px 28px 72px;
+  gap: 48px;
+}
+
+.home-hero {
+  text-align: center;
+  padding: 0;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.home-hero h1 {
+  max-width: none;
+}
+
+.home-hero p {
+  margin: 16px auto 0;
+  max-width: 52ch;
+}
+
+.home-cta {
+  margin-top: 26px;
+}
+
+.home-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.home-step {
+  position: relative;
+  padding-top: 30px;
+}
+
+.home-step-number {
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: grid;
+  place-items: center;
+}
+
+.home-step h2 {
+  font-size: 0.95rem;
+  margin: 0 0 4px;
+}
+
+.home-step p {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .homepage {
+    padding: 40px 16px 56px;
+    gap: 32px;
+  }
+
+  .home-steps {
+    grid-template-columns: 1fr;
   }
 }
 

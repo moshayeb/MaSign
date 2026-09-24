@@ -212,7 +212,15 @@ FRONTEND_DIST = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent.
 # once the JS ran, but the server call itself returned a genuine 404, which
 # is wrong for a page that exists (found live, reported directly). Explicit
 # routes registered ahead of the mount win over it and answer 200.
-FRONTEND_PAGES = ["/about", "/privacy", "/documentation", "/how-it-works", "/what-masign-checks", "/educational-disclaimer"]
+FRONTEND_PAGES = [
+    "/workspace",
+    "/about",
+    "/privacy",
+    "/documentation",
+    "/how-it-works",
+    "/what-masign-checks",
+    "/educational-disclaimer",
+]
 
 
 def _serve_frontend_index() -> FileResponse:

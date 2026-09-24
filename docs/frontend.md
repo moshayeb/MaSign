@@ -157,20 +157,36 @@ then one under `src/index.css`'s `.sitefoot-grid` breakpoints (720px,
 linking to a real destination — the workspace itself, a real GitHub URL, or
 one of six new static pages under `src/pages/` (About, Privacy,
 Documentation, How it works, What MaSign checks, Educational disclaimer).
-`src/pages/index.ts`'s `PAGES` map is the single source both `main.tsx`
-(pathname → page component, checked once at load — no router dependency)
-and the tests read from. The app has no client-side navigation between
-pages: a footer link is a plain `<a href>` and reloads, which needs
-`dist/404.html` (a build-time copy of `index.html`, `package.json`'s
-`build` script) so a direct link or a refresh on `/about` etc. still works
-— Starlette's `StaticFiles(html=True)` serves `404.html` for an unmatched
-path instead of a bare 404, verified by reading its `get_response` source
-directly rather than assumed.
+`src/pages/index.ts`'s `PAGES` map names the six static information pages.
+`main.tsx` maps `/` to `HomePage`, `/workspace` to the interactive `App`,
+and those six paths to their static components. Links are ordinary `<a>`
+links, so the server must also know these paths: `app/main.py` serves the
+built `index.html` with **200** for `/workspace` and each public page before
+mounting static assets. A copied `404.html` is not sufficient: it can render
+the React shell but still reports a false 404 to the browser and monitoring.
+The backend test covers every known public route.
 
-Shared chrome (`PageChrome.tsx`: toaster, header, footer) wraps both the
-workspace (`App.tsx`) and every static page, so they read as one product.
-`StaticPage.tsx` gives the static pages a narrow readable column (`.staticpage`,
-max 720px) instead of the workspace's sidebar layout.
+Shared chrome (`PageChrome.tsx`: toaster, header, footer) wraps the home
+page, workspace and static pages, so they read as one product. The header
+has real links for How it works, What MaSign checks and Documentation, plus
+an **Open workspace** CTA; on a phone they collapse into a keyboard-accessible
+menu. `StaticPage.tsx` gives the static pages a narrow readable column
+(`.staticpage`, max 720px) instead of the workspace's sidebar layout.
+### Public home and workspace (MAS-133)
+
+`/` is a small public home page: its purpose is to explain MaSign and lead a
+visitor to `/workspace`, without loading contract data or inviting a paid
+question immediately. It has one **Open workspace** CTA, a three-step
+Upload → Review → Check sources explanation, and the cited answers / honest
+unknowns / risk grading trust points.
+
+`/workspace` is the existing working area. Before a contract is selected it
+leads with **Select a contract to get started**; the all-contract question
+composer is an explicitly chosen secondary action. This keeps upload or
+selection as the main first task. Old `/#<contract>/<tab>` bookmarks redirect
+to `/workspace` while preserving their hash. If duplicate filenames appear
+in the contract library, each duplicate gets its UTC upload date in the
+stable `22 Sep` form; unique names stay compact.
 
 A **future login page** exists as a design only, `src/pages/LoginPageDesign.tsx`
 — two-column, a decorative illustration panel and a form panel, mobile shows

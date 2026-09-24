@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Contract } from '../api'
 import { reviewBadge, rubricMayNotApply } from '../reviewStatus'
 
@@ -9,6 +9,14 @@ interface Props {
   onReload: () => void
 }
 
+function formatShortDate(iso: string): string {
+  const date = new Date(iso)
+  // Keep the compact duplicate label stable and unambiguous whichever browser
+  // locale the visitor uses. The upload timestamp is UTC, so format it as UTC
+  // too: a late-night upload must not look like a different day elsewhere.
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
+
 // The sidebar list (MAS-104): a search box once there is more than one
 // contract, and one line per contract — type, name, review state. Size,
 // passage count and date moved to the contract header.
@@ -16,6 +24,14 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const shown = contracts?.filter((c) => !needle || c.filename.toLowerCase().includes(needle)) ?? null
+  // Several uploads can share a filename (real data does — MAS-133); a
+  // duplicate is distinguishable in the list by its upload date without
+  // opening it, counted across every contract, not just the filtered view.
+  const duplicateNames = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const c of contracts ?? []) counts.set(c.filename, (counts.get(c.filename) ?? 0) + 1)
+    return new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name))
+  }, [contracts])
 
   return (
     <section className="card contracts">
@@ -68,7 +84,10 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
                       ) : contract.risk_status === 'done' ? (
                         <span className="risk-dot clean" />
                       ) : null}
-                      <span className={`contract-status ${badge.tone}`}>{badge.label}</span>
+                      <span className={`contract-status ${badge.tone}`}>
+                        {badge.label}
+                        {duplicateNames.has(contract.filename) ? ` · ${formatShortDate(contract.created_at)}` : ''}
+                      </span>
                       {rubricMayNotApply(contract) && (
                         <span className="status warn tiny" title={contract.document_kind_reasons?.join(' · ') || 'The file does not read as a commercial contract'}>
                           {contract.document_kind === 'not_contract' ? 'Not a contract?' : 'Type uncertain'}

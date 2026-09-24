@@ -62,7 +62,7 @@ describe('contract workspace tabs (MAS-95)', () => {
   it('shows the tabs only once a contract is selected, with Overview first', async () => {
     render(<App />)
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Ask the contract/)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Select a contract to get started')
 
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
 
