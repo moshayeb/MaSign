@@ -144,13 +144,42 @@ it runs. There are no green "Nothing found" cards.
 
 The permanent header carries the wordmark alone (height 26); the tagline it
 used to repeat on every screen lives on the landing page, where it is a
-claim rather than furniture. There is no header navigation yet, and the
-`Footer` links only to things that exist — the disclaimer "AI-assisted
-contract review. Verify important terms before signing.", the repository,
-and the version from `src/version.ts` (a test fails if it drifts from
-`package.json`). About / Privacy / Documentation links arrive with those
-pages (MAS-126); a link to a page that does not exist reads as less
-finished than no link.
+claim rather than furniture. There is no header navigation yet.
+
+**Public footer, redesigned (MAS-132, superseding the MAS-125/MAS-126 "no
+links to pages that don't exist" scope cut for this specific set — owner
+decision 2026-09-24: build the small set of pages the footer needs, not
+omit the links).** `Footer` is a dark section (`#101417`) on the otherwise
+light theme — MAS-95 still applies everywhere else; this is one scoped
+component, not a palette change. Four columns on desktop, collapsing to two
+then one under `src/index.css`'s `.sitefoot-grid` breakpoints (720px,
+460px): brand + tagline + GitHub, then Product / Resources / Project, each
+linking to a real destination — the workspace itself, a real GitHub URL, or
+one of six new static pages under `src/pages/` (About, Privacy,
+Documentation, How it works, What MaSign checks, Educational disclaimer).
+`src/pages/index.ts`'s `PAGES` map is the single source both `main.tsx`
+(pathname → page component, checked once at load — no router dependency)
+and the tests read from. The app has no client-side navigation between
+pages: a footer link is a plain `<a href>` and reloads, which needs
+`dist/404.html` (a build-time copy of `index.html`, `package.json`'s
+`build` script) so a direct link or a refresh on `/about` etc. still works
+— Starlette's `StaticFiles(html=True)` serves `404.html` for an unmatched
+path instead of a bare 404, verified by reading its `get_response` source
+directly rather than assumed.
+
+Shared chrome (`PageChrome.tsx`: toaster, header, footer) wraps both the
+workspace (`App.tsx`) and every static page, so they read as one product.
+`StaticPage.tsx` gives the static pages a narrow readable column (`.staticpage`,
+max 720px) instead of the workspace's sidebar layout.
+
+A **future login page** exists as a design only, `src/pages/LoginPageDesign.tsx`
+— two-column, a decorative illustration panel and a form panel, mobile shows
+the form first (`order` in the `@media (max-width: 760px)` block; each panel
+resets to `flex: none` there, not the desktop `flex: 1 1 50%`, or stacking
+leaves large empty gaps — caught in a real mobile screenshot before this
+shipped). It is deliberately **not** in `PAGES` and not imported by `App.tsx`
+or `main.tsx` — no route renders it. Review it via a temporary `ui-preview`
+screenshot, never a live URL.
 
 The engineering-grid background is gone and the blue tint behind the page is
 softer: the app should read as a legal workspace, not a developer tool.

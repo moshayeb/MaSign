@@ -2025,48 +2025,161 @@ button.chip.ranked {
   color: var(--accent);
 }
 
-/* Footer (MAS-125) */
+/* Footer (MAS-132): a dark section on the otherwise light theme (MAS-95 is
+   unchanged everywhere else — this is one scoped component, not a palette
+   change), so its own colours are literal, not the light-theme :root tokens. */
 .sitefoot {
   flex: none;
-  border-top: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.6);
+  background: #101417;
+  color: #cbd3dc;
 }
 
 .sitefoot-inner {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 18px 28px 24px;
+  padding: 48px 28px 24px;
+}
+
+.sitefoot-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 32px;
+}
+
+.sitefoot-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sitefoot-brand .sitefoot-logo {
+  margin-bottom: 4px;
+}
+
+/* The wordmark's ink follows the light theme by default (near-black); on
+   this dark footer it needs to read white instead, scoped to just here. */
+.sitefoot .logo-ink {
+  fill: #f4f6fa;
+}
+
+.sitefoot .logo-accent {
+  fill: var(--accent-bright);
+}
+
+.sitefoot-tagline {
+  color: #f4f6fa;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sitefoot-sub {
+  color: #8b96a3;
+}
+
+.sitefoot-heading {
+  color: #f4f6fa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin: 0 0 4px;
+}
+
+.sitefoot .link {
+  color: #b7c0cb;
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+
+.sitefoot .link:hover {
+  color: #f4f6fa;
+  text-decoration: underline;
+}
+
+.sitefoot-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 36px 0 20px;
+}
+
+.sitefoot-bottom {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px 24px;
 }
 
-.sitefoot-note {
-  color: var(--text-2);
-  font-size: 0.88rem;
-}
-
-.sitefoot-meta {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.sitefoot-meta a {
-  color: var(--accent);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.sitefoot-meta a:hover {
-  text-decoration: underline;
+.sitefoot-copyright {
+  color: #8b96a3;
+  font-size: 0.82rem;
 }
 
 @media (max-width: 720px) {
   .sitefoot-inner {
-    padding: 16px 16px 20px;
+    padding: 36px 16px 20px;
+  }
+
+  .sitefoot-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 28px 20px;
+  }
+
+  .sitefoot-brand {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 460px) {
+  .sitefoot-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Static public pages (MAS-132): About, Privacy, Documentation, How it
+   works, What MaSign checks, Educational disclaimer — a narrow readable
+   column instead of the workspace's sidebar layout. */
+.staticpage {
+  flex: 1 0 auto;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 40px 28px 60px;
+}
+
+.staticpage-article h1 {
+  margin-bottom: 18px;
+}
+
+.staticpage-article h2 {
+  margin: 24px 0 8px;
+  font-size: 1rem;
+}
+
+.staticpage-article p,
+.staticpage-article ul,
+.staticpage-article ol {
+  margin: 0 0 14px;
+}
+
+.staticpage-article ul,
+.staticpage-article ol {
+  padding-left: 22px;
+}
+
+.staticpage-article li {
+  margin-bottom: 8px;
+}
+
+.staticpage-article li:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  .staticpage {
+    padding: 28px 16px 40px;
   }
 }
 
@@ -2167,4 +2280,202 @@ button.chip.ranked {
 
 .upload button.block {
   margin-top: 10px;
+}
+
+/* Future login page — design only, not routed (MAS-132). Reviewed via a
+   ui-preview screenshot; see pages/LoginPageDesign.tsx for why. */
+.login-design {
+  display: flex;
+  min-height: 100vh;
+}
+
+.login-illustration {
+  flex: 1 1 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: linear-gradient(160deg, var(--accent-bright), var(--accent));
+  overflow: hidden;
+}
+
+.login-illustration-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.22) 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+}
+
+.login-illustration-content {
+  position: relative;
+  max-width: 380px;
+  color: #fff;
+}
+
+.login-illustration-line {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.login-illustration-sub {
+  color: rgba(255, 255, 255, 0.86);
+  margin-bottom: 28px;
+}
+
+.login-doc-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.4);
+}
+
+.login-doc-card-head {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.login-doc-card-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+
+.login-doc-line {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.login-doc-line.long {
+  width: 85%;
+}
+
+.login-doc-line.short {
+  width: 45%;
+}
+
+.login-doc-clause {
+  position: relative;
+  border: 1px solid var(--high);
+  background: rgba(220, 38, 38, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px 12px;
+  margin: 10px 0;
+}
+
+.login-doc-badge {
+  display: inline-block;
+  background: var(--high);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-top: 4px;
+}
+
+.login-doc-source {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.login-form-panel {
+  flex: 1 1 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  padding: 48px;
+}
+
+.login-form-inner {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.login-heading {
+  margin: 28px 0 20px;
+  font-size: 1.4rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 6px;
+}
+
+.login-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-top: 10px;
+}
+
+.login-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
+.login-input:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 1px;
+}
+
+.login-submit {
+  margin-top: 18px;
+  width: 100%;
+  justify-content: center;
+}
+
+.login-links {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 18px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 760px) {
+  .login-design {
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* Form first on a phone (per spec), illustration below it. Each panel
+     sizes to its own content here, not a forced 50vh half (found live: the
+     desktop flex-basis left large empty gaps above/below the content once
+     stacked). */
+  .login-form-panel,
+  .login-illustration {
+    flex: none;
+  }
+
+  .login-form-panel {
+    order: 1;
+    padding: 32px 20px;
+  }
+
+  .login-illustration {
+    order: 2;
+    padding: 32px 20px;
+  }
 }
