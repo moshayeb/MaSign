@@ -17,8 +17,12 @@ describe('LoginPageDesign', () => {
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
-    expect(screen.getByText('Forgot password?')).toBeInTheDocument()
-    expect(screen.getByText('Create an account')).toBeInTheDocument()
+
+    // Not links: there is nowhere real for these to go yet, so a `#` href
+    // would itself be a placeholder link — disabled buttons instead.
+    expect(screen.getByRole('button', { name: 'Forgot password?' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Create an account' })).toBeDisabled()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
 
     // No account system exists to submit to — clicking through must not throw.
     expect(() => screen.getByRole('button', { name: 'Sign in' }).click()).not.toThrow()

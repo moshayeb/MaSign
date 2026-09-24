@@ -2454,6 +2454,12 @@ button.chip.ranked {
   font-size: 0.85rem;
 }
 
+/* Disabled, not clickable -- there is nowhere real for these to go yet. */
+.login-links button:disabled {
+  opacity: 0.55;
+  text-decoration: none;
+}
+
 @media (max-width: 760px) {
   .login-design {
     flex-direction: column;
