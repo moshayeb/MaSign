@@ -3,6 +3,11 @@ import { toast } from 'sonner'
 import { askQuestion, type Contract, type QueryResponse } from '../api'
 import { CALLS_PER_QUESTION } from '../cost'
 
+// Matches the backend's QueryRequest.question max_length (app/api/routes.py,
+// MAX_QUESTION_LENGTH) so a too-long question is stopped by the browser
+// before a submit round-trips to a 422 (MAS-130).
+const MAX_QUESTION_LENGTH = 2000
+
 export interface Asked {
   question: string
   contract: Contract | null // null = all contracts
@@ -66,6 +71,7 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Pr
           }
         }}
         placeholder="Ask about the contract — e.g. What is the termination fee?"
+        maxLength={MAX_QUESTION_LENGTH}
         disabled={busy}
       />
       <div className="question-row">
