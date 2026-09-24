@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import sys
 import threading
 import traceback
@@ -38,6 +39,7 @@ DEFAULT_LOG_PATH = HOOKS_DIR / "blocked.log"
 CONFIRM_CODE_FILE = HOOKS_DIR / ".confirm_code"
 
 CONFIRM_CODE_ENV = "MASIGN_CONFIRM_CODE"
+CONFIRM_CODE_FILE_ENV = "MASIGN_CONFIRM_CODE_FILE"
 CONFIRM_TIMEOUT_ENV = "MASIGN_CONFIRM_TIMEOUT"
 CONFIRM_TEST_INPUT_ENV = "MASIGN_HOOK_TEST_CONFIRM_INPUT"
 DEFAULT_CONFIRM_TIMEOUT = 20.0
@@ -165,36 +167,98 @@ def _confirm_code() -> str | None:
     `.confirm_code` file next (survives across shells without relying on how
     Claude Code propagates environment variables to a hook subprocess, which
     was not verified either way). Neither present -> None, and `confirm()`
-    treats that as "cannot confirm", not "nothing to check"."""
+    treats that as "cannot confirm", not "nothing to check".
+
+    The file's path is itself overridable via `MASIGN_CONFIRM_CODE_FILE` --
+    not for production use, but so `tests/test_safety_hooks.py` can point it
+    at a guaranteed-empty tmp path and get a deterministic "no code
+    configured" case, regardless of whether the real
+    `.claude/hooks/.confirm_code` happens to exist on the machine running
+    the tests (it legitimately does on a dev machine that has set one up)."""
     env_value = os.environ.get(CONFIRM_CODE_ENV, "").strip()
     if env_value:
         return env_value
+    file_override = os.environ.get(CONFIRM_CODE_FILE_ENV)
+    code_file = Path(file_override) if file_override else CONFIRM_CODE_FILE
     try:
-        file_value = CONFIRM_CODE_FILE.read_text(encoding="utf-8").strip()
+        file_value = code_file.read_text(encoding="utf-8").strip()
     except Exception:
         return None
     return file_value or None
 
 
 def _open_terminal_for_confirmation():
-    """A read/write handle onto the *real* console, independent of this
-    process's own stdin (already consumed by the tool-call JSON) and stdout
-    (piped back to Claude Code, not guaranteed to reach a human watching in
-    real time). `CONIN$`/`CONOUT$` on Windows and `/dev/tty` on POSIX both
-    open the controlling terminal directly rather than whatever this
-    process's stdio was redirected to -- and both raise if no console is
-    attached at all, which is exactly the unattended ("Auto Mode") case this
-    function exists to detect and refuse, not paper over."""
+    """POSIX only (see `_prompt_windows_new_console` for why Windows does not
+    use this). A read/write handle onto the *real* controlling terminal,
+    independent of this process's own stdin (already consumed by the
+    tool-call JSON) and stdout (piped back to Claude Code, not guaranteed to
+    reach a human watching in real time). `/dev/tty` opens the controlling
+    terminal directly rather than whatever this process's stdio was
+    redirected to, and raises if none is attached at all -- the unattended
+    case this function exists to detect and refuse, not paper over."""
     try:
-        if os.name == "nt":
-            read_handle = open("CONIN$", "r", encoding="utf-8", errors="replace")
-            write_handle = open("CONOUT$", "w", encoding="utf-8", errors="replace")
-        else:
-            read_handle = open("/dev/tty", "r", encoding="utf-8", errors="replace")
-            write_handle = read_handle
-        return read_handle, write_handle
+        handle = open("/dev/tty", "r+", encoding="utf-8", errors="replace")
+        return handle, handle
     except OSError:
         return None, None
+
+
+def _prompt_windows_new_console(prompt_text: str, timeout: float) -> str | None:
+    """Windows only. Found live: opening `CONIN$`/`CONOUT$` (this process's
+    *own* console handles) does not raise in this project's actual harness
+    (a Claude Code session running inside a VSCode extension host) -- but it
+    also is not a window the person can see or type into. Something in that
+    process tree has *a* console attached, just not one that is visible,
+    which meant every real confirmation silently ran out its full timeout
+    with nobody ever having had a chance to answer -- safe (it still denies)
+    but not what a confirmation prompt is for.
+
+    The fix is to stop relying on whatever console this process inherited
+    and instead spawn a brand new one on purpose: `CREATE_NEW_CONSOLE` asks
+    Windows for a fresh, independent console window, not a handle onto this
+    process's existing (possibly hidden) one. A small `cmd.exe /c set /p`
+    script in that new window shows the prompt and reads one line from
+    *its own* input -- genuinely separate from this process's stdin/stdout
+    either way -- and writes what was typed to a throwaway temp file this
+    function reads back, because piping the new console's stdout would
+    defeat the point of giving it its own visible one."""
+    import subprocess
+    import tempfile
+
+    fd, path = tempfile.mkstemp(prefix="masign_confirm_", suffix=".txt")
+    os.close(fd)
+    try:
+        # cmd.exe's own escaping: `&`, `|`, `^` need a caret in front of them
+        # inside a /c command line, or they get interpreted as shell syntax.
+        safe_prompt = re.sub(r"([&|^<>])", r"^\1", prompt_text)
+        script = (
+            f"title MaSign confirmation required & "
+            f"echo {safe_prompt} & "
+            f'set /p CODE="Type the confirmation code and press Enter: " & '
+            f'>"{path}" echo %CODE%'
+        )
+        try:
+            proc = subprocess.Popen(["cmd.exe", "/c", script], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        except Exception:
+            return None
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                proc.kill()
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
+            return None
+        try:
+            content = Path(path).read_text(encoding="utf-8", errors="replace").strip()
+        except Exception:
+            return None
+        return content or None
+    finally:
+        try:
+            os.remove(path)
+        except Exception:  # pragma: no cover - best-effort cleanup
+            pass
 
 
 def _read_line_with_timeout(read_handle, timeout: float) -> str | None:
@@ -241,21 +305,28 @@ def confirm(*, hook: str, reason: str, call: ToolCall, action_text: str) -> None
 
     Deliberately bypasses Claude Code's own ask/allow plumbing: that
     plumbing is the part shown to pass an unattended session through
-    unanswered, so this talks directly to the OS console instead (see
-    `_open_terminal_for_confirmation`). Every branch that cannot positively
+    unanswered, so this talks directly to the OS console instead. On
+    Windows that means a brand new, genuinely visible console window
+    (`_prompt_windows_new_console`) rather than this process's own
+    `CONIN$`/`CONOUT$` -- found live, in this project's actual VSCode-
+    extension harness, to open without error but attach to a console
+    nobody could see, which meant every confirmation ran out its timeout
+    unanswered even with a human right there. On POSIX, `/dev/tty` (see
+    `_open_terminal_for_confirmation`) is the controlling terminal itself,
+    which does not have that problem. Every branch that cannot positively
     confirm a match fails closed as `deny`: no code configured anywhere,
-    no console attached (the unattended case, now correctly refused instead
-    of silently passed), a wrong code, or nobody answering before the
-    timeout. Only a correct code typed in time allows the call through.
+    no console attached or spawnable, a wrong code, or nobody answering
+    before the timeout. Only a correct code typed in time allows the call
+    through.
 
-    Test seam: `MASIGN_HOOK_TEST_CONFIRM_INPUT`, read in place of opening a
-    console, lets `tests/test_safety_hooks.py` supply "what was typed"
-    without scripting a real keystroke into a real console (not something a
-    subprocess test can portably do) -- it still exercises the same
-    match/mismatch branches this function uses live, it only swaps out
-    where the answer comes from. The no-answer/timeout path is exercised for
-    real, against a real console handle, with `MASIGN_CONFIRM_TIMEOUT` set
-    low so the test does not hang."""
+    Test seam: `MASIGN_HOOK_TEST_CONFIRM_INPUT`, read in place of prompting
+    at all, lets `tests/test_safety_hooks.py` supply "what was typed"
+    without scripting a real keystroke into a real console window (not
+    something a subprocess test can portably do) -- it still exercises the
+    same match/mismatch branches this function uses live, it only swaps out
+    where the answer comes from. The no-answer/timeout path is exercised
+    for real, against the real platform-specific prompt, with
+    `MASIGN_CONFIRM_TIMEOUT` set low so the test does not hang."""
     expected = _confirm_code()
     if not expected:
         deny(
@@ -273,6 +344,16 @@ def confirm(*, hook: str, reason: str, call: ToolCall, action_text: str) -> None
     test_input = os.environ.get(CONFIRM_TEST_INPUT_ENV)
     if test_input is not None:
         typed = test_input.strip()
+    elif os.name == "nt":
+        prompt_text = f"[{hook}] CONFIRMATION REQUIRED: {reason} -- about to run: {action_text}"
+        typed = _prompt_windows_new_console(prompt_text, timeout)
+        if typed is None:
+            deny(
+                hook=hook,
+                reason=f"{reason} [no confirmation code entered within {timeout:.0f}s (or the console could not be opened) -- denied, fail closed]",
+                call=call,
+            )
+            return
     else:
         read_handle, write_handle = _open_terminal_for_confirmation()
         if read_handle is None:
@@ -322,10 +403,22 @@ def allow() -> None:
 
 def run_hook(hook_name: str, classify) -> None:
     """Boilerplate every hook script shares: read stdin, run `classify`, and
-    guarantee that *any* exception between here and a decision becomes an
-    `ask` rather than an uncaught crash (which Claude Code would not treat
-    as blocking). `classify(call) -> tuple[str, str] | None` returns
-    ("ask"|"deny"|"confirm", reason) or None for "this call is fine"."""
+    guarantee that *any* exception between here and a decision becomes a
+    safe outcome rather than an uncaught crash (which Claude Code would not
+    treat as blocking -- a bare Python traceback exits 1, not 2).
+    `classify(call) -> tuple[str, str] | None` returns
+    ("ask"|"deny"|"confirm", reason) or None for "this call is fine".
+
+    A crash while *classifying* becomes `ask` -- found and fixed live: this
+    was the only exception boundary here until `confirm()` was added, and
+    `confirm()` is real I/O (spawning a console process on Windows,
+    threading on POSIX), not pure pattern-matching, so it can fail in ways
+    `ask`/`deny` cannot. A crash while *acting on* a `confirm` decision now
+    escalates to `deny`, not `ask`: `classify` already judged this call
+    risky enough to require a human-typed code, so if the mechanism meant
+    to collect that code breaks, falling back to `ask` -- proven elsewhere
+    in this project not to reliably stop anything unattended -- would be a
+    silent downgrade of a decision already made, not a neutral fallback."""
     call = read_tool_call()
     if call.parse_error:
         ask(hook=hook_name, reason=f"could not parse the tool call ({call.parse_error}); failing safe", call=call)
@@ -343,10 +436,20 @@ def run_hook(hook_name: str, classify) -> None:
         allow()
         return
     decision, reason = verdict
-    if decision == "deny":
-        deny(hook=hook_name, reason=reason, call=call)
-    elif decision == "confirm":
-        action_text = call.command() or call.file_path() or "(no command text captured)"
-        confirm(hook=hook_name, reason=reason, call=call, action_text=action_text)
-    else:
-        ask(hook=hook_name, reason=reason, call=call)
+    try:
+        if decision == "deny":
+            deny(hook=hook_name, reason=reason, call=call)
+        elif decision == "confirm":
+            action_text = call.command() or call.file_path() or "(no command text captured)"
+            confirm(hook=hook_name, reason=reason, call=call, action_text=action_text)
+        else:
+            ask(hook=hook_name, reason=reason, call=call)
+    except Exception:
+        # deny()/ask()/confirm() all end in sys.exit(), which raises
+        # SystemExit -- a BaseException this `except Exception` does not
+        # catch, so reaching here means one of them crashed before exiting.
+        deny(
+            hook=hook_name,
+            reason=f"{reason} [hook crashed while acting on its own {decision!r} decision ({traceback.format_exc(limit=2).strip().splitlines()[-1]}); failing to the strictest option, deny]",
+            call=call,
+        )

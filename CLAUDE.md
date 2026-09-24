@@ -237,6 +237,29 @@ earlier in the same session were not. See `_common.confirm()`'s
 docstring and `tests/test_safety_hooks.py`'s `TestConfirmationCode` for
 the mechanism and its test seam.
 
+**Found live, same day: opening this process's own `CONIN$`/`CONOUT$`
+is not the same as a window the owner can see.** In this project's
+actual harness (a Claude Code session running inside a VSCode extension
+host on Windows), `CONIN$`/`CONOUT$` opened without error -- so
+`confirm()` correctly waited out its full timeout rather than denying
+immediately -- but attached to a console nobody could see or type into,
+so every real confirmation ran out the clock unanswered even with the
+owner present. Fixed by not relying on whatever console this process
+inherited at all: on Windows, `confirm()` now spawns a brand new,
+independent console window via `CREATE_NEW_CONSOLE`
+(`_prompt_windows_new_console`) to show the prompt and collect the code,
+confirmed live to actually appear on screen and to still correctly deny
+when nothing is typed. (POSIX's `/dev/tty` is the controlling terminal
+itself and was not affected.) Fixing this also surfaced a second bug:
+`run_hook`'s fail-closed exception guard covered `classify()` but not
+the `confirm()` call itself, so a crash inside the new, more complex
+console-spawning code (a missing `import re`, caught by this) would
+have exited 1 -- which Claude Code treats as non-blocking, the exact
+open-by-default failure mode `run_hook` exists to close. Fixed: a crash
+while acting on a `confirm` decision now escalates to `deny`, not
+`ask`, since `classify` already judged the call risky enough to need a
+human-typed code.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error

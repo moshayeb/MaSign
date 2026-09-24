@@ -63,16 +63,30 @@ Local history-destroying commands (`reset --hard`, `commit --amend`,
 `rebase`, `filter-branch`, `reflog expire`, `gc --prune`) and everything
 `protect_sensitive_files.py` covers never reach a remote or a reviewer, so
 they got a fourth decision instead of a blanket `deny`: `_common.confirm()`
-bypasses Claude Code's permission prompt entirely, opens the real OS
-console directly (`CONIN$`/`CONOUT$` on Windows, `/dev/tty` on POSIX —
-independent of this process's own stdin, already spent on the tool-call
-JSON, and its stdout, which a human isn't necessarily watching) and
-requires a human to type a code the owner chose (`MASIGN_CONFIRM_CODE` or
-a local, git-ignored `.claude/hooks/.confirm_code`) within a time limit
-(`MASIGN_CONFIRM_TIMEOUT`, default 20s). No code configured, no console
-attached, a wrong code, or nobody answering in time — every one of those
-denies, same as Hook 2. Proven live, twice: a real `git reset --hard HEAD`
-with no code configured was stopped (`blocked.log`, `2026-09-24T11:33:37Z`),
-and — after `protect_sensitive_files.py` was escalated the same way — a
-real `rm CLAUDE.md` that had previously gone straight through under `ask`
-was stopped too (`2026-09-24T13:00:11Z`).
+bypasses Claude Code's permission prompt entirely and requires a human to
+type a code the owner chose (`MASIGN_CONFIRM_CODE` or a local, git-ignored
+`.claude/hooks/.confirm_code`) within a time limit (`MASIGN_CONFIRM_TIMEOUT`,
+default 20s). No code configured, no console attached or spawnable, a wrong
+code, or nobody answering in time — every one of those denies, same as
+Hook 2. Proven live, twice: a real `git reset --hard HEAD` with no code
+configured was stopped (`blocked.log`, `2026-09-24T11:33:37Z`), and — after
+`protect_sensitive_files.py` was escalated the same way — a real
+`rm CLAUDE.md` that had previously gone straight through under `ask` was
+stopped too (`2026-09-24T13:00:11Z`).
+
+**Found the same day: this process's own console is not the owner's
+screen.** `confirm()` first tried `CONIN$`/`CONOUT$` (Windows) / `/dev/tty`
+(POSIX) — the *inherited* console. On POSIX that is the controlling
+terminal itself and is fine. On Windows, in this project's actual harness
+(Claude Code inside a VSCode extension host), it opened without error but
+attached to a console the owner could not see, so every real confirmation
+silently ran out its timeout — safe (still denied), but nobody ever had a
+real chance to answer. Fixed by not trusting the inherited console at all
+on Windows: `_prompt_windows_new_console` spawns a brand new, independent
+console window (`CREATE_NEW_CONSOLE`) to show the prompt, confirmed live
+to actually appear on screen. Fixing it also exposed that `run_hook`'s
+fail-closed exception guard covered `classify()` but not the `confirm()`
+call itself — a crash in the new, more complex console-spawning code
+(a missing `import re`, caught this way) would have exited 1, which
+Claude Code treats as non-blocking. Now a crash while acting on a
+`confirm` decision escalates to `deny`, not `ask`.

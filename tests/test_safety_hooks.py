@@ -31,12 +31,16 @@ HISTORY = HOOKS / "block_history_rewrite.py"
 def run_hook(script: Path, payload: dict, log_path: Path, cwd: Path = ROOT, extra_env: dict | None = None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["MASIGN_HOOK_LOG"] = str(log_path)
-    # A stray MASIGN_CONFIRM_CODE in the developer's own shell must not leak
-    # into a test that is specifically checking the "no code configured"
-    # path — confirm() tests set it back explicitly when they need it.
+    # A stray MASIGN_CONFIRM_CODE in the developer's own shell, or a real
+    # .claude/hooks/.confirm_code on the machine running the tests, must not
+    # leak into a test that is specifically checking the "no code
+    # configured" path — point the file lookup at a path that is guaranteed
+    # not to exist instead of the real one; confirm() tests set either back
+    # explicitly when they need it.
     env.pop("MASIGN_CONFIRM_CODE", None)
     env.pop("MASIGN_HOOK_TEST_CONFIRM_INPUT", None)
     env.pop("MASIGN_CONFIRM_TIMEOUT", None)
+    env["MASIGN_CONFIRM_CODE_FILE"] = str(log_path.with_name("no_such_confirm_code_file"))
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
