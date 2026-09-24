@@ -180,10 +180,15 @@ question immediately. It has one **Open workspace** CTA, a three-step
 Upload → Review → Check sources explanation, and the cited answers / honest
 unknowns / risk grading trust points.
 
-Below those steps, the **Why MaSign** proof section (MAS-134) uses a warm
-off-white ground with four white cards: Cited answers, Risk review, Key terms
-and Honest unknowns. Its copy names only behaviour MaSign has today; it does
-not make accuracy, speed, certification, customer-logo, pricing or
+MAS-135 makes the home page calmer and easier to read without changing the
+workspace palette: a warm ivory ground, a pale-cyan hero surface, dark navy
+headings and readable dark-grey body text. The hero says **Understand your
+contract before you sign** and explains the three concrete things MaSign does:
+find terms, review possible risks, and open the source text. The Why MaSign
+section uses four white cards: Cited answers, Risk review, Key terms and
+Honest unknowns, led by **A clear first read of your contract, with sources
+you can open.** Its copy names only behaviour MaSign has today; it does not
+make accuracy, speed, certification, customer-logo, pricing or
 cross-document-review claims. The secondary **Open workspace** CTA links to
 `/workspace`. The grid is four columns on desktop and one column at phone
 width.
