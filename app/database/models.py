@@ -123,3 +123,18 @@ class KeyTermRow:
     quote: str
     typed: dict | None
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class ContractLink:
+    """An uploaded contract explicitly linked as the resolution of a named
+    external reference on another contract (MAS-137). Directional and one
+    level deep: `linked_contract_id`'s own references are not included.
+    Never created by a heuristic -- always an explicit, user-confirmed action.
+    """
+
+    id: UUID
+    primary_contract_id: UUID
+    linked_contract_id: UUID
+    reference_name: str
+    created_at: datetime
