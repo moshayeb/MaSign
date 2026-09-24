@@ -10,6 +10,11 @@ guardrail withheld counts as not graded (MAS-94), and a model failure makes
 it failed, never quietly empty. Since MAS-82 the same job extracts the
 contract's financial key terms, one more call per batch, with its own
 completeness flag so an unreadable key-terms reply never reads as "not stated".
+Since MAS-129 risk grading and key-term extraction are graded in separate
+try/except blocks per batch: they are independent model calls, so a
+key-terms-only failure marks key terms incomplete without discarding this
+batch's (or any prior batch's) already-verified risk findings and without
+marking the whole review "failed" — only a risk-grading failure does that.
 """
 
 import logging
@@ -73,7 +78,6 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             ]
             try:
                 report = analyze_risks(hits, model, filenames={contract_id: contract.filename})
-                term_report = extract_key_terms(hits, model, filenames={contract_id: contract.filename})
             except ChatModelError as error:
                 logger.warning("Risk review of %s failed at passage %d: %s", contract.filename, start + 1, error)
                 repository.replace_risk_findings(db, contract_id, findings)
@@ -104,10 +108,23 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 complete = complete and report.complete
                 checked += len(batch) - len(report.blocked)
                 findings.extend((f.hit.chunk_id, f.category, f.severity, f.reason, f.quote) for f in report.findings)
-            # Key terms: an unusable reply leaves these passages unchecked for
-            # terms, which the card must say rather than "not stated" (MAS-82).
-            terms_complete = terms_complete and term_report.checked and term_report.complete
-            terms.extend((t.hit.chunk_id, t.term, t.value, t.quote, t.typed) for t in term_report.findings)
+
+            # Key terms is a separate model call and a separate failure domain
+            # from risk grading above (MAS-129): its own try/except means a
+            # key-terms-only failure never discards this batch's — or any
+            # prior batch's — already-verified risk findings, and never turns
+            # the whole review "failed" over something that is not a risk
+            # review failure. It only marks key terms incomplete, same as an
+            # unusable reply already does below, so the card says "Not
+            # checked" instead of silently reading "not stated" (MAS-82).
+            try:
+                term_report = extract_key_terms(hits, model, filenames={contract_id: contract.filename})
+            except ChatModelError as error:
+                logger.warning("Key-term extraction of %s failed at passage %d: %s", contract.filename, start + 1, error)
+                terms_complete = False
+            else:
+                terms_complete = terms_complete and term_report.checked and term_report.complete
+                terms.extend((t.hit.chunk_id, t.term, t.value, t.quote, t.typed) for t in term_report.findings)
             repository.update_risk_review(
                 db,
                 contract_id,

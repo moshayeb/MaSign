@@ -109,6 +109,25 @@ def test_a_model_failure_marks_the_review_failed_with_the_reason(db, fake_chat_m
     assert review.complete is False
 
 
+def test_a_key_terms_only_failure_keeps_the_verified_risk_findings(db, fake_chat_model: FakeChatModel) -> None:
+    # MAS-129: risk grading succeeded for both passages; only the key-terms
+    # call fails. The review must still reach "done" with both risk findings
+    # kept — not "failed" with everything discarded, which is what a shared
+    # try/except around both calls used to do.
+    contract_id = _stored(db, FEES, UNLIMITED)
+    fake_chat_model.risk_reply = lambda user: json.dumps([_finding("liability", "High", 1, "shall be unlimited")]) if "unlimited" in user else "[]"
+    fake_chat_model.key_terms_error = ChatModelError("Anthropic API refused the request (HTTP 429): rate limited")
+
+    review = review_contract(contract_id, fake_chat_model, batch_size=1)
+
+    assert review.status == "done"
+    assert review.complete is True  # risk grading itself never failed
+    assert review.key_terms_complete is False
+    rows = repository.list_risk_findings(db, contract_id)
+    assert [(r.category, r.quote) for r in rows] == [("liability", "shall be unlimited")]
+    assert repository.list_key_terms(db, contract_id) == []  # nothing usable to store
+
+
 def test_an_unreadable_batch_makes_the_review_incomplete_not_empty(db, fake_chat_model: FakeChatModel) -> None:
     contract_id = _stored(db, FEES, UNLIMITED)
     fake_chat_model.risk_reply = lambda user: "no json here" if "unlimited" in user else "[]"

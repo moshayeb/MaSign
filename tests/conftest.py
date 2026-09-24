@@ -94,6 +94,10 @@ class FakeChatModel:
         self.truncated = False
         # Set to an exception to make only the risk call fail (MAS-76).
         self.risk_error: Exception | None = None
+        # Set to an exception to make only the key-terms call fail, leaving
+        # the risk call for the same batch (and every other batch) unaffected
+        # (MAS-129).
+        self.key_terms_error: Exception | None = None
 
     def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None):
         from app.answering.llm import Completion
@@ -102,9 +106,12 @@ class FakeChatModel:
 
         self.calls.append((system, user))
         is_risk = system == RISK_PROMPT
+        is_terms = system == TERMS_PROMPT
         if is_risk and self.risk_error is not None:
             raise self.risk_error
-        reply = self.risk_reply if is_risk else self.key_terms_reply if system == TERMS_PROMPT else self.reply
+        if is_terms and self.key_terms_error is not None:
+            raise self.key_terms_error
+        reply = self.risk_reply if is_risk else self.key_terms_reply if is_terms else self.reply
         return Completion(reply(user) if callable(reply) else reply, truncated=self.truncated)
 
 
