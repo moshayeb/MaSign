@@ -6,7 +6,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import Chunk, Contract, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
+from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
 from app.ingestion.document_type import DocumentKind, classify_document
 
 
@@ -149,11 +149,77 @@ def set_embedding_ids(
 
 
 def delete_contract(connection: psycopg.Connection, contract_id: UUID) -> bool:
-    """Remove a contract and, via the FK cascade, its chunks."""
+    """Remove a contract and, via the FK cascade, its chunks and contract_links rows."""
     with connection.transaction():
         with connection.cursor() as cursor:
             cursor.execute("DELETE FROM contracts WHERE id = %s", (contract_id,))
             return cursor.rowcount > 0
+
+
+def create_link(
+    connection: psycopg.Connection, *, primary_contract_id: UUID, linked_contract_id: UUID, reference_name: str
+) -> ContractLink:
+    """Record that `linked_contract_id` resolves `reference_name` on `primary_contract_id` (MAS-137).
+
+    Always called from an explicit, user-confirmed action (app/api/routes.py)
+    -- never inferred from filename or content.
+    """
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO contract_links (primary_contract_id, linked_contract_id, reference_name)
+                VALUES (%s, %s, %s)
+                RETURNING *
+                """,
+                (primary_contract_id, linked_contract_id, reference_name),
+            )
+            row = cursor.fetchone()
+    return ContractLink(**row)
+
+
+def list_links(connection: psycopg.Connection, primary_contract_id: UUID) -> list[ContractLink]:
+    """Every link where `primary_contract_id` is the contract with the gap (MAS-137)."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM contract_links WHERE primary_contract_id = %s ORDER BY created_at",
+            (primary_contract_id,),
+        )
+        return [ContractLink(**row) for row in cursor.fetchall()]
+
+
+def bundle_contract_ids(connection: psycopg.Connection, primary_contract_id: UUID) -> list[UUID]:
+    """The primary contract plus every contract linked to it (MAS-137), primary first."""
+    return [primary_contract_id] + [link.linked_contract_id for link in list_links(connection, primary_contract_id)]
+
+
+def delete_link(connection: psycopg.Connection, link_id: UUID) -> ContractLink | None:
+    """Remove a link and invalidate the primary's existing review (MAS-137).
+
+    A review that ran over the linked document's passages must never keep
+    silently claiming that coverage once the link is gone -- the same
+    honesty rule `replace_chunks` already enforces when a contract's own
+    chunks change.
+    """
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM contract_links WHERE id = %s RETURNING *", (link_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            link = ContractLink(**row)
+            cursor.execute("SELECT 1 FROM risk_reviews WHERE contract_id = %s", (link.primary_contract_id,))
+            if cursor.fetchone() is not None:
+                cursor.execute(
+                    """
+                    UPDATE risk_reviews SET
+                        status = 'failed', complete = FALSE, key_terms_complete = FALSE,
+                        error = 'Linked documents changed. Run the review again.', updated_at = now()
+                    WHERE contract_id = %s
+                    """,
+                    (link.primary_contract_id,),
+                )
+    return link
 
 
 def get_vector_index(connection: psycopg.Connection, collection: str) -> VectorIndex | None:

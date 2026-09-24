@@ -15,7 +15,7 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Contract, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary
+from app.database.models import Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
@@ -563,6 +563,80 @@ def get_contract(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
     return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms)
+
+
+class LinkContractRequest(BaseModel):
+    linked_contract_id: UUID
+    # The exact external reference this link resolves (must match one of the
+    # primary's current, unresolved references -- never inferred).
+    reference_name: str
+
+
+class ContractLinkOut(BaseModel):
+    id: UUID
+    primary_contract_id: UUID
+    linked_contract_id: UUID
+    reference_name: str
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, link: ContractLink) -> "ContractLinkOut":
+        return cls(
+            id=link.id,
+            primary_contract_id=link.primary_contract_id,
+            linked_contract_id=link.linked_contract_id,
+            reference_name=link.reference_name,
+            created_at=link.created_at,
+        )
+
+
+@router.get("/contracts/{contract_id}/links", response_model=list[ContractLinkOut])
+def list_contract_links(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> list[ContractLinkOut]:
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    return [ContractLinkOut.from_model(link) for link in repository.list_links(db, contract_id)]
+
+
+@router.post("/contracts/{contract_id}/links", response_model=ContractLinkOut, status_code=status.HTTP_201_CREATED)
+def link_contract(
+    contract_id: UUID, body: LinkContractRequest, db: psycopg.Connection = Depends(get_db)
+) -> ContractLinkOut:
+    """Link an uploaded contract as the resolution of a named reference (MAS-137).
+
+    Always an explicit, user-confirmed action: `reference_name` must match one
+    of the primary's current, unresolved external references (MAS-84) -- this
+    never infers a match from filename or content.
+    """
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    if body.linked_contract_id == contract_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A contract cannot be linked to itself.")
+    if repository.get_contract(db, body.linked_contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The document to link was not found.")
+
+    chunks = repository.list_chunks(db, contract_id)
+    unresolved = {r.name for r in find_external_references([c.chunk_text for c in chunks])} - {
+        link.reference_name for link in repository.list_links(db, contract_id)
+    }
+    if body.reference_name not in unresolved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'"{body.reference_name}" is not an unresolved reference on this contract.',
+        )
+
+    link = repository.create_link(
+        db, primary_contract_id=contract_id, linked_contract_id=body.linked_contract_id, reference_name=body.reference_name
+    )
+    return ContractLinkOut.from_model(link)
+
+
+@router.delete("/contracts/{contract_id}/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_contract(contract_id: UUID, link_id: UUID, db: psycopg.Connection = Depends(get_db)) -> Response:
+    links = repository.list_links(db, contract_id)
+    if not any(link.id == link_id for link in links):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found.")
+    repository.delete_link(db, link_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 class Passage(BaseModel):
