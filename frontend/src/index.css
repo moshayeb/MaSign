@@ -177,8 +177,7 @@ a {
 }
 
 .topnav-link:hover {
-  background: rgba(12, 173, 237, 0.06);
-  color: var(--accent);
+  color: var(--accent-bright);
 }
 
 .topnav-cta {
@@ -2317,7 +2316,10 @@ button.chip.ranked {
 
 .home-step {
   position: relative;
-  padding-top: 30px;
+  /* The number badge sits at top:16px and is 26px tall, so its bottom edge
+     is at 42px -- padding-top must clear that or the heading starts under
+     it (found live: it did, by 12px, with the previous 30px value). */
+  padding-top: 48px;
 }
 
 .home-step-number {
