@@ -180,9 +180,8 @@ question immediately. It has one **Open workspace** CTA, a three-step
 Upload → Review → Check sources explanation, and the cited answers / honest
 unknowns / risk grading trust points.
 
-MAS-135 makes the home page calmer and easier to read without changing the
-workspace palette: a warm ivory ground, a pale-cyan hero surface, dark navy
-headings and readable dark-grey body text. The hero says **Understand your
+MAS-135 made the home page calmer and easier to read with a pale-cyan hero
+surface, dark navy headings and readable dark-grey body text. The hero says **Understand your
 contract before you sign** and explains the three concrete things MaSign does:
 find terms, review possible risks, and open the source text. The Why MaSign
 section uses four white cards: Cited answers, Risk review, Key terms and
@@ -192,6 +191,15 @@ make accuracy, speed, certification, customer-logo, pricing or
 cross-document-review claims. The secondary **Open workspace** CTA links to
 `/workspace`. The grid is four columns on desktop and one column at phone
 width.
+
+### Shared visual system (MAS-136)
+
+MaSign now shares MassQL's light brand direction: `#0caded` is the cyan used
+for fills and decorative emphasis; `#087eac` is the darker companion used for
+interactive text on white. Shared surfaces are white, `#f5f5f5`, and
+`#f8f9fb`, with `#e8e8e8` borders. Inter is the shared `16px` base typeface;
+headings use `#111`, body text `#333`, secondary text `#555`, and muted text
+`#777`. Risk and status colours retain their existing meanings.
 
 `/workspace` is the existing working area. Before a contract is selected it
 leads with **Select a contract to get started**; the all-contract question
