@@ -14,17 +14,17 @@ const TRUST = [
   },
   {
     title: 'Risk review',
-    text: 'Review High, Medium, and Low findings from the Customer’s side.',
+    text: 'See important contract terms that may need attention.',
     icon: <path d="M12 3 2.5 20h19L12 3ZM12 9v4m0 3h.01" />,
   },
   {
     title: 'Key terms',
-    text: 'See fees, dates, renewal, notice, and termination terms together.',
+    text: 'Find fees, dates, renewals, notice periods, and termination terms.',
     icon: <path d="M7 3v3m10-3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm2 8h3m-3 4h5" />,
   },
   {
     title: 'Honest unknowns',
-    text: 'MaSign keeps “Not found” and “Not checked” clearly separate.',
+    text: 'MaSign clearly says when the contract does not contain enough information.',
     icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Zm0-12v4m0 3h.01" />,
   },
 ]
@@ -37,11 +37,10 @@ export function HomePage() {
       <main className="content homepage">
         <section className="hero home-hero">
           <h1>
-            Ask the contract. <span className="glow">Get the clause that proves it.</span>
+            Understand your contract <span className="glow">before you sign.</span>
           </h1>
           <p>
-            Upload a contract, ask questions about it in plain language, and get answers grounded in the document's own text — every
-            citation opens the exact passage it came from.
+            MaSign helps you find important terms, review possible risks, and open the exact contract text behind every result.
           </p>
           <a className="primary home-cta" href="/workspace">
             Open workspace
@@ -65,8 +64,8 @@ export function HomePage() {
 
         <section className="home-proof" aria-labelledby="why-masign-title">
           <div className="home-proof-heading">
-            <p className="eyebrow">WHY MASIGN</p>
-            <h2 id="why-masign-title">Clear answers. Evidence you can check.</h2>
+            <h2 id="why-masign-title">Why MaSign</h2>
+            <p>A clear first read of your contract, with sources you can open.</p>
           </div>
           <div className="home-proof-grid">
             {TRUST.map((item) => (

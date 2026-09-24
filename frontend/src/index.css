@@ -2272,22 +2272,32 @@ button.chip.ranked {
   width: 100%;
   padding: 56px 28px 72px;
   gap: 48px;
+  background: #f8f5f0;
 }
 
 .home-hero {
   text-align: center;
-  padding: 0;
+  padding: 52px 32px;
   max-width: 640px;
   margin: 0 auto;
+  border: 1px solid #cde7f1;
+  border-radius: var(--radius);
+  background: #eef8fc;
 }
 
 .home-hero h1 {
   max-width: none;
 }
 
+.home-hero h1 .glow {
+  background: none;
+  color: var(--accent);
+}
+
 .home-hero p {
   margin: 16px auto 0;
   max-width: 52ch;
+  color: var(--text-2);
 }
 
 .home-cta {
@@ -2345,9 +2355,15 @@ button.chip.ranked {
 }
 
 .home-proof-heading h2 {
-  margin: 8px 0 0;
+  margin: 0;
   font-size: clamp(1.45rem, 2.5vw, 2rem);
   letter-spacing: -0.025em;
+}
+
+.home-proof-heading p {
+  max-width: 46ch;
+  margin: 10px auto 0;
+  color: var(--text-2);
 }
 
 .home-proof-grid {
@@ -2408,6 +2424,10 @@ button.chip.ranked {
   .homepage {
     padding: 40px 16px 56px;
     gap: 32px;
+  }
+
+  .home-hero {
+    padding: 38px 20px;
   }
 
   .home-steps {
