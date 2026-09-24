@@ -1,5 +1,6 @@
 """Reads and writes for the contracts and chunks tables."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 import psycopg
@@ -382,9 +383,10 @@ def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, RiskSummar
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT r.contract_id, r.status, r.complete, r.chunks_checked, r.chunks_total,
+            SELECT r.contract_id, r.status, r.complete, r.chunks_checked, r.chunks_total, r.key_terms_complete,
                    (SELECT severity FROM risk_findings f WHERE f.contract_id = r.contract_id
-                    ORDER BY CASE severity WHEN 'High' THEN 3 WHEN 'Medium' THEN 2 ELSE 1 END DESC LIMIT 1) AS worst
+                    ORDER BY CASE severity WHEN 'High' THEN 3 WHEN 'Medium' THEN 2 ELSE 1 END DESC LIMIT 1) AS worst,
+                   (SELECT COUNT(*) FROM risk_findings f WHERE f.contract_id = r.contract_id AND f.severity = 'High') AS high_findings
             FROM risk_reviews r
             """
         )
@@ -395,6 +397,32 @@ def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, RiskSummar
                 complete=row["complete"],
                 chunks_checked=row["chunks_checked"],
                 chunks_total=row["chunks_total"],
+                key_terms_complete=row["key_terms_complete"],
+                high_findings=row["high_findings"],
             )
             for row in cursor.fetchall()
         }
+
+
+def list_key_terms_for(connection: psycopg.Connection, term_ids: Sequence[str]) -> dict[UUID, dict[str, KeyTermRow]]:
+    """Earliest stored value per contract for the given terms (MAS-101): one query, not N+1.
+
+    Used for the contract-list summary strip, which only needs a handful of
+    terms per contract — not the full `list_key_terms` read a single contract
+    page uses.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT ON (k.contract_id, k.term) k.*
+            FROM key_terms k JOIN chunks c ON c.id = k.chunk_id
+            WHERE k.term = ANY(%s)
+            ORDER BY k.contract_id, k.term, c.chunk_index
+            """,
+            (list(term_ids),),
+        )
+        result: dict[UUID, dict[str, KeyTermRow]] = {}
+        for row in cursor.fetchall():
+            term_row = KeyTermRow(**row)
+            result.setdefault(term_row.contract_id, {})[term_row.term] = term_row
+        return result

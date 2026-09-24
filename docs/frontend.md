@@ -78,14 +78,21 @@ live text (the S) was outlined with fontTools. `frontend/public/brand/` holds
 the font-free colour and white versions for documents.
 Two-column layout: a sticky sidebar and the main column, stacking under
 960 px. Since MAS-104 the sidebar is the upload card (the dashed drop zone —
-the owner kept it over a "+ New contract" button, 2026-09-21), a search box once there is more than one
-contract, and one line per contract: file-type tag, name, and the review
-state in words (Reviewed · High risk / Not reviewed / Reviewing… / Review
-failed, `reviewStatus.ts`) — size, passage count and date moved to the
-contract header. With no
-contract selected the main column is a landing: headline, the question
-composer (scope pills and Ask inside one bordered box), example questions
-as chips and three feature tiles.
+the owner kept it over a "+ New contract" button, 2026-09-21), a search box
+and a **Sort by** select (newest / highest risk / most deviations,
+client-side — the list is small) once there is more than one contract, and
+one line per contract: file-type tag, name, and the review state in words
+(Reviewed · High risk / Not reviewed / Reviewing… / Review failed,
+`reviewStatus.ts`) — size, passage count and date moved to the contract
+header. Since MAS-101 a reviewed contract with something to add gets a
+second, muted line under its name — recurring fee, initial term, High
+findings and deviations from `GET /api/contracts` (`recurring_fee`,
+`initial_term`, `high_findings`, `deviations`, all read from stored rows,
+no model call), e.g. "EUR 18,500 per month · 36 months · 2 High ·
+3 deviations", ellipsis at narrow widths. The line is omitted — not a
+duplicate "Reviewed" — when the review found nothing beyond what the status
+badge already says, or when there is no review yet (`ContractList.tsx`,
+`summaryLine`).
 
 ### Contract workspace tabs (MAS-95)
 

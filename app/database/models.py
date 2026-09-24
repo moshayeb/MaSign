@@ -84,6 +84,8 @@ class RiskSummary:
     complete: bool
     chunks_checked: int
     chunks_total: int
+    key_terms_complete: bool = False
+    high_findings: int = 0
 
 
 @dataclass(frozen=True)

@@ -120,7 +120,7 @@ Interactive docs at `http://localhost:8000/docs`.
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. |
-| `GET`  | `/api/contracts` | List stored contracts, newest first, with review status, worst severity, completeness, checked/total passage counts, `ingestion_notes`, and the MAS-107 `document_kind` evidence. |
+| `GET`  | `/api/contracts` | List stored contracts, newest first, with review status, worst severity, completeness, checked/total passage counts, `ingestion_notes`, the MAS-107 `document_kind` evidence, and the MAS-101 summary strip: `recurring_fee`, `initial_term` (text, from stored key terms), `high_findings` (High-severity risk count), `deviations` (MAS-96), `key_terms_status` (`complete` \| `partial` \| `none`) — all read from stored rows, no model call. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
 | `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`, and the `document_kind` of MAS-107). Runs automatically after upload. |
 | `GET`  | `/api/contracts/{contract_id}/search` | `?q=<question>&limit=5` → the passages the question would be answered from, best first, with scores. Retrieval only, no model call (MAS-91). |

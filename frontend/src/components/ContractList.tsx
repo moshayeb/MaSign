@@ -9,6 +9,39 @@ interface Props {
   onReload: () => void
 }
 
+type SortOption = 'newest' | 'risk' | 'deviations'
+const SEVERITY_RANK: Record<string, number> = { High: 3, Medium: 2, Low: 1 }
+
+// The second line under a contract's name (MAS-101): what it costs and how
+// risky it is, from stored key terms — no click needed. Null (no second
+// line) when there is nothing beyond what the status badge already says —
+// no review yet, or a review with no fee/term extracted, no High findings
+// and no deviations.
+function summaryLine(contract: Contract): string | null {
+  if (!contract.risk_status) return null
+  const parts: string[] = []
+  if (contract.recurring_fee) parts.push(contract.recurring_fee)
+  if (contract.initial_term) parts.push(contract.initial_term)
+  if (contract.high_findings) parts.push(`${contract.high_findings} High`)
+  if (contract.deviations) parts.push(`${contract.deviations} deviation${contract.deviations === 1 ? '' : 's'}`)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+function sortContracts(list: Contract[], sortBy: SortOption): Contract[] {
+  if (sortBy === 'newest') return list
+  const sorted = [...list]
+  if (sortBy === 'risk') {
+    sorted.sort(
+      (a, b) =>
+        (SEVERITY_RANK[b.risk_worst_severity ?? ''] ?? 0) - (SEVERITY_RANK[a.risk_worst_severity ?? ''] ?? 0) ||
+        (b.high_findings ?? 0) - (a.high_findings ?? 0),
+    )
+  } else {
+    sorted.sort((a, b) => (b.deviations ?? 0) - (a.deviations ?? 0))
+  }
+  return sorted
+}
+
 function formatShortDate(iso: string): string {
   const date = new Date(iso)
   // Keep the compact duplicate label stable and unambiguous whichever browser
@@ -22,8 +55,10 @@ function formatShortDate(iso: string): string {
 // passage count and date moved to the contract header.
 export function ContractList({ contracts, selectedId, onSelect, onReload }: Props) {
   const [query, setQuery] = useState('')
+  const [sortBy, setSortBy] = useState<SortOption>('newest')
   const needle = query.trim().toLowerCase()
-  const shown = contracts?.filter((c) => !needle || c.filename.toLowerCase().includes(needle)) ?? null
+  const filtered = contracts?.filter((c) => !needle || c.filename.toLowerCase().includes(needle)) ?? null
+  const shown = filtered && sortContracts(filtered, sortBy)
   // Several uploads can share a filename (real data does — MAS-133); a
   // duplicate is distinguishable in the list by its upload date without
   // opening it, counted across every contract, not just the filtered view.
@@ -44,14 +79,24 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
         </button>
       </div>
       {contracts && contracts.length > 1 && (
-        <input
-          type="search"
-          className="contract-search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search contracts"
-          aria-label="Search contracts"
-        />
+        <div className="contract-list-controls">
+          <input
+            type="search"
+            className="contract-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search contracts"
+            aria-label="Search contracts"
+          />
+          <label className="contract-sort">
+            <span className="visually-hidden">Sort by</span>
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)}>
+              <option value="newest">Newest</option>
+              <option value="risk">Highest risk</option>
+              <option value="deviations">Most deviations</option>
+            </select>
+          </label>
+        </div>
       )}
       {contracts === null ? (
         <p className="muted">Loading…</p>
@@ -99,6 +144,7 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
                         </span>
                       )}
                     </span>
+                    {summaryLine(contract) && <span className="contract-summary">{summaryLine(contract)}</span>}
                   </span>
                 </button>
               </li>
