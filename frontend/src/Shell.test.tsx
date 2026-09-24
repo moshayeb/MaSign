@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import pkg from '../package.json'
 import App from './App'
+import { PAGES } from './pages'
 import { APP_VERSION } from './version'
 
 vi.mock('sonner', async () => {
@@ -9,30 +10,38 @@ vi.mock('sonner', async () => {
   return { ...actual, toast: { ...actual.toast, error: vi.fn(), success: vi.fn(), promise: vi.fn((p: Promise<unknown>) => ({ unwrap: () => p })) } }
 })
 
-// The application shell (MAS-125): a footer that says what MaSign is, a header
-// that carries the logo alone, and no link that points at something missing.
+// The application shell (MAS-125, redesigned MAS-132): a four-column public
+// footer, a header that carries the logo alone, and no link that points at
+// something missing — every href is either a real in-app page (src/pages/),
+// the workspace itself, or a working GitHub URL.
 
 describe('the shell', () => {
-  it('shows the disclaimer, the repository and the version in a footer on every screen', () => {
+  it('shows a four-column footer with real links on every screen', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
     render(<App />)
 
     const footer = screen.getByRole('contentinfo')
-    expect(within(footer).getByText('AI-assisted contract review. Verify important terms before signing.')).toBeInTheDocument()
-    expect(within(footer).getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/moshayeb/MaSign')
-    expect(within(footer).getByText(`Version ${APP_VERSION}`)).toBeInTheDocument()
+    expect(within(footer).getByText('Understand contracts before you sign.')).toBeInTheDocument()
+    expect(within(footer).getByText('© 2026 MaSign · Educational project')).toBeInTheDocument()
+    expect(within(footer).getByRole('heading', { name: 'Product' })).toBeInTheDocument()
+    expect(within(footer).getByRole('heading', { name: 'Resources' })).toBeInTheDocument()
+    expect(within(footer).getByRole('heading', { name: 'Project' })).toBeInTheDocument()
+    // At least one GitHub link (column 1, Resources, and the bottom row all carry one).
+    expect(within(footer).getAllByRole('link', { name: 'GitHub' })[0]).toHaveAttribute('href', 'https://github.com/moshayeb/MaSign')
+    expect(within(footer).getByRole('link', { name: 'Report an issue' })).toHaveAttribute('href', 'https://github.com/moshayeb/MaSign/issues')
   })
 
   it('carries no link to a page that does not exist', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
     render(<App />)
 
-    // Only real destinations: the repository, the brand's own home, and downloads.
+    // Every href is either a known static page, the workspace itself, a
+    // GitHub URL, or a download — never a placeholder.
+    const knownPaths = new Set(['/', ...Object.keys(PAGES)])
     for (const link of screen.getAllByRole('link')) {
       const href = link.getAttribute('href') ?? ''
-      expect(href === '/' || href.startsWith('https://github.com/') || href.startsWith('/api/')).toBe(true)
+      expect(knownPaths.has(href) || href.startsWith('https://github.com/') || href.startsWith('/api/')).toBe(true)
     }
-    expect(screen.queryByRole('link', { name: /How it works|About|Privacy|Documentation/ })).not.toBeInTheDocument()
   })
 
   it('keeps the tagline off the permanent header', () => {

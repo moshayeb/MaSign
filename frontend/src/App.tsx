@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Toaster, toast } from 'sonner'
+import { toast } from 'sonner'
 import { listContracts, type Contract, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
 import { ContractList } from './components/ContractList'
+import { PageChrome } from './components/PageChrome'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
 import { RiskReviewPanel } from './components/RiskReviewPanel'
 import { PassageReader, type SourceRef } from './components/PassageReader'
 import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
-import { Footer } from './components/Footer'
-import { Wordmark } from './components/Wordmark'
 import { formatSize, kindBadge, reviewBadge } from './reviewStatus'
 import { suggestQuestions } from './suggestions'
 
@@ -195,16 +194,7 @@ export default function App() {
   )
 
   return (
-    <>
-      <Toaster position="top-right" theme="light" richColors closeButton />
-      <header className="topbar">
-        <div className="topbar-inner">
-          <a className="brand" href="/" aria-label="MaSign home">
-            <Wordmark height={26} />
-          </a>
-        </div>
-      </header>
-
+    <PageChrome>
       <div className="layout">
         <aside className="sidebar">
           <UploadForm
@@ -345,7 +335,6 @@ export default function App() {
           )}
         </main>
       </div>
-      <Footer />
-    </>
+    </PageChrome>
   )
 }
