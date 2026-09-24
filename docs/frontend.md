@@ -180,6 +180,14 @@ question immediately. It has one **Open workspace** CTA, a three-step
 Upload → Review → Check sources explanation, and the cited answers / honest
 unknowns / risk grading trust points.
 
+Below those steps, the **Why MaSign** proof section (MAS-134) uses a warm
+off-white ground with four white cards: Cited answers, Risk review, Key terms
+and Honest unknowns. Its copy names only behaviour MaSign has today; it does
+not make accuracy, speed, certification, customer-logo, pricing or
+cross-document-review claims. The secondary **Open workspace** CTA links to
+`/workspace`. The grid is four columns on desktop and one column at phone
+width.
+
 `/workspace` is the existing working area. Before a contract is selected it
 leads with **Select a contract to get started**; the all-contract question
 composer is an explicitly chosen secondary action. This keeps upload or

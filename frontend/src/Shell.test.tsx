@@ -65,6 +65,17 @@ describe('the shell', () => {
     expect(workspaceLinks.length).toBeGreaterThan(0)
     for (const link of workspaceLinks) expect(link).toHaveAttribute('href', '/workspace')
   })
+
+  it('explains four real MaSign behaviours without unsupported claims (MAS-134)', () => {
+    render(<HomePage />)
+
+    expect(screen.getByRole('heading', { name: 'Clear answers. Evidence you can check.' })).toBeInTheDocument()
+    for (const title of ['Cited answers', 'Risk review', 'Key terms', 'Honest unknowns']) {
+      expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
+    }
+    expect(screen.getByText('Open the exact clause behind every answer.')).toBeInTheDocument()
+    expect(screen.getByText('MaSign keeps “Not found” and “Not checked” clearly separate.')).toBeInTheDocument()
+  })
 })
 
 describe('the version in the footer', () => {

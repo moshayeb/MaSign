@@ -2330,6 +2330,80 @@ button.chip.ranked {
   color: var(--muted);
 }
 
+/* MAS-134: a quiet proof section that explains real MaSign behaviour without
+   borrowed accuracy, speed, security or enterprise claims. */
+.home-proof {
+  margin: 8px -28px -72px;
+  padding: 64px 28px 72px;
+  background: #f0e9df;
+  text-align: center;
+}
+
+.home-proof-heading {
+  max-width: 580px;
+  margin: 0 auto 28px;
+}
+
+.home-proof-heading h2 {
+  margin: 8px 0 0;
+  font-size: clamp(1.45rem, 2.5vw, 2rem);
+  letter-spacing: -0.025em;
+}
+
+.home-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 1044px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.home-proof-card {
+  min-height: 184px;
+  padding: 20px;
+}
+
+.home-proof-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  margin-bottom: 18px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.home-proof-card h3 {
+  margin: 0 0 7px;
+  font-size: 1rem;
+}
+
+.home-proof-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.home-proof-cta {
+  display: inline-flex;
+  margin-top: 28px;
+  padding: 10px 18px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.home-proof-cta:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
 @media (max-width: 720px) {
   .homepage {
     padding: 40px 16px 56px;
@@ -2338,6 +2412,19 @@ button.chip.ranked {
 
   .home-steps {
     grid-template-columns: 1fr;
+  }
+
+  .home-proof {
+    margin: 0 -16px -56px;
+    padding: 48px 16px 56px;
+  }
+
+  .home-proof-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-proof-card {
+    min-height: 0;
   }
 }
 
