@@ -264,3 +264,14 @@ human-typed code.
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error
 toasts show the API's `detail` verbatim. See `docs/frontend.md`.
+
+### Visual system (MAS-136, 2026-09-24)
+
+The owner approved a MassQL-aligned update to the earlier MAS-95 palette.
+The application remains light-theme only, but MAS-95's `#f4f6fa`, `#009fe3`,
+and `#0077b3` token values are superseded. Shared tokens are: white ground,
+`#f5f5f5` and `#f8f9fb` surfaces, `#e8e8e8` borders, `#111` headings, `#333`
+body text, `#555` secondary text, `#777` muted text, `#0caded` for cyan fills
+and decorative emphasis, `#087eac` for readable interactive text on white,
+and `#0a9fd8` for primary-button hover. Use Inter at a 16px base size.
+Status and risk colours retain their semantic meanings.
