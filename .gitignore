@@ -20,3 +20,4 @@ Contract_Analysis_Project_Plan.docx
 !.claude/commands/
 !.claude/hooks/
 .claude/hooks/*.log
+.claude/hooks/.confirm_code

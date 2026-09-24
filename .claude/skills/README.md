@@ -34,7 +34,8 @@ Python/script paths), but the scripts, their tests and this doc are.
 |---|---|---|
 | `protect_sensitive_files.py` | destructive ops (`rm`, overwrite, `git checkout --`, `git clean -f`) on CLAUDE.md, .gitignore, .dockerignore, .env(.example), an existing migration file | ask |
 | `block_destructive_sql.py` | an unbounded `DELETE`, or either of the two whole-table SQL statements this hook exists to stop, wherever they're headed for a real database client (psql/python/mysql/sqlite3) or a non-doc file | **deny** |
-| `block_history_rewrite.py` | `git push` to main, any force-push, `reset --hard`, `commit --amend`, `rebase`, `filter-branch`, `reflog expire`, `gc --prune` | ask |
+| `block_history_rewrite.py` | `git push` to main, any force-push to any branch | ask |
+| `block_history_rewrite.py` | `reset --hard`, `commit --amend`, `rebase`, `filter-branch`, `reflog expire`, `gc --prune` | **confirm** — a typed code, see below |
 
 All three fail closed: a crash, bad stdin, or a call they cannot classify
 becomes **ask**, never a silent allow (`.claude/hooks/_common.py`). Every
@@ -47,13 +48,31 @@ Documented, not hidden: neither SQL nor file-protection hook can see what
 happens *inside* an interpreter it merely launches — only the tool call's
 own text.
 
-**`ask` is not a guarantee outside an attended session.** Also found live:
-a real push to `main` and a real `reset --hard` both went through with no
-prompt, in the autonomous session that built these hooks, while `deny`
-stopped a real destructive-SQL attempt every single time. `ask` routes
-through the normal interactive permission prompt, which an unattended
-("Auto Mode") session can pass unanswered; `deny` (exit 2) never enters
-that system. `protect_sensitive_files.py` and `block_history_rewrite.py`
-are `ask`-only by design, so right now neither promises a human in the
-loop unattended — flagged in both docstrings and in CLAUDE.md as a
-decision, not quietly accepted.
+**`ask` is not a guarantee outside an attended session.** Found live: a real
+push to `main` and a real `reset --hard` both went through with no prompt,
+in the autonomous session that built these hooks, while `deny` stopped a
+real destructive-SQL attempt every single time. `ask` routes through the
+normal interactive permission prompt, which an unattended ("Auto Mode")
+session can pass unanswered; `deny` (exit 2) never enters that system.
+`protect_sensitive_files.py` and push-to-main/force-push in
+`block_history_rewrite.py` are still `ask`-only by design — a push is
+already headed for a PR review, so a second human is downstream of it
+either way.
+
+**`confirm`: a typed code for the commands a push/PR review never sees.**
+Local history-destroying commands (`reset --hard`, `commit --amend`,
+`rebase`, `filter-branch`, `reflog expire`, `gc --prune`) never reach a
+remote or a reviewer, so they got a fourth decision instead of a blanket
+`deny`: `_common.confirm()` bypasses Claude Code's permission prompt
+entirely, opens the real OS console directly (`CONIN$`/`CONOUT$` on
+Windows, `/dev/tty` on POSIX — independent of this process's own stdin,
+already spent on the tool-call JSON, and its stdout, which a human isn't
+necessarily watching) and requires a human to type a code the owner
+chose (`MASIGN_CONFIRM_CODE` or a local, git-ignored
+`.claude/hooks/.confirm_code`) within a time limit
+(`MASIGN_CONFIRM_TIMEOUT`, default 20s). No code configured, no console
+attached, a wrong code, or nobody answering in time — every one of those
+denies, same as Hook 2. Proven live: a real `git reset --hard HEAD` with
+no code configured was actually stopped in this exact autonomous session
+(`blocked.log`, `2026-09-24T11:33:37Z`), where the equivalent `ask`-based
+attempt earlier in the same session was not.

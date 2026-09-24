@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import sys
+import threading
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -33,6 +35,12 @@ from pathlib import Path
 
 HOOKS_DIR = Path(__file__).resolve().parent
 DEFAULT_LOG_PATH = HOOKS_DIR / "blocked.log"
+CONFIRM_CODE_FILE = HOOKS_DIR / ".confirm_code"
+
+CONFIRM_CODE_ENV = "MASIGN_CONFIRM_CODE"
+CONFIRM_TIMEOUT_ENV = "MASIGN_CONFIRM_TIMEOUT"
+CONFIRM_TEST_INPUT_ENV = "MASIGN_HOOK_TEST_CONFIRM_INPUT"
+DEFAULT_CONFIRM_TIMEOUT = 20.0
 
 
 @dataclass
@@ -151,6 +159,161 @@ def deny(*, hook: str, reason: str, call: ToolCall) -> None:
     sys.exit(2)
 
 
+def _confirm_code() -> str | None:
+    """The code a correct answer must match. Env var first (a teammate can
+    set it per-shell without touching a tracked file); a local, git-ignored
+    `.confirm_code` file next (survives across shells without relying on how
+    Claude Code propagates environment variables to a hook subprocess, which
+    was not verified either way). Neither present -> None, and `confirm()`
+    treats that as "cannot confirm", not "nothing to check"."""
+    env_value = os.environ.get(CONFIRM_CODE_ENV, "").strip()
+    if env_value:
+        return env_value
+    try:
+        file_value = CONFIRM_CODE_FILE.read_text(encoding="utf-8").strip()
+    except Exception:
+        return None
+    return file_value or None
+
+
+def _open_terminal_for_confirmation():
+    """A read/write handle onto the *real* console, independent of this
+    process's own stdin (already consumed by the tool-call JSON) and stdout
+    (piped back to Claude Code, not guaranteed to reach a human watching in
+    real time). `CONIN$`/`CONOUT$` on Windows and `/dev/tty` on POSIX both
+    open the controlling terminal directly rather than whatever this
+    process's stdio was redirected to -- and both raise if no console is
+    attached at all, which is exactly the unattended ("Auto Mode") case this
+    function exists to detect and refuse, not paper over."""
+    try:
+        if os.name == "nt":
+            read_handle = open("CONIN$", "r", encoding="utf-8", errors="replace")
+            write_handle = open("CONOUT$", "w", encoding="utf-8", errors="replace")
+        else:
+            read_handle = open("/dev/tty", "r", encoding="utf-8", errors="replace")
+            write_handle = read_handle
+        return read_handle, write_handle
+    except OSError:
+        return None, None
+
+
+def _read_line_with_timeout(read_handle, timeout: float) -> str | None:
+    """Block on `readline()` in a background thread so a human who never
+    answers cannot hang the hook forever -- `thread.join(timeout)` returns
+    control either way. A thread still blocked in `readline()` after the
+    timeout is abandoned deliberately: it is a daemon thread, so it cannot
+    keep the process alive, and the caller must not attempt to close the
+    handle out from under it (that risk is why the close happens only on the
+    non-timeout path, in `confirm()`)."""
+    result: "queue.Queue[str | None]" = queue.Queue(maxsize=1)
+
+    def _reader() -> None:
+        try:
+            line = read_handle.readline()
+        except Exception:
+            line = None
+        try:
+            result.put_nowait(line)
+        except Exception:  # pragma: no cover - queue is never full before this
+            pass
+
+    thread = threading.Thread(target=_reader, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        return None
+    try:
+        line = result.get_nowait()
+    except queue.Empty:  # pragma: no cover - thread finished, so it put something
+        return None
+    return line.strip() if line is not None else None
+
+
+def confirm(*, hook: str, reason: str, call: ToolCall, action_text: str) -> None:
+    """A fourth decision, stronger than `ask` and short of an unconditional
+    `deny`: the call proceeds only if a human at the real console types a
+    code the owner chose themselves, within a time limit. Exists because a
+    live test proved plain `ask` does not stop anything in an unattended
+    ("Auto Mode") session -- see block_history_rewrite.py's docstring for
+    the full account -- while a blanket `deny` would remove the "sometimes
+    this really is the right command" flexibility Hook 3 was built to keep
+    (an interactive rebase to clean up a branch before a PR is not wrong).
+
+    Deliberately bypasses Claude Code's own ask/allow plumbing: that
+    plumbing is the part shown to pass an unattended session through
+    unanswered, so this talks directly to the OS console instead (see
+    `_open_terminal_for_confirmation`). Every branch that cannot positively
+    confirm a match fails closed as `deny`: no code configured anywhere,
+    no console attached (the unattended case, now correctly refused instead
+    of silently passed), a wrong code, or nobody answering before the
+    timeout. Only a correct code typed in time allows the call through.
+
+    Test seam: `MASIGN_HOOK_TEST_CONFIRM_INPUT`, read in place of opening a
+    console, lets `tests/test_safety_hooks.py` supply "what was typed"
+    without scripting a real keystroke into a real console (not something a
+    subprocess test can portably do) -- it still exercises the same
+    match/mismatch branches this function uses live, it only swaps out
+    where the answer comes from. The no-answer/timeout path is exercised for
+    real, against a real console handle, with `MASIGN_CONFIRM_TIMEOUT` set
+    low so the test does not hang."""
+    expected = _confirm_code()
+    if not expected:
+        deny(
+            hook=hook,
+            reason=f"{reason} [no confirmation code configured -- set {CONFIRM_CODE_ENV} or {CONFIRM_CODE_FILE.name} to enable a typed override; denied, fail closed]",
+            call=call,
+        )
+        return
+
+    try:
+        timeout = float(os.environ.get(CONFIRM_TIMEOUT_ENV, DEFAULT_CONFIRM_TIMEOUT))
+    except ValueError:
+        timeout = DEFAULT_CONFIRM_TIMEOUT
+
+    test_input = os.environ.get(CONFIRM_TEST_INPUT_ENV)
+    if test_input is not None:
+        typed = test_input.strip()
+    else:
+        read_handle, write_handle = _open_terminal_for_confirmation()
+        if read_handle is None:
+            deny(
+                hook=hook,
+                reason=f"{reason} [no interactive console attached to confirm -- denied, fail closed]",
+                call=call,
+            )
+            return
+        try:
+            write_handle.write(
+                f"\n[{hook}] CONFIRMATION REQUIRED\n{reason}\n"
+                f"About to run: {action_text}\n"
+                f"Type the confirmation code within {timeout:.0f}s to allow this, "
+                "anything else (or nothing) denies it: "
+            )
+            write_handle.flush()
+        except Exception:  # pragma: no cover - a write failure still falls through to the read
+            pass
+        typed = _read_line_with_timeout(read_handle, timeout)
+        if typed is None:
+            deny(
+                hook=hook,
+                reason=f"{reason} [no confirmation code entered within {timeout:.0f}s -- denied, fail closed]",
+                call=call,
+            )
+            return
+        try:
+            read_handle.close()
+            if write_handle is not read_handle:
+                write_handle.close()
+        except Exception:  # pragma: no cover - closing is cleanup, not the decision
+            pass
+
+    if typed == expected:
+        log_event(hook=hook, decision="confirmed", reason=reason, call=call)
+        sys.exit(0)
+
+    deny(hook=hook, reason=f"{reason} [confirmation code did not match -- denied]", call=call)
+
+
 def allow() -> None:
     """Explicitly say nothing and get out of the way. This is the common case
     (an ordinary command) and must be cheap and silent."""
@@ -162,7 +325,7 @@ def run_hook(hook_name: str, classify) -> None:
     guarantee that *any* exception between here and a decision becomes an
     `ask` rather than an uncaught crash (which Claude Code would not treat
     as blocking). `classify(call) -> tuple[str, str] | None` returns
-    ("ask"|"deny", reason) or None for "this call is fine"."""
+    ("ask"|"deny"|"confirm", reason) or None for "this call is fine"."""
     call = read_tool_call()
     if call.parse_error:
         ask(hook=hook_name, reason=f"could not parse the tool call ({call.parse_error}); failing safe", call=call)
@@ -182,5 +345,8 @@ def run_hook(hook_name: str, classify) -> None:
     decision, reason = verdict
     if decision == "deny":
         deny(hook=hook_name, reason=reason, call=call)
+    elif decision == "confirm":
+        action_text = call.command() or call.file_path() or "(no command text captured)"
+        confirm(hook=hook_name, reason=reason, call=call, action_text=action_text)
     else:
         ask(hook=hook_name, reason=reason, call=call)

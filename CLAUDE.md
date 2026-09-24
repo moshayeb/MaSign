@@ -171,9 +171,12 @@ through at all).
   Documented gap, not a hidden one: SQL built and executed *inside* a
   program the agent merely runs is invisible to a PreToolUse hook.
 - `block_history_rewrite.py` -- asks before `git push` straight to `main`
-  (explicit, via refspec, or a bare `push` while `main` is checked out),
-  any `--force`/`-f` push to any branch, `reset --hard`, `commit --amend`,
-  `rebase`, `filter-branch`, `reflog expire`, or `gc --prune`.
+  (explicit, via refspec, or a bare `push` while `main` is checked out) or
+  any `--force`/`-f` push to any branch -- a push is already headed for a
+  PR review, so a second human is downstream of it either way. For the
+  commands a push/PR review never sees -- `reset --hard`, `commit --amend`,
+  `rebase`, `filter-branch`, `reflog expire`, `gc --prune` -- it requires a
+  **typed confirmation code** instead (Homework 6 "overkurs"): see below.
 
 Every ask/deny is appended to `.claude/hooks/blocked.log` (git-ignored,
 local audit trail). `tests/test_safety_hooks.py` runs each script as a real
@@ -195,11 +198,32 @@ prompt involved. Both hooks independently confirmed the same input
 correctly classifies as `ask` when run standalone -- the gap is not in the
 classification, it is that `ask` routes through the normal interactive
 permission system, which an unattended session can pass through unanswered,
-while `deny` (exit 2) never enters that system at all. Hooks 1 and 3 are
-`ask`-only by explicit design (owner sign-off, 2026-09-24); this means
-neither currently guarantees a human in the loop outside an attended
-session, which is worth a deliberate decision, not a silent gap -- see
-`.claude/hooks/block_history_rewrite.py`'s docstring for the full account.
+while `deny` (exit 2) never enters that system at all.
+
+**Resolved for the local history-destroying commands with a fourth
+decision, `confirm` (owner sign-off, 2026-09-24).** `protect_sensitive_files.py`
+and push/force-push in `block_history_rewrite.py` stay `ask`-only --
+deliberately, since a push already heads toward a PR review, a second
+human is downstream regardless. But `reset --hard`, `commit --amend`,
+`rebase`, `filter-branch`, `reflog expire` and `gc --prune` can destroy
+work with no remote and no reviewer ever involved, so those now go through
+`_common.confirm()`: it bypasses Claude Code's permission prompt entirely
+-- the exact plumbing `ask` was shown to leak through -- and instead opens
+the real OS console directly (`CONIN$`/`CONOUT$` on Windows, `/dev/tty` on
+POSIX; not this process's own stdin, already spent on the tool-call JSON,
+nor its stdout, which nobody may be watching) and requires a human to type
+a code the owner set themselves (`MASIGN_CONFIRM_CODE`, or a local,
+git-ignored `.claude/hooks/.confirm_code`) within `MASIGN_CONFIRM_TIMEOUT`
+seconds (default 20). No code configured anywhere, no console attached
+(exactly the unattended case above), a wrong code, or nobody answering in
+time: every one of those is a `deny`, same as Hook 2 -- only a correct,
+human-typed code lets the call through. Proven live, not just unit-tested:
+a real `git reset --hard HEAD` with no code configured was genuinely
+stopped in this same autonomous session (`.claude/hooks/blocked.log`,
+`2026-09-24T11:33:37Z`), where the equivalent `ask`-based attempt earlier
+in this same session was not. See `_common.confirm()`'s docstring and
+`tests/test_safety_hooks.py`'s `TestConfirmationCode` for the mechanism
+and its test seam.
 
 ## Frontend Decision
 

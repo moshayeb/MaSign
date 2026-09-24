@@ -20,31 +20,45 @@ was a `git reset --hard`, not a push:
   - `git gc --prune=...` (explicit prune) — can garbage-collect commits that
     are only reachable via reflog, i.e. the same safety net.
 
-All of these are `ask`, not `deny`: unlike Hook 2's unbounded SQL, every one
-of them is sometimes exactly the right command (an interactive rebase to
-clean up a branch before a PR, an amend of a commit that was never pushed).
-The point is that they never happen *silently* — the owner is always the one
-who says yes.
+IMPORTANT, found live while building this hook: `ask` prints
+`permissionDecision: "ask"` and exits 0 so Claude Code raises its normal
+interactive permission prompt — and a `git push origin HEAD:main` and a
+`git reset --hard HEAD` both ran through, unprompted, in an autonomous
+("Auto Mode") session with nobody present to answer that prompt, in the
+same session that had block_destructive_sql.py's hard `deny` stop a real
+DROP + TABLE attempt outright, no prompt involved, every single time it
+was tried. This was not a bug in this file's classification (both commands
+were independently confirmed to return the right decision when the script
+is run standalone against the same input) — it is that `ask` delegates to
+a permission system an unattended session can sail through, while `deny`
+(exit 2) is unconditional and never enters that system at all.
 
-IMPORTANT, found live while building this hook: "the owner is always the
-one who says yes" is only true when someone is there to say it. `ask`
-prints `permissionDecision: "ask"` and exits 0 so Claude Code raises its
-normal interactive permission prompt — and a `git push origin HEAD:main`
-and a `git reset --hard HEAD` both ran through, unprompted, in an
-autonomous ("Auto Mode") session with nobody present to answer that
-prompt, in the same session that had block_destructive_sql.py's hard
-`deny` stop a real DROP + TABLE attempt outright, no prompt involved,
-every single time it was tried. The difference is not a bug in this
-file's classification (both commands were independently confirmed to
-return `ask` when the script is run standalone against the same input) —
-it is that `ask` delegates to a permission system an unattended session
-can sail through, while `deny` (exit 2) is unconditional and does not
-route through that system at all. For a hook whose stated purpose is
-"guaranteed to be in the loop", `ask` alone does not deliver that
-guarantee outside an interactively attended session; only `deny` does.
-Left as `ask` here because that is what was specified and reversing it
-unilaterally is not this hook's call to make — but the gap is real and
-is flagged for a decision, not silently accepted.
+Two decisions came out of that finding (owner sign-off, 2026-09-24), split
+by how reversible the command is:
+
+- `git push` to `main`, and any `--force`/`-f`/`--force-with-lease` push,
+  stay `ask`. A push reaching a shared remote is itself the point where a
+  second human (a PR reviewer) is already in the loop before it lands
+  anywhere permanent — Hook 1 (file protection) is left the same way for
+  the same reason: both act on things a human downstream still gets a
+  chance to see before real damage.
+- `git reset --hard`, `commit --amend`, `rebase`, `filter-branch`,
+  `reflog expire` and `gc --prune` — the commands that can quietly destroy
+  local work with no remote or reviewer ever in a position to notice — are
+  now `confirm`, not `ask`: a new decision (`_common.py`'s `confirm()`)
+  that does not use Claude Code's permission prompt at all. It opens the
+  real OS console directly (bypassing this process's own stdin, already
+  consumed by the tool-call JSON, and its stdout, not guaranteed to reach
+  a human watching in real time) and requires a human to type a
+  confirmation code the owner set themselves — in `MASIGN_CONFIRM_CODE` or
+  a local, git-ignored `.claude/hooks/.confirm_code` file — within a time
+  limit. No code configured, no console attached (exactly the unattended
+  case above), a wrong code, or nobody answering in time: every one of
+  those denies, same as Hook 2. Only a correct, human-typed code lets the
+  call through, so an unattended session now gets a real stop here instead
+  of a silent pass-through, while a human physically present keeps the
+  flexibility a blanket `deny` would have removed. See `_common.confirm()`
+  for the full mechanism and its test seam.
 """
 
 from __future__ import annotations
@@ -159,22 +173,22 @@ def classify(call: ToolCall) -> tuple[str, str] | None:
                 return "ask", "git push --force can discard commits on the remote branch"
 
         elif sub == "reset" and "--hard" in rest:
-            return "ask", "git reset --hard discards uncommitted work (and commits, with a ref) — this is the exact command that wiped uncommitted CLAUDE.md/.gitignore edits once already"
+            return "confirm", "git reset --hard discards uncommitted work (and commits, with a ref) — this is the exact command that wiped uncommitted CLAUDE.md/.gitignore edits once already"
 
         elif sub == "commit" and "--amend" in rest:
-            return "ask", "git commit --amend rewrites the tip commit, which may already be pushed"
+            return "confirm", "git commit --amend rewrites the tip commit, which may already be pushed"
 
         elif sub == "rebase":
-            return "ask", "git rebase rewrites commit history"
+            return "confirm", "git rebase rewrites commit history"
 
         elif sub == "filter-branch":
-            return "ask", "git filter-branch rewrites the entire history"
+            return "confirm", "git filter-branch rewrites the entire history"
 
         elif sub == "reflog" and rest[:1] == ["expire"]:
-            return "ask", "git reflog expire removes the recovery net that a bad reset/rebase depends on"
+            return "confirm", "git reflog expire removes the recovery net that a bad reset/rebase depends on"
 
         elif sub == "gc" and any(w == "--prune" or w.startswith("--prune=") for w in rest):
-            return "ask", "git gc --prune can permanently remove commits only reachable via reflog"
+            return "confirm", "git gc --prune can permanently remove commits only reachable via reflog"
 
     return None
 

@@ -28,9 +28,17 @@ SQL = HOOKS / "block_destructive_sql.py"
 HISTORY = HOOKS / "block_history_rewrite.py"
 
 
-def run_hook(script: Path, payload: dict, log_path: Path, cwd: Path = ROOT) -> subprocess.CompletedProcess:
+def run_hook(script: Path, payload: dict, log_path: Path, cwd: Path = ROOT, extra_env: dict | None = None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["MASIGN_HOOK_LOG"] = str(log_path)
+    # A stray MASIGN_CONFIRM_CODE in the developer's own shell must not leak
+    # into a test that is specifically checking the "no code configured"
+    # path — confirm() tests set it back explicitly when they need it.
+    env.pop("MASIGN_CONFIRM_CODE", None)
+    env.pop("MASIGN_HOOK_TEST_CONFIRM_INPUT", None)
+    env.pop("MASIGN_CONFIRM_TIMEOUT", None)
+    if extra_env:
+        env.update(extra_env)
     return subprocess.run(
         [sys.executable, str(script)],
         input=json.dumps(payload),
@@ -69,6 +77,15 @@ def assert_deny(result: subprocess.CompletedProcess, contains: str | None = None
     assert "BLOCKED" in result.stderr
     if contains:
         assert contains.lower() in result.stderr.lower()
+
+
+def assert_confirmed(result: subprocess.CompletedProcess) -> None:
+    """The `confirm` decision's success path is deliberately shaped exactly
+    like a plain allow (exit 0, silent stdout) — `confirm()` only ever
+    surfaces itself via `deny` (a wrong/missing/timed-out code) or via the
+    `blocked.log` "confirmed" entry, never a distinct stdout protocol,
+    because Claude Code has no third permission state to hand it to."""
+    assert_allow(result)
 
 
 def assert_allow(result: subprocess.CompletedProcess) -> None:
@@ -256,9 +273,21 @@ class TestBlockHistoryRewrite:
             ("git gc --prune=now", "prune"),
         ],
     )
-    def test_asks_before_any_history_rewriting_command(self, tmp_path, command, contains):
+    def test_history_rewriting_commands_require_a_confirmation_code(self, tmp_path, command, contains):
+        # Widened per the owner's 2026-09-24 sign-off: these are no longer
+        # `ask` (proven live not to stop anything unattended — see
+        # block_history_rewrite.py's docstring) but `confirm`, a decision
+        # that bypasses Claude Code's permission prompt entirely and denies
+        # unless a human types a code at the real console. With no code
+        # configured at all (the default in this test's environment — see
+        # `run_hook`, which strips MASIGN_CONFIRM_CODE), that is an
+        # unconditional deny, which is itself the point: no code means no
+        # way through, not a silent pass.
         log = tmp_path / "hooks.log"
-        assert_ask(run_hook(HISTORY, bash(command), log), contains=contains)
+        result = run_hook(HISTORY, bash(command), log)
+        assert_deny(result, contains=contains)
+        assert_deny(result, contains="no confirmation code configured")
+        assert last_log_entry(log)["decision"] == "deny"
 
     def test_allows_ordinary_git_commands(self, tmp_path):
         log = tmp_path / "hooks.log"
@@ -282,6 +311,81 @@ class TestBlockHistoryRewrite:
         env["MASIGN_HOOK_LOG"] = str(log)
         result = subprocess.run([sys.executable, str(HISTORY)], input="", capture_output=True, text=True, cwd=str(ROOT), env=env, timeout=15)
         assert_ask(result, contains="failing safe")
+
+
+# --- The confirm() mechanism itself: a typed code, not just a click ----------
+#
+# These exercise _common.confirm(), reached here via block_history_rewrite.py's
+# `reset --hard`, but the mechanism is shared by every hook that ever returns
+# a "confirm" verdict. `MASIGN_HOOK_TEST_CONFIRM_INPUT` is a deliberate test
+# seam (documented in confirm()'s own docstring): it supplies "what a human
+# typed" without this test scripting a real keystroke into a real OS console,
+# which no subprocess test can portably do — it still drives the same
+# match/mismatch code path confirm() uses live, only the source of the
+# answer changes. The timeout path below does NOT use that seam: it opens a
+# real console and genuinely waits, proving the no-one-answered branch for
+# real, with the timeout set low so the test stays fast.
+
+
+class TestConfirmationCode:
+    def test_correct_code_allows_the_action_through(self, tmp_path):
+        log = tmp_path / "hooks.log"
+        result = run_hook(
+            HISTORY,
+            bash("git reset --hard HEAD"),
+            log,
+            extra_env={"MASIGN_CONFIRM_CODE": "4242", "MASIGN_HOOK_TEST_CONFIRM_INPUT": "4242"},
+        )
+        assert_confirmed(result)
+        assert last_log_entry(log)["decision"] == "confirmed"
+
+    def test_wrong_code_denies(self, tmp_path):
+        log = tmp_path / "hooks.log"
+        result = run_hook(
+            HISTORY,
+            bash("git reset --hard HEAD"),
+            log,
+            extra_env={"MASIGN_CONFIRM_CODE": "4242", "MASIGN_HOOK_TEST_CONFIRM_INPUT": "0000"},
+        )
+        assert_deny(result, contains="did not match")
+        assert last_log_entry(log)["decision"] == "deny"
+
+    def test_no_code_configured_anywhere_denies(self, tmp_path):
+        log = tmp_path / "hooks.log"
+        result = run_hook(HISTORY, bash("git commit --amend -m x"), log)
+        assert_deny(result, contains="no confirmation code configured")
+
+    def test_nobody_answers_in_time_denies_for_real(self, tmp_path):
+        # No MASIGN_HOOK_TEST_CONFIRM_INPUT here: this genuinely opens the
+        # real console and waits. Nothing types anything, so it must time
+        # out — MASIGN_CONFIRM_TIMEOUT=1 keeps that fast instead of hanging
+        # for the 20s production default.
+        log = tmp_path / "hooks.log"
+        result = run_hook(
+            HISTORY,
+            bash("git rebase main"),
+            log,
+            extra_env={"MASIGN_CONFIRM_CODE": "4242", "MASIGN_CONFIRM_TIMEOUT": "1"},
+        )
+        assert_deny(result)
+        reason = last_log_entry(log)["reason"]
+        assert "denied, fail closed" in reason
+        assert ("no confirmation code entered" in reason) or ("no interactive console attached" in reason)
+
+    def test_confirm_never_hangs_the_process(self, tmp_path):
+        # Belt-and-braces on the above: the subprocess call itself has a
+        # hard 15s timeout (see run_hook) — if confirm() ever failed to
+        # release the calling process (e.g. a close() blocking on a still-
+        # reading background thread), this test would raise
+        # subprocess.TimeoutExpired instead of completing.
+        log = tmp_path / "hooks.log"
+        result = run_hook(
+            HISTORY,
+            bash("git gc --prune=now"),
+            log,
+            extra_env={"MASIGN_CONFIRM_CODE": "4242", "MASIGN_CONFIRM_TIMEOUT": "1"},
+        )
+        assert result.returncode == 2
 
 
 # --- Cross-cutting: logging and non-Bash/file tools ---------------------------
