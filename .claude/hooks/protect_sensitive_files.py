@@ -48,6 +48,15 @@ caught by this hook. Closing it generically would mean sandboxing or
 auditing what every interpreter does after a hook returns control, which
 is the same out-of-scope problem noted in block_destructive_sql.py, not a
 gap unique to this hook.
+
+A second, more important gap surfaced live rather than reasoned about in
+advance: this hook's decision is `ask`, and in an unattended ("Auto Mode")
+session an `ask` can go unanswered and the call proceeds — a live
+`git reset --hard HEAD` in that state ran with no prompt shown, in the
+same session where block_destructive_sql.py's `deny` stopped a real
+destructive-SQL attempt outright every time. See block_history_rewrite.py's
+docstring for the full account; it applies here identically, since this
+hook is `ask`-only too.
 """
 
 from __future__ import annotations

@@ -46,3 +46,14 @@ doc file merely *naming* the banned SQL keywords is not itself SQL).
 Documented, not hidden: neither SQL nor file-protection hook can see what
 happens *inside* an interpreter it merely launches — only the tool call's
 own text.
+
+**`ask` is not a guarantee outside an attended session.** Also found live:
+a real push to `main` and a real `reset --hard` both went through with no
+prompt, in the autonomous session that built these hooks, while `deny`
+stopped a real destructive-SQL attempt every single time. `ask` routes
+through the normal interactive permission prompt, which an unattended
+("Auto Mode") session can pass unanswered; `deny` (exit 2) never enters
+that system. `protect_sensitive_files.py` and `block_history_rewrite.py`
+are `ask`-only by design, so right now neither promises a human in the
+loop unattended — flagged in both docstrings and in CLAUDE.md as a
+decision, not quietly accepted.

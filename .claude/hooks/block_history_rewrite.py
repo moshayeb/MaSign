@@ -25,6 +25,26 @@ of them is sometimes exactly the right command (an interactive rebase to
 clean up a branch before a PR, an amend of a commit that was never pushed).
 The point is that they never happen *silently* — the owner is always the one
 who says yes.
+
+IMPORTANT, found live while building this hook: "the owner is always the
+one who says yes" is only true when someone is there to say it. `ask`
+prints `permissionDecision: "ask"` and exits 0 so Claude Code raises its
+normal interactive permission prompt — and a `git push origin HEAD:main`
+and a `git reset --hard HEAD` both ran through, unprompted, in an
+autonomous ("Auto Mode") session with nobody present to answer that
+prompt, in the same session that had block_destructive_sql.py's hard
+`deny` stop a real DROP + TABLE attempt outright, no prompt involved,
+every single time it was tried. The difference is not a bug in this
+file's classification (both commands were independently confirmed to
+return `ask` when the script is run standalone against the same input) —
+it is that `ask` delegates to a permission system an unattended session
+can sail through, while `deny` (exit 2) is unconditional and does not
+route through that system at all. For a hook whose stated purpose is
+"guaranteed to be in the loop", `ask` alone does not deliver that
+guarantee outside an interactively attended session; only `deny` does.
+Left as `ask` here because that is what was specified and reversing it
+unilaterally is not this hook's call to make — but the gap is real and
+is flagged for a decision, not silently accepted.
 """
 
 from __future__ import annotations

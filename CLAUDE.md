@@ -186,6 +186,21 @@ session start: a hook added or changed mid-session needs a restart before
 it reliably takes effect everywhere, though this project's own build of
 them took hold immediately in the session that wrote them.
 
+**ask is not a guarantee in an unattended session -- only deny is.** Found
+live, not reasoned about in advance: a real `git push origin HEAD:main`
+and a real `git reset --hard HEAD` both ran through with no prompt shown,
+in the same autonomous ("Auto Mode") session where block_destructive_sql.py's
+`deny` stopped a real destructive-SQL attempt outright, every time, no
+prompt involved. Both hooks independently confirmed the same input
+correctly classifies as `ask` when run standalone -- the gap is not in the
+classification, it is that `ask` routes through the normal interactive
+permission system, which an unattended session can pass through unanswered,
+while `deny` (exit 2) never enters that system at all. Hooks 1 and 3 are
+`ask`-only by explicit design (owner sign-off, 2026-09-24); this means
+neither currently guarantees a human in the loop outside an attended
+session, which is worth a deliberate decision, not a silent gap -- see
+`.claude/hooks/block_history_rewrite.py`'s docstring for the full account.
+
 ## Frontend Decision
 
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error
