@@ -177,7 +177,7 @@ a {
 }
 
 .topnav-link:hover {
-  color: var(--accent-bright);
+  color: var(--accent);
 }
 
 .topnav-cta {
