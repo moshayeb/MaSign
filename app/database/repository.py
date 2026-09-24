@@ -318,7 +318,14 @@ def replace_risk_findings(
     contract_id: UUID,
     findings: list[tuple[UUID, str, str, str, str]],
 ) -> None:
-    """Swap the contract's stored findings for `(chunk_id, category, severity, reason, quote)` rows."""
+    """Swap the contract's stored findings for `(chunk_id, category, severity, reason, quote)` rows.
+
+    `chunk_id` may belong to a linked document's own chunks when this is a
+    bundle review (MAS-138) -- the finding is still recorded under this
+    contract_id, the review that found it; a solo review of the linked
+    document later stores its own row for the same chunk independently
+    (contract_id, chunk_id, category) is the uniqueness, not chunk_id alone.
+    """
     with connection.transaction():
         with connection.cursor() as cursor:
             cursor.execute("DELETE FROM risk_findings WHERE contract_id = %s", (contract_id,))
@@ -326,7 +333,7 @@ def replace_risk_findings(
                 """
                 INSERT INTO risk_findings (contract_id, chunk_id, category, severity, reason, quote)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chunk_id, category) DO NOTHING
+                ON CONFLICT (contract_id, chunk_id, category) DO NOTHING
                 """,
                 [(contract_id, *finding) for finding in findings],
             )
@@ -336,8 +343,9 @@ def list_risk_findings(connection: psycopg.Connection, contract_id: UUID) -> lis
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT f.* FROM risk_findings f JOIN chunks c ON c.id = f.chunk_id
-            WHERE f.contract_id = %s ORDER BY c.chunk_index, f.category
+            SELECT f.*, c.contract_id AS source_contract_id FROM risk_findings f JOIN chunks c ON c.id = f.chunk_id
+            WHERE f.contract_id = %s
+            ORDER BY (c.contract_id <> f.contract_id), c.contract_id, c.chunk_index, f.category
             """,
             (contract_id,),
         )
@@ -349,7 +357,12 @@ def replace_key_terms(
     contract_id: UUID,
     terms: list[tuple[UUID, str, str, str, dict | None]],
 ) -> None:
-    """Swap the contract's stored key terms for `(chunk_id, term, value, quote, typed)` rows."""
+    """Swap the contract's stored key terms for `(chunk_id, term, value, quote, typed)` rows.
+
+    `chunk_id` may belong to a linked document's own chunks when this is a
+    bundle review (MAS-138); see `replace_risk_findings` for why the
+    uniqueness is `(contract_id, chunk_id, term)`, not `chunk_id` alone.
+    """
     with connection.transaction():
         with connection.cursor() as cursor:
             cursor.execute("DELETE FROM key_terms WHERE contract_id = %s", (contract_id,))
@@ -357,7 +370,7 @@ def replace_key_terms(
                 """
                 INSERT INTO key_terms (contract_id, chunk_id, term, value, quote, typed)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chunk_id, term) DO NOTHING
+                ON CONFLICT (contract_id, chunk_id, term) DO NOTHING
                 """,
                 [(contract_id, chunk_id, term, value, quote, Jsonb(typed) if typed is not None else None)
                  for chunk_id, term, value, quote, typed in terms],
@@ -365,12 +378,18 @@ def replace_key_terms(
 
 
 def list_key_terms(connection: psycopg.Connection, contract_id: UUID) -> list[KeyTermRow]:
-    """Stored key terms in passage order, so the first row per term is the earliest statement."""
+    """Stored key terms, earliest statement first per term.
+
+    "Earliest" means the primary document's own passages first (in passage
+    order), then a linked document's (MAS-138) -- two documents can both have
+    a chunk_index 0, so document identity, not just chunk_index, decides.
+    """
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT k.* FROM key_terms k JOIN chunks c ON c.id = k.chunk_id
-            WHERE k.contract_id = %s ORDER BY c.chunk_index, k.term
+            SELECT k.*, c.contract_id AS source_contract_id FROM key_terms k JOIN chunks c ON c.id = k.chunk_id
+            WHERE k.contract_id = %s
+            ORDER BY (c.contract_id <> k.contract_id), c.contract_id, c.chunk_index, k.term
             """,
             (contract_id,),
         )
