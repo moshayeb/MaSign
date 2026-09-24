@@ -29,6 +29,7 @@ import queue
 import re
 import sys
 import threading
+import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -203,6 +204,78 @@ def _open_terminal_for_confirmation():
         return None, None
 
 
+_CONFIRM_WINDOW_TITLE = "MaSign confirmation required"
+
+
+def _bring_window_to_foreground(title: str, poll_seconds: float = 5.0) -> None:
+    """Best-effort only -- found live to matter: `CREATE_NEW_CONSOLE` opens a
+    window, but Windows does not give it focus, so on a desktop with several
+    other windows already open it can land behind all of them with no
+    visible signal it exists -- the console genuinely opened, the owner
+    genuinely never saw it. Polls (title changes are not instant) for a
+    top-level window with this exact title -- set by the `title` command in
+    `_prompt_windows_new_console`'s script -- and forces it forward. Looked
+    up by title, not by the spawned process's PID: on a machine where
+    Windows Terminal is the default console host (Windows 11's default --
+    confirmed live on the dev machine this was built on via
+    `Get-Process | Where MainWindowTitle`, which found a real
+    `WindowsTerminal` process correctly titled this way), the visible
+    top-level window can belong to Windows Terminal, not to the `cmd.exe`
+    process this module spawned, so a PID-based lookup would find nothing.
+
+    `SetForegroundWindow` alone was found live not to be enough: Windows
+    deliberately blocks background/unattended processes from stealing
+    focus and silently no-ops the call rather than erroring, so a window
+    can exist, be correctly titled, and still never visibly appear.
+    `FlashWindowEx` is the API meant for exactly this case -- notify
+    without stealing focus -- and is not subject to the same block, so
+    both are attempted: foreground if Windows allows it, a flashing
+    taskbar entry if it does not. Uses only `ctypes` (no pywin32
+    dependency, consistent with the rest of this project's
+    dependency-free hook scripts); any failure here is cosmetic -- the
+    confirmation prompt and its timeout still work correctly either way,
+    it just might not visibly announce itself."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        deadline = time.time() + poll_seconds
+        hwnd = 0
+        while time.time() < deadline and not hwnd:
+            hwnd = user32.FindWindowW(None, title)
+            if not hwnd:
+                time.sleep(0.15)
+        if not hwnd:
+            return
+
+        SW_RESTORE = 9
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.SetForegroundWindow(hwnd)
+
+        class FLASHWINFO(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.UINT),
+                ("hwnd", wintypes.HWND),
+                ("dwFlags", wintypes.DWORD),
+                ("uCount", wintypes.UINT),
+                ("dwTimeout", wintypes.DWORD),
+            ]
+
+        FLASHW_ALL = 0x00000003
+        FLASHW_TIMERNOFG = 0x0000000C  # flash until the window gets focus
+        info = FLASHWINFO(
+            cbSize=ctypes.sizeof(FLASHWINFO),
+            hwnd=hwnd,
+            dwFlags=FLASHW_ALL | FLASHW_TIMERNOFG,
+            uCount=0,
+            dwTimeout=0,
+        )
+        user32.FlashWindowEx(ctypes.byref(info))
+    except Exception:  # pragma: no cover - cosmetic, never the actual decision
+        pass
+
+
 def _prompt_windows_new_console(prompt_text: str, timeout: float) -> str | None:
     """Windows only. Found live: opening `CONIN$`/`CONOUT$` (this process's
     *own* console handles) does not raise in this project's actual harness
@@ -232,7 +305,7 @@ def _prompt_windows_new_console(prompt_text: str, timeout: float) -> str | None:
         # inside a /c command line, or they get interpreted as shell syntax.
         safe_prompt = re.sub(r"([&|^<>])", r"^\1", prompt_text)
         script = (
-            f"title MaSign confirmation required & "
+            f"title {_CONFIRM_WINDOW_TITLE} & "
             f"echo {safe_prompt} & "
             f'set /p CODE="Type the confirmation code and press Enter: " & '
             f'>"{path}" echo %CODE%'
@@ -241,6 +314,7 @@ def _prompt_windows_new_console(prompt_text: str, timeout: float) -> str | None:
             proc = subprocess.Popen(["cmd.exe", "/c", script], creationflags=subprocess.CREATE_NEW_CONSOLE)
         except Exception:
             return None
+        threading.Thread(target=_bring_window_to_foreground, args=(_CONFIRM_WINDOW_TITLE,), daemon=True).start()
         try:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
