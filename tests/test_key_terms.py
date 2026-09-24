@@ -286,6 +286,58 @@ def test_standards_compare_typed_values_only_and_never_add_a_model_call(db, fake
     assert len(fake_chat_model.calls) == calls_after_review  # reading verdicts costs nothing
 
 
+# --- contract-list summary strip (MAS-101) -----------------------------------------------------
+
+
+def test_contract_list_summarises_fee_term_risk_and_deviations_without_a_model_call(db, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(
+        db,
+        FEES,
+        LATE,
+        "3. Term. The Initial Term is thirty-six (36) months.",
+        "4. Notice. Either party may terminate this Agreement on ninety (90) days' notice.",
+        "9. Liability. Customer's liability under this Agreement shall be unlimited.",
+    )
+    fake_chat_model.risk_reply = json.dumps(
+        [{"category": "liability", "severity": "High", "reason": "unlimited liability", "passage": 5, "quote": "shall be unlimited"}]
+    )
+    fake_chat_model.key_terms_reply = json.dumps(
+        [
+            _item("recurring_fee", "EUR 18,500 per month", 1, "pay EUR 18,500 per month", {"amount": 18500, "currency": "EUR", "period": "month"}),
+            _item("late_payment", "1.5% per month", 2, "interest at 1.5% per month", {"rate_percent": 1.5, "per": "month"}),
+            _item("initial_term", "36 months", 3, "The Initial Term is thirty-six (36) months.", {"months": 36}),
+            _item("notice_period", "90 days", 4, "ninety (90) days' notice", {"days": 90}),
+        ]
+    )
+    fake_chat_model.calls.clear()
+    review_contract(contract_id, fake_chat_model)
+    calls_after_review = len(fake_chat_model.calls)
+
+    listed = {c["contract_id"]: c for c in client.get("/api/contracts").json()}[str(contract_id)]
+    assert listed["recurring_fee"] == "EUR 18,500 per month"
+    assert listed["initial_term"] == "36 months"
+    assert listed["high_findings"] == 1
+    # late_payment (1.5% > 1%/month standard) and notice_period (90 > 60 days standard) deviate.
+    assert listed["deviations"] == 2
+    assert listed["key_terms_status"] == "complete"
+
+    solo = client.get(f"/api/contracts/{contract_id}").json()
+    assert (solo["recurring_fee"], solo["initial_term"], solo["deviations"]) == ("EUR 18,500 per month", "36 months", 2)
+    assert len(fake_chat_model.calls) == calls_after_review  # the list reads stored rows, no new call
+
+
+def test_contract_list_summarises_an_unreviewed_contract_as_not_reviewed(db) -> None:
+    contract_id = _stored(db, FEES)
+
+    listed = {c["contract_id"]: c for c in client.get("/api/contracts").json()}[str(contract_id)]
+
+    assert listed["recurring_fee"] is None
+    assert listed["initial_term"] is None
+    assert listed["high_findings"] == 0
+    assert listed["deviations"] == 0
+    assert listed["key_terms_status"] == "none"
+
+
 # --- export (MAS-97) --------------------------------------------------------------------------
 
 

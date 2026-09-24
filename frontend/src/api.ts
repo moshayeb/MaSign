@@ -24,6 +24,12 @@ export interface Contract {
   document_kind?: DocumentKind | null
   document_looks_like?: string | null
   document_kind_reasons?: string[]
+  // The list-row summary strip (MAS-101): from stored key terms, no model call.
+  recurring_fee?: string | null
+  initial_term?: string | null
+  high_findings?: number
+  deviations?: number
+  key_terms_status?: 'complete' | 'partial' | 'none'
 }
 
 export type DocumentKind = 'contract' | 'uncertain' | 'not_contract'

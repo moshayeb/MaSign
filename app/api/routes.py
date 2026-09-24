@@ -21,6 +21,7 @@ from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import ExternalReference, find_external_references
 from app.key_terms.deadlines import compute_deadlines
+from app.key_terms.standards import STANDARDS
 from app.key_terms.standards import compare as compare_to_standard
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
@@ -120,6 +121,12 @@ class QueryResponse(BaseModel):
     redacted_passages: list[int] = []
 
 
+# Terms the contract-list summary strip needs (MAS-101): the two shown as
+# text, plus every term with a standard, to count deviations without a
+# second pass over the full key-terms table.
+SUMMARY_TERM_IDS = ("recurring_fee", "initial_term", *STANDARDS.keys())
+
+
 class ContractSummary(BaseModel):
     contract_id: UUID
     filename: str
@@ -144,9 +151,30 @@ class ContractSummary(BaseModel):
     document_kind: str | None = None
     document_looks_like: str | None = None
     document_kind_reasons: list[str] = []
+    # The list-row summary strip (MAS-101), from stored key terms — no model call.
+    recurring_fee: str | None = None
+    initial_term: str | None = None
+    high_findings: int = 0
+    deviations: int = 0
+    # complete | partial | none — how much of the key-terms pass has run.
+    key_terms_status: str = "none"
 
     @classmethod
-    def from_model(cls, contract: Contract, review: RiskSummary | None = None) -> "ContractSummary":
+    def from_model(
+        cls, contract: Contract, review: RiskSummary | None = None, key_terms: dict[str, KeyTermRow] | None = None
+    ) -> "ContractSummary":
+        key_terms = key_terms or {}
+        if review and review.key_terms_complete:
+            key_terms_status = "complete"
+        elif review and review.chunks_checked > 0:
+            key_terms_status = "partial"
+        else:
+            key_terms_status = "none"
+        deviations = sum(
+            1
+            for term_id in STANDARDS
+            if (row := key_terms.get(term_id)) is not None and compare_to_standard(term_id, row.typed).status == "deviates"
+        )
         return cls(
             contract_id=contract.id,
             filename=contract.filename,
@@ -165,6 +193,11 @@ class ContractSummary(BaseModel):
             document_kind=contract.document_kind,
             document_looks_like=contract.document_looks_like,
             document_kind_reasons=list(contract.document_kind_reasons),
+            recurring_fee=key_terms["recurring_fee"].value if "recurring_fee" in key_terms else None,
+            initial_term=key_terms["initial_term"].value if "initial_term" in key_terms else None,
+            high_findings=review.high_findings if review else 0,
+            deviations=deviations,
+            key_terms_status=key_terms_status,
         )
 
 
@@ -516,7 +549,8 @@ def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_
 @router.get("/contracts", response_model=list[ContractSummary])
 def list_contracts(db: psycopg.Connection = Depends(get_db)) -> list[ContractSummary]:
     reviews = repository.list_risk_summaries(db)
-    return [ContractSummary.from_model(c, reviews.get(c.id)) for c in repository.list_contracts(db)]
+    key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS)
+    return [ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id)) for c in repository.list_contracts(db)]
 
 
 @router.get("/contracts/{contract_id}", response_model=ContractSummary)
@@ -527,7 +561,8 @@ def get_contract(
     contract = repository.get_contract(db, contract_id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id))
+    key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
+    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms)
 
 
 class Passage(BaseModel):
