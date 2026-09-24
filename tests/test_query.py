@@ -47,3 +47,22 @@ def test_missing_question_is_rejected(retriever_calls: list[str]) -> None:
 
     assert response.status_code == 422
     assert retriever_calls == []
+
+
+def test_a_question_over_the_length_limit_is_rejected_before_retrieval(retriever_calls: list[str]) -> None:
+    # MAS-130: no cap meant an arbitrarily large question reached the paid
+    # chat provider. One character over routes.MAX_QUESTION_LENGTH must be
+    # rejected by validation, the same readable 422 shape as a blank one,
+    # before retrieval (and the paid call after it) ever runs.
+    response = client.post("/api/query", json={"question": "x" * (routes.MAX_QUESTION_LENGTH + 1)})
+
+    assert response.status_code == 422
+    assert retriever_calls == []
+
+
+def test_a_question_at_exactly_the_length_limit_is_accepted(retriever_calls: list[str]) -> None:
+    question = "x" * routes.MAX_QUESTION_LENGTH
+    response = client.post("/api/query", json={"question": question})
+
+    assert response.status_code == 200
+    assert retriever_calls == [question]

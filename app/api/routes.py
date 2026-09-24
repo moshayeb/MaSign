@@ -38,9 +38,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["contracts"])
 
+# Every question reaches the paid chat provider (litellm.completion()); an
+# unbounded length has no cap on per-query cost. 2000 chars is generous for
+# any real question and matched by the frontend's input (MAS-130).
+MAX_QUESTION_LENGTH = 2000
+
 
 class QueryRequest(BaseModel):
-    question: str = Field(..., min_length=1)
+    question: str = Field(..., min_length=1, max_length=MAX_QUESTION_LENGTH)
     # Restrict the search to one contract; omit to search every uploaded contract.
     contract_id: UUID | None = None
     limit: int = Field(DEFAULT_LIMIT, ge=1, le=20)
