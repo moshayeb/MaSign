@@ -148,18 +148,26 @@ absolute interpreter/script paths) but the scripts themselves are tracked,
 tested and documented like any other code. Every hook reads one JSON tool
 call on stdin and fails closed: a crash, malformed stdin, or missing
 `tool_name` all become **ask**, never a silent allow (`_common.py`
-`run_hook`). `ask` prints a `permissionDecision` JSON and exits 0 (forces
-the normal approval prompt); `deny` writes to stderr and exits 2 (no way
-through at all).
+`run_hook`). Three decisions exist: `ask` prints a `permissionDecision`
+JSON and exits 0 (forces Claude Code's normal approval prompt); `deny`
+writes to stderr and exits 2 (no way through at all, ever); `confirm`
+(added 2026-09-24, see the paragraph below) exits 2 the same as `deny`
+unless a human types a correct code at the real console first -- it does
+not use Claude Code's prompt at all.
 
-- `protect_sensitive_files.py` -- asks before `rm`/`mv`/a truncating `>`/
+- `protect_sensitive_files.py` -- requires a **typed confirmation code**
+  (`confirm`, see below) before `rm`/`mv`/a truncating `>`/
   `git checkout --`/`git restore`/`git clean -f` touches `CLAUDE.md`,
   `.gitignore`, `.dockerignore`, `.env`, `.env.example`, or an *existing*
   `app/database/migrations/*.sql` file (a brand new migration is exempt),
   and before a Write/Edit/NotebookEdit targets any of them directly. Built
   after a real incident: a `git reset --hard` once wiped uncommitted
   CLAUDE.md/.gitignore/.dockerignore edits, recovered only from a dangling
-  stash. Disclosed gap: a one-line interpreter script that opens and
+  stash. Escalated from `ask` to `confirm` (owner sign-off, 2026-09-24)
+  after a live `rm CLAUDE.md` went straight through with `ask` still in
+  place -- the same gap documented below for Hook 3, demonstrated here a
+  second time before it was closed. Disclosed gap, unrelated to the
+  ask/confirm question: a one-line interpreter script that opens and
   overwrites a protected file directly is not pattern-matched -- including
   this project's own habit of editing CLAUDE.md that way.
 - `block_destructive_sql.py` -- **denies** (hard, exit 2) an unbounded
@@ -200,30 +208,34 @@ classification, it is that `ask` routes through the normal interactive
 permission system, which an unattended session can pass through unanswered,
 while `deny` (exit 2) never enters that system at all.
 
-**Resolved for the local history-destroying commands with a fourth
-decision, `confirm` (owner sign-off, 2026-09-24).** `protect_sensitive_files.py`
-and push/force-push in `block_history_rewrite.py` stay `ask`-only --
-deliberately, since a push already heads toward a PR review, a second
-human is downstream regardless. But `reset --hard`, `commit --amend`,
-`rebase`, `filter-branch`, `reflog expire` and `gc --prune` can destroy
-work with no remote and no reviewer ever involved, so those now go through
-`_common.confirm()`: it bypasses Claude Code's permission prompt entirely
--- the exact plumbing `ask` was shown to leak through -- and instead opens
-the real OS console directly (`CONIN$`/`CONOUT$` on Windows, `/dev/tty` on
-POSIX; not this process's own stdin, already spent on the tool-call JSON,
-nor its stdout, which nobody may be watching) and requires a human to type
-a code the owner set themselves (`MASIGN_CONFIRM_CODE`, or a local,
+**Resolved with a fourth decision, `confirm` (owner sign-off,
+2026-09-24).** Push and force-push in `block_history_rewrite.py` stay
+`ask`-only -- deliberately, since a push already heads toward a PR
+review, a second human is downstream regardless. Everything else that
+found the gap live -- `reset --hard`, `commit --amend`, `rebase`,
+`filter-branch`, `reflog expire`, `gc --prune` in `block_history_rewrite.py`,
+and *all* of `protect_sensitive_files.py` (escalated the same day, after
+a live `rm CLAUDE.md` reproduced the identical gap with no remote or
+reviewer ever involved) -- now goes through `_common.confirm()`: it
+bypasses Claude Code's permission prompt entirely -- the exact plumbing
+`ask` was shown to leak through -- and instead opens the real OS console
+directly (`CONIN$`/`CONOUT$` on Windows, `/dev/tty` on POSIX; not this
+process's own stdin, already spent on the tool-call JSON, nor its
+stdout, which nobody may be watching) and requires a human to type a
+code the owner set themselves (`MASIGN_CONFIRM_CODE`, or a local,
 git-ignored `.claude/hooks/.confirm_code`) within `MASIGN_CONFIRM_TIMEOUT`
 seconds (default 20). No code configured anywhere, no console attached
 (exactly the unattended case above), a wrong code, or nobody answering in
 time: every one of those is a `deny`, same as Hook 2 -- only a correct,
-human-typed code lets the call through. Proven live, not just unit-tested:
-a real `git reset --hard HEAD` with no code configured was genuinely
-stopped in this same autonomous session (`.claude/hooks/blocked.log`,
-`2026-09-24T11:33:37Z`), where the equivalent `ask`-based attempt earlier
-in this same session was not. See `_common.confirm()`'s docstring and
-`tests/test_safety_hooks.py`'s `TestConfirmationCode` for the mechanism
-and its test seam.
+human-typed code lets the call through. Proven live, not just
+unit-tested, twice: a real `git reset --hard HEAD` with no code
+configured was genuinely stopped (`.claude/hooks/blocked.log`,
+`2026-09-24T11:33:37Z`), and later the same `rm CLAUDE.md` that had
+previously gone straight through under `ask` was genuinely stopped too
+(`2026-09-24T13:00:11Z`) -- where both equivalent `ask`-based attempts
+earlier in the same session were not. See `_common.confirm()`'s
+docstring and `tests/test_safety_hooks.py`'s `TestConfirmationCode` for
+the mechanism and its test seam.
 
 ## Frontend Decision
 

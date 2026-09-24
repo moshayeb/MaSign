@@ -118,11 +118,17 @@ class TestProtectSensitiveFiles:
         ],
     )
     def test_blocks_destructive_bash_on_protected_files(self, tmp_path, command, target):
+        # Escalated from `ask` to `confirm` after a live `rm CLAUDE.md`
+        # demonstrated `ask` does not stop anything in an unattended
+        # session (see the hook's docstring). With no confirmation code
+        # configured anywhere (the default here — `run_hook` strips
+        # MASIGN_CONFIRM_CODE), `confirm` denies unconditionally, which is
+        # itself the proof this now actually blocks something.
         log = tmp_path / "hooks.log"
         result = run_hook(PROTECT, bash(command), log)
-        body = assert_ask(result, contains=target)
-        assert last_log_entry(log)["decision"] == "ask"
-        assert body  # the JSON round-tripped, which is what Claude Code actually parses
+        assert_deny(result, contains=target)
+        assert_deny(result, contains="no confirmation code configured")
+        assert last_log_entry(log)["decision"] == "deny"
 
     def test_blocks_write_to_an_existing_migration(self, tmp_path):
         migrations = sorted((ROOT / "app" / "database" / "migrations").glob("*.sql"))
@@ -130,12 +136,26 @@ class TestProtectSensitiveFiles:
         existing = migrations[0].relative_to(ROOT).as_posix()
         log = tmp_path / "hooks.log"
         result = run_hook(PROTECT, write(existing), log)
-        assert_ask(result, contains=existing.rsplit("/", 1)[-1])
+        assert_deny(result, contains=existing.rsplit("/", 1)[-1])
 
     def test_allows_creating_a_new_migration_file(self, tmp_path):
         log = tmp_path / "hooks.log"
         result = run_hook(PROTECT, write("app/database/migrations/999_test_only_never_applied.sql", "ALTER TABLE x ADD y INT;"), log)
         assert_allow(result)
+
+    def test_correct_confirmation_code_lets_a_protected_delete_through(self, tmp_path):
+        # Hook 1 shares _common.confirm() with Hook 3 (see TestConfirmationCode
+        # for the full mechanism); this just proves it is actually wired up
+        # here too, not only on block_history_rewrite.py.
+        log = tmp_path / "hooks.log"
+        result = run_hook(
+            PROTECT,
+            bash("rm CLAUDE.md"),
+            log,
+            extra_env={"MASIGN_CONFIRM_CODE": "4242", "MASIGN_HOOK_TEST_CONFIRM_INPUT": "4242"},
+        )
+        assert_confirmed(result)
+        assert last_log_entry(log)["decision"] == "confirmed"
 
     def test_allows_ordinary_files_and_ordinary_commands(self, tmp_path):
         log = tmp_path / "hooks.log"
@@ -393,13 +413,13 @@ class TestConfirmationCode:
 
 def test_every_ask_and_deny_is_logged_with_hook_name_and_timestamp(tmp_path):
     log = tmp_path / "hooks.log"
-    run_hook(PROTECT, bash("rm CLAUDE.md"), log)
+    run_hook(PROTECT, bash("rm CLAUDE.md"), log)  # confirm(), no code configured -> deny
     run_hook(SQL, bash('psql -c "DROP TABLE contracts;"'), log)
-    run_hook(HISTORY, bash("git push origin main"), log)
+    run_hook(HISTORY, bash("git push origin main"), log)  # still ask (a push heads to a PR review)
 
     entries = [json.loads(line) for line in log.read_text(encoding="utf-8").strip().splitlines()]
     assert [e["hook"] for e in entries] == ["protect-sensitive-files", "block-destructive-sql", "block-history-rewrite"]
-    assert [e["decision"] for e in entries] == ["ask", "deny", "ask"]
+    assert [e["decision"] for e in entries] == ["deny", "deny", "ask"]
     for entry in entries:
         assert entry["ts"]  # non-empty ISO timestamp
         assert entry["reason"]

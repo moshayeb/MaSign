@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Hook 1 (Homework 6): ask before a destructive operation touches a file
-this project depends on outsiders never silently losing.
+"""Hook 1 (Homework 6): require a typed confirmation code before a
+destructive operation touches a file this project depends on outsiders
+never silently losing.
 
 Protected, exactly:
   CLAUDE.md, .gitignore, .dockerignore, .env, .env.example
@@ -15,9 +16,9 @@ move a commit between branches wiped uncommitted CLAUDE.md / .gitignore /
 .dockerignore edits, recovered only because they were still in a dangling
 stash. This hook is what should have asked first.
 
-Two tool shapes are covered:
+Two tool shapes are covered, both routed to `_common.confirm()`:
   - Write / Edit / NotebookEdit whose target path is one of the protected
-    files — asked regardless of *what* the new content is, because the
+    files — confirmed regardless of *what* the new content is, because the
     point is "you are about to change this file", not "the change looks
     bad".
   - Bash commands whose parsed structure deletes, overwrites or reverts one
@@ -28,10 +29,10 @@ Two tool shapes are covered:
 
 `git reset --hard` is deliberately *not* re-implemented here: it discards
 uncommitted work project-wide, not path by path, so it belongs to Hook 3
-(block_history_rewrite.py) and is asked about there unconditionally. That
-is what would have caught the actual incident — this hook catches the
-narrower, more common case of a direct `rm`/`checkout`/`clean` on one of
-these five names.
+(block_history_rewrite.py), which requires the same confirmation code for
+it. That is what would have caught the actual incident — this hook catches
+the narrower, more common case of a direct `rm`/`checkout`/`clean` on one
+of these five names.
 
 Disclosed gap, found by noticing it applied to this project's own habits:
 the Bash classifier only pattern-matches named shell primitives. A one-line
@@ -50,13 +51,24 @@ is the same out-of-scope problem noted in block_destructive_sql.py, not a
 gap unique to this hook.
 
 A second, more important gap surfaced live rather than reasoned about in
-advance: this hook's decision is `ask`, and in an unattended ("Auto Mode")
-session an `ask` can go unanswered and the call proceeds — a live
-`git reset --hard HEAD` in that state ran with no prompt shown, in the
-same session where block_destructive_sql.py's `deny` stopped a real
-destructive-SQL attempt outright every time. See block_history_rewrite.py's
-docstring for the full account; it applies here identically, since this
-hook is `ask`-only too.
+advance, and is why this hook no longer uses `ask`: in an unattended
+("Auto Mode") session an `ask` can go unanswered and the call proceeds —
+a live `rm CLAUDE.md` in that state deleted the file with no prompt
+shown and no error, in the same session where block_destructive_sql.py's
+`deny` stopped a real destructive-SQL attempt outright every time. `ask`
+routes through Claude Code's own interactive permission prompt, which an
+unattended session can pass through unanswered; it never even reached
+that prompt's answer, it just went straight through. `_common.confirm()`
+does not use that plumbing at all: it opens the real OS console directly
+and requires a human to type a code the owner set themselves
+(`MASIGN_CONFIRM_CODE` or a local, git-ignored
+`.claude/hooks/.confirm_code`) within a time limit. No code configured,
+no console attached, a wrong code, or nobody answering in time all fail
+to `deny`, same as Hook 2 — the same mechanism Hook 3 uses for local
+history-rewriting commands, applied here after the live `rm CLAUDE.md`
+gap was demonstrated a second time with `ask` still in place (owner
+sign-off, 2026-09-24). See block_history_rewrite.py's and
+`_common.confirm()`'s docstrings for the full mechanism.
 """
 
 from __future__ import annotations
@@ -170,7 +182,7 @@ def _classify_bash(command: str) -> tuple[str, str] | None:
                     reasons.append("git clean -f can delete untracked files, including .env")
 
     if reasons:
-        return "ask", "; ".join(dict.fromkeys(reasons))  # de-duplicate, keep order
+        return "confirm", "; ".join(dict.fromkeys(reasons))  # de-duplicate, keep order
     return None
 
 
@@ -178,7 +190,7 @@ def classify(call: ToolCall) -> tuple[str, str] | None:
     if call.tool_name in ("Write", "Edit", "NotebookEdit"):
         path = call.file_path()
         if path and _is_protected(path):
-            return "ask", f"{call.tool_name} targets protected file {_normalise(path)}"
+            return "confirm", f"{call.tool_name} targets protected file {_normalise(path)}"
         return None
 
     if call.tool_name == "Bash":
