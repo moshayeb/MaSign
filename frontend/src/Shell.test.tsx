@@ -59,7 +59,7 @@ describe('the shell', () => {
   it('makes the marketing claim on the home page, where it belongs (MAS-133)', () => {
     render(<HomePage />)
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Get the clause that proves it/)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Understand your contract before you sign/)
     // The CTA appears both in the header nav and the hero.
     const workspaceLinks = screen.getAllByRole('link', { name: /Open workspace/ })
     expect(workspaceLinks.length).toBeGreaterThan(0)
@@ -69,12 +69,13 @@ describe('the shell', () => {
   it('explains four real MaSign behaviours without unsupported claims (MAS-134)', () => {
     render(<HomePage />)
 
-    expect(screen.getByRole('heading', { name: 'Clear answers. Evidence you can check.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Why MaSign' })).toBeInTheDocument()
     for (const title of ['Cited answers', 'Risk review', 'Key terms', 'Honest unknowns']) {
       expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
     }
     expect(screen.getByText('Open the exact clause behind every answer.')).toBeInTheDocument()
-    expect(screen.getByText('MaSign keeps “Not found” and “Not checked” clearly separate.')).toBeInTheDocument()
+    expect(screen.getByText('A clear first read of your contract, with sources you can open.')).toBeInTheDocument()
+    expect(screen.getByText('MaSign clearly says when the contract does not contain enough information.')).toBeInTheDocument()
   })
 })
 
