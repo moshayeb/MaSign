@@ -85,19 +85,37 @@ def render_markdown(filename: str, review: RiskReviewResponse, terms: KeyTermsRe
     return "\n".join(lines)
 
 
+_FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")
+
+
+def _escape_formula(value: str) -> str:
+    """A CSV cell beginning with =, +, - or @ is read as a formula by Excel,
+    Google Sheets and LibreOffice when the file is opened -- and some of
+    these cells carry verbatim contract text (a model's quote, a typed
+    value), which is attacker-controlled: a crafted contract could shape a
+    cell to start with one of these (MAS-131). CSV itself has no escape for
+    this; a leading apostrophe is what makes spreadsheet software treat the
+    cell as literal text instead."""
+    return f"'{value}" if value.lstrip().startswith(_FORMULA_TRIGGER_CHARS) else value
+
+
+def _safe_row(writer, values: list) -> None:
+    writer.writerow([_escape_formula(v) if isinstance(v, str) else v for v in values])
+
+
 def render_csv(review: RiskReviewResponse, terms: KeyTermsResponse) -> str:
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(["kind", "name", "severity_or_status", "value_or_reason", "standard", "passage", "quote"])
     for f in review.findings:
-        writer.writerow(["finding", f.category_name, f.severity, f.reason, "", f.chunk_index + 1, f.quote])
+        _safe_row(writer, ["finding", f.category_name, f.severity, f.reason, "", f.chunk_index + 1, f.quote])
     for term in terms.terms:
         if term.source:
-            writer.writerow(["key_term", term.name, term.status, term.value, _standard_cell(term), term.source.chunk_index + 1, term.source.quote])
+            _safe_row(writer, ["key_term", term.name, term.status, term.value, _standard_cell(term), term.source.chunk_index + 1, term.source.quote])
             for other in term.others:
-                writer.writerow(["key_term", term.name, "also_stated", other.value, "", other.chunk_index + 1, other.quote])
+                _safe_row(writer, ["key_term", term.name, "also_stated", other.value, "", other.chunk_index + 1, other.quote])
         else:
-            writer.writerow(["key_term", term.name, term.status, term.value, "", "", ""])
+            _safe_row(writer, ["key_term", term.name, term.status, term.value, "", "", ""])
     return out.getvalue()
 
 
