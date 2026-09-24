@@ -28,7 +28,7 @@ export function Footer() {
             <a className="link" href="/how-it-works">
               How it works
             </a>
-            <a className="link" href="/">
+            <a className="link" href="/workspace">
               Open workspace
             </a>
             <a className="link" href="/what-masign-checks">

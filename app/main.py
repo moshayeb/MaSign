@@ -8,7 +8,7 @@ import psycopg
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.answering.llm import ChatModel, ChatModelError, UnconfiguredChatModel, get_chat_model
@@ -206,7 +206,30 @@ def readiness_check(
 # Mounted last so /api, /health and /docs keep winning.
 FRONTEND_DIST = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent.parent / "frontend" / "dist"))
 
+# Client-side page paths (MAS-132) — must match frontend/src/pages/index.ts's
+# PAGES map. Without an explicit route each of these fell through to
+# StaticFiles(html=True)'s 404.html fallback: the page rendered correctly
+# once the JS ran, but the server call itself returned a genuine 404, which
+# is wrong for a page that exists (found live, reported directly). Explicit
+# routes registered ahead of the mount win over it and answer 200.
+FRONTEND_PAGES = [
+    "/workspace",
+    "/about",
+    "/privacy",
+    "/documentation",
+    "/how-it-works",
+    "/what-masign-checks",
+    "/educational-disclaimer",
+]
+
+
+def _serve_frontend_index() -> FileResponse:
+    return FileResponse(FRONTEND_DIST / "index.html")
+
+
 if (FRONTEND_DIST / "index.html").is_file():
+    for _page_path in FRONTEND_PAGES:
+        app.add_api_route(_page_path, _serve_frontend_index, include_in_schema=False, methods=["GET"])
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 else:
 

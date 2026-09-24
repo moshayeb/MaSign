@@ -61,12 +61,15 @@ export function LoginPageDesign() {
             </button>
           </form>
           <div className="login-links">
-            <a className="link" href="#">
+            {/* Disabled, not a link: there is nowhere real for these to go
+                yet (no accounts, no password reset) -- a `#` href would be
+                a placeholder link, which this design deliberately avoids. */}
+            <button type="button" className="link" disabled>
               Forgot password?
-            </a>
-            <a className="link" href="#">
+            </button>
+            <button type="button" className="link" disabled>
               Create an account
-            </a>
+            </button>
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import pkg from '../package.json'
 import App from './App'
+import { HomePage } from './HomePage'
 import { PAGES } from './pages'
 import { APP_VERSION } from './version'
 
@@ -35,9 +36,9 @@ describe('the shell', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
     render(<App />)
 
-    // Every href is either a known static page, the workspace itself, a
-    // GitHub URL, or a download — never a placeholder.
-    const knownPaths = new Set(['/', ...Object.keys(PAGES)])
+    // Every href is either a known static page, the home page, the
+    // workspace itself, a GitHub URL, or a download — never a placeholder.
+    const knownPaths = new Set(['/', '/workspace', ...Object.keys(PAGES)])
     for (const link of screen.getAllByRole('link')) {
       const href = link.getAttribute('href') ?? ''
       expect(knownPaths.has(href) || href.startsWith('https://github.com/') || href.startsWith('/api/')).toBe(true)
@@ -51,8 +52,18 @@ describe('the shell', () => {
     const header = screen.getByRole('banner')
     expect(within(header).getByLabelText('MaSign home')).toBeInTheDocument()
     expect(within(header).queryByText(/with the clause to prove it/)).not.toBeInTheDocument()
-    // The landing page still makes the claim, where it belongs.
+    // The workspace's empty state is a functional prompt now, not the pitch.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Select a contract to get started')
+  })
+
+  it('makes the marketing claim on the home page, where it belongs (MAS-133)', () => {
+    render(<HomePage />)
+
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Get the clause that proves it/)
+    // The CTA appears both in the header nav and the hero.
+    const workspaceLinks = screen.getAllByRole('link', { name: /Open workspace/ })
+    expect(workspaceLinks.length).toBeGreaterThan(0)
+    for (const link of workspaceLinks) expect(link).toHaveAttribute('href', '/workspace')
   })
 })
 

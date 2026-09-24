@@ -29,6 +29,21 @@ def test_built_ui_is_served_from_the_root(tmp_path: Path, monkeypatch: pytest.Mo
     assert client.get("/api/contracts/not-a-uuid").status_code == 422
 
 
+def test_known_client_side_pages_answer_200_not_404(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # MAS-132 gap, reported live: /about and /privacy rendered correctly once
+    # the JS ran, but the server itself answered 404 (StaticFiles(html=True)'s
+    # generic fallback) -- wrong for a page that exists. Explicit routes must
+    # win with a real 200 and the same index.html the client router reads.
+    (tmp_path / "index.html").write_text("<!doctype html><title>MaSign</title><div id=root></div>")
+    module = _reload_main(monkeypatch, tmp_path)
+    client = TestClient(module.app)
+
+    for path in module.FRONTEND_PAGES:
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert "<title>MaSign</title>" in response.text, path
+
+
 def test_without_a_built_ui_the_root_redirects_to_the_docs(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _reload_main(monkeypatch, None)
 

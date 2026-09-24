@@ -24,39 +24,6 @@ function parseHash(): { contractId: string | null; tab: Tab } {
 
 const EXAMPLES = ['What is the termination fee?', 'Is there a cap on liability?', 'When are invoices due, and what happens if we pay late?']
 
-const FEATURES = [
-  {
-    title: 'Every answer cites its clause',
-    text: 'Each [n] in the answer opens the exact passage it came from, with the file and passage number.',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-        <path d="M14 3v6h6M8 13h8M8 17h5" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Honest when the text is silent',
-    text: 'If the contract does not cover the question you get “Not found in contract.” — never a guess.',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="m9 12 2 2 4-4" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Risky clauses, graded',
-    text: 'Liability, termination, auto-renewal and four more categories flagged High / Medium / Low from your side.',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-        <path d="M12 9v4M12 17h.01" />
-      </svg>
-    ),
-  },
-]
-
 function formatUploaded(iso: string): string {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
@@ -66,6 +33,10 @@ export default function App() {
   const [contracts, setContracts] = useState<Contract[] | null>(null)
   const [selected, setSelected] = useState<Contract | null>(null)
   const [asked, setAsked] = useState<Asked | null>(null)
+  // Before any contract is selected, the composer stays hidden behind this
+  // secondary trigger rather than being the default view (MAS-133): a new
+  // visitor sees "pick or upload a contract" first, not a question box.
+  const [askAllContracts, setAskAllContracts] = useState(false)
   // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
   const [source, setSource] = useState<SourceRef | null>(null)
   const [draft, setDraft] = useState('')
@@ -147,6 +118,7 @@ export default function App() {
     setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
     setSource(null)
     setReview(null)
+    setAskAllContracts(false)
   }, [setTab])
 
   // A finding or key term was clicked: show the text at that passage (MAS-83/95).
@@ -209,38 +181,33 @@ export default function App() {
         <main className="content">
           {!selected ? (
             <>
-              <section className="hero">
-                <h1>
-                  Ask the contract. <span className="glow">Get the clause that proves it.</span>
-                </h1>
-                <p>
-                  Upload a contract or pick one on the left, then ask in plain language. MaSign answers only from the text, quotes the
-                  passages it used, and grades the risky clauses from your side of the deal.
-                </p>
-              </section>
-              <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
-              {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
-              {!asked && (
+              {!askAllContracts && !asked && (
+                // The composer is not the first thing a new visitor sees
+                // (MAS-133): pick or upload a contract is the primary task
+                // here, "ask across all contracts" is a smaller secondary
+                // option below it, not the default view.
+                <section className="card empty-state">
+                  <h1>Select a contract to get started</h1>
+                  <p className="muted">Choose one from the list on the left, or upload a new contract, to ask questions and see its risk review.</p>
+                  <button type="button" className="link" onClick={() => setAskAllContracts(true)}>
+                    Or ask a question across all contracts
+                  </button>
+                </section>
+              )}
+              {(askAllContracts || asked) && (
                 <>
-                  <div className="examples">
-                    <span className="muted">Try:</span>
-                    {EXAMPLES.map((example) => (
-                      <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
-                        {example}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="features">
-                    {FEATURES.map((feature) => (
-                      <section key={feature.title} className="card feature">
-                        <div className="feature-icon" aria-hidden="true">
-                          {feature.icon}
-                        </div>
-                        <h2>{feature.title}</h2>
-                        <p>{feature.text}</p>
-                      </section>
-                    ))}
-                  </div>
+                  <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
+                  {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
+                  {!asked && (
+                    <div className="examples">
+                      <span className="muted">Try:</span>
+                      {EXAMPLES.map((example) => (
+                        <button key={example} type="button" className="chip" onClick={() => setDraft(example)}>
+                          {example}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </>
