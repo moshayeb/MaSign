@@ -56,16 +56,21 @@ collapsed passage list) and the suggested actions (MAS-15/16).
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
-## Look and feel (MAS-73, MAS-79, MAS-95)
+## Look and feel (MAS-73, MAS-79, MAS-95, MAS-136)
 
-**Light theme only** since MAS-95 (owner decision 2026-09-20; the MAS-79 navy
-palette is in git history). Inter on a `#f4f6fa` ground with a faint cyan
-wash and grid, white cards, the logo's cyan as the single accent: `#009fe3`
-for fills and borders, `#0077b3` (4.6:1 on white) wherever it is text.
-Status colours are the 700-weight shades (`--ok #047857`, `--warn #b45309`)
-on 12 % tints; severity tags are white on solid red/amber/green. Every
-colour is a `:root` token — no hard-coded dark values remain, and
-`color-scheme: light` is set. The header shows the full logo inlined (`components/Wordmark.tsx`,
+**Light theme only** remains the rule from MAS-95 (owner decision 2026-09-20;
+the MAS-79 navy palette is in git history). Its specific palette was
+superseded by the owner-approved MassQL alignment in MAS-136 on 2026-09-24:
+Inter uses a 16px base size; shared surfaces are white, `#f5f5f5`, and
+`#f8f9fb`; borders are `#e8e8e8`; headings, body, secondary, and muted text
+are `#111`, `#333`, `#555`, and `#777`. `#0caded` is used for cyan fills and
+decorative emphasis, while `#087eac` is the readable cyan for interactive
+text on white. Primary buttons hover to `#0a9fd8`; outlined controls use a
+pale-cyan hover surface and cyan border; header links use a simple cyan text
+hover. Status colours are the 700-weight shades (`--ok #047857`, `--warn
+#b45309`) on 12 % tints; severity tags are white on solid red/amber/green.
+Every shared colour is a `:root` token, and `color-scheme: light` is set. The
+header shows the full logo inlined (`components/Wordmark.tsx`,
 generated from `logo/MaSign_logo_BB.svg`) so the ink paths follow the theme
 and no font is needed: every letter is an outline — the owner exported the
 wordmark from Illustrator in Anurati, and the one letter Illustrator left as
