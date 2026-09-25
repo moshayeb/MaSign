@@ -18,10 +18,16 @@ interface Props {
   open?: boolean
 }
 
+// A literal `[]` default would allocate a new array every render, which
+// breaks the effect below's dependency check and causes an infinite
+// render loop (MAS-157: this is what actually OOM'd Reader.test.tsx, not
+// the test's heap size).
+const NO_CONTRACTS: Contract[] = []
+
 // The contract's own text, passage by passage, so every finding, key term
 // and citation is one click from the words it came from (MAS-83). Stored
 // chunk text only — PDF page positions are a follow-up.
-export function PassageReader({ contract, contracts = [], target, open: alwaysOpen = false }: Props) {
+export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open: alwaysOpen = false }: Props) {
   const [passages, setPassages] = useState<Passage[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [members, setMembers] = useState<Contract[]>([contract])
