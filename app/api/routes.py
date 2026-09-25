@@ -776,9 +776,9 @@ def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(g
 
 @router.get("/contracts/{contract_id}/export.{fmt}")
 def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection = Depends(get_db)) -> Response:
-    """The review as a file: `export.md` (Markdown) or `export.csv`. Same data as /risks and /key-terms (MAS-97)."""
-    if fmt not in ("md", "csv"):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md or csv.")
+    """The review as Markdown, CSV, or PDF. Same data as /risks and /key-terms."""
+    if fmt not in ("md", "csv", "pdf"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md, csv or pdf.")
     contract = repository.get_contract(db, contract_id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
@@ -800,11 +800,13 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
         if (item := repository.get_contract(db, bundle_id)) is not None
     }
     if fmt == "md":
-        text, media = export.render_markdown(contract.filename, review_body, terms_body, documents), "text/markdown; charset=utf-8"
+        content, media = export.render_markdown(contract.filename, review_body, terms_body, documents), "text/markdown; charset=utf-8"
+    elif fmt == "csv":
+        content, media = export.render_csv(review_body, terms_body, documents), "text/csv; charset=utf-8"
     else:
-        text, media = export.render_csv(review_body, terms_body, documents), "text/csv; charset=utf-8"
+        content, media = export.render_pdf(contract.filename, review_body, terms_body, documents), "application/pdf"
     return Response(
-        content=text,
+        content=content,
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{export.safe_filename(contract.filename, fmt)}"'},
     )

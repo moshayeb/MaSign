@@ -3225,80 +3225,91 @@ button.chip.ranked {
   }
 }
 
-/* Actions menu (MAS-125): one primary button per screen, the rest in here */
-.actions-menu {
-  position: relative;
-}
+/* Compact export menu (MAS-154): the trigger is small, while the open menu
+   uses an icon plus a plain label per row so each export is immediately clear. */
+.actions-menu { position: relative; }
 
 .actions-menu > summary {
   list-style: none;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 1px solid var(--line-2);
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
   background: var(--panel);
-  color: var(--text);
-  font-size: 0.88rem;
-  font-weight: 500;
+  color: var(--text-2);
 }
 
-.actions-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.actions-menu > summary::after {
-  content: '▾';
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.actions-menu > summary:hover {
-  background: var(--bg-2);
-}
-
-.actions-menu[open] > summary {
+.actions-menu > summary::-webkit-details-marker { display: none; }
+.actions-menu > summary:hover, .actions-menu[open] > summary {
   border-color: var(--accent-line);
+  color: var(--accent);
+  background: var(--accent-light);
 }
+
+.export-icon { width: 18px; height: 18px; display: block; }
 
 .actions-list {
   position: absolute;
   right: 0;
   z-index: 5;
   margin-top: 6px;
-  min-width: 190px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
-  padding: 6px;
+  min-width: 190px;
+  padding: 4px 0;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--panel);
   box-shadow: 0 12px 28px -16px rgba(15, 23, 42, 0.4);
 }
 
-.actions-list .link {
-  margin-left: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  text-align: left;
+.export-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
   font-size: 0.88rem;
-}
-
-.actions-list .link:hover {
-  background: var(--panel-2);
+  font-weight: 500;
   text-decoration: none;
 }
 
-@media (max-width: 720px) {
-  .actions-list {
-    right: auto;
-    left: 0;
-  }
+.export-action:hover, .export-action:focus-visible {
+  color: var(--accent);
+  background: var(--accent-light);
+  text-decoration: none;
+  outline: none;
 }
+
+.export-action + .export-action {
+  border-top: 1px solid var(--line);
+}
+
+.export-action .export-icon {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+
+.export-action:hover .export-icon, .export-action:focus-visible .export-icon {
+  color: var(--accent);
+}
+
+@media (max-width: 720px) { .actions-list { right: auto; left: 0; } }
 
 /* The upload card keeps its rectangle but carries less weight (MAS-125) */
 .card.upload {
