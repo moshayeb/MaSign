@@ -526,7 +526,7 @@ def list_key_terms_for(connection: psycopg.Connection, term_ids: Sequence[str]) 
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT DISTINCT ON (k.contract_id, k.term) k.*
+            SELECT DISTINCT ON (k.contract_id, k.term) k.*, c.contract_id AS source_contract_id
             FROM key_terms k JOIN chunks c ON c.id = k.chunk_id
             WHERE k.term = ANY(%s)
             ORDER BY k.contract_id, k.term, c.chunk_index
