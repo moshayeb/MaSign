@@ -565,3 +565,14 @@ on `/passages`) — together with the quote mark when both apply.
 `contract_id` is optional in the request — default the UI to the selected
 contract, and offer "all contracts" explicitly. A 503 here carries the reason
 (no API key, provider down, rate limit) in `detail` — show it verbatim.
+
+### Related-document panel (MAS-153)
+
+When a review names a document that has not been uploaded, the related-document
+panel makes the next step clear without claiming a match. It shows the named
+document, then one primary row: choose an already uploaded document and select
+**Link document**. The alternate upload path is visually secondary and keeps
+its cost disclosure: uploading starts the document review (about two
+model calls for up to eight passages). The explicit confirmation dialog and
+unlink behaviour are unchanged. The panel uses Inter and the normal body/text
+scale, and stacks the selector and button at narrow widths.

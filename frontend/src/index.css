@@ -3370,25 +3370,73 @@ button.chip.ranked {
 /* Explicit bundle links are actions beside coverage, not a second review. */
 .contract-links {
   display: grid;
-  gap: 8px;
-  margin: 10px 0;
+  gap: 10px;
+  margin: 12px 0;
 }
 
 .link-action,
 .confirm-box {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   background: var(--panel);
 }
 
+.link-action-unresolved {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.link-action-copy h3 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.link-action-copy p {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.link-action-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.link-action-main label {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.link-action-alternative {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-2);
+  font-size: 0.875rem;
+}
+
 .link-action select {
-  max-width: 240px;
-  padding: 5px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   background: var(--panel);
@@ -3396,9 +3444,29 @@ button.chip.ranked {
   font: inherit;
 }
 
-.confirm-box { display: block; }
+.link-confirm-button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.confirm-box {
+  display: block;
+  padding: 14px 16px;
+}
 .confirm-box p { margin: 0 0 8px; }
 .confirm-box button + button { margin-left: 8px; }
+
+@media (max-width: 560px) {
+  .link-action-main {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .link-confirm-button {
+    width: 100%;
+  }
+}
 
 .reader-documents {
   display: flex;
