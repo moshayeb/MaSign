@@ -2525,6 +2525,17 @@ button.chip.ranked {
   margin: 0;
 }
 
+.home-legal-notice {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.home-legal-notice a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 .home-eyebrow {
   display: inline-block;
   margin: 0 0 14px;

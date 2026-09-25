@@ -164,6 +164,9 @@ export function HomePage() {
       <main className="content homepage">
         <section className="home-hero-row">
           <div className="hero home-hero">
+            <p className="home-legal-notice">
+              Educational tool — not legal advice. <a href="/educational-disclaimer">Full disclaimer</a>
+            </p>
             <p className="home-eyebrow">AI-assisted contract analysis</p>
             <h1>
               Understand your contract <span className="glow">before you sign.</span>

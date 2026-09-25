@@ -87,4 +87,11 @@ describe('MAS-142 public content pages', () => {
     expect(within(main).getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/how-it-works')
     expect(within(main).getByRole('link', { name: 'What MaSign checks' })).toHaveAttribute('href', '/what-masign-checks')
   })
+
+  it('Educational disclaimer states a limitation of liability, not just "no warranty" (MAS-155)', () => {
+    render(<EducationalDisclaimerPage />)
+
+    expect(screen.getByText(/accepts no liability/)).toBeInTheDocument()
+    expect(screen.getByText(/[Rr]egardless of how MaSign was accessed or used/)).toBeInTheDocument()
+  })
 })
