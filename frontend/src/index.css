@@ -2503,7 +2503,7 @@ button.chip.ranked {
    landing page, not the workspace it sends visitors to. */
 .homepage {
   flex: 1 0 auto;
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
   width: 100%;
   padding: 56px 28px 72px;
@@ -2511,65 +2511,312 @@ button.chip.ranked {
   background: var(--bg);
 }
 
+.home-hero-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 40px;
+}
+
 .home-hero {
-  text-align: center;
-  padding: 52px 32px;
-  max-width: 640px;
-  margin: 0 auto;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius);
-  background: #e6f7ff;
+  text-align: left;
+  padding: 0;
+  max-width: 480px;
+  margin: 0;
+}
+
+.home-eyebrow {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .home-hero h1 {
   max-width: none;
 }
 
-.home-hero h1 .glow {
-  background: none;
-  color: var(--accent);
-}
-
 .home-hero p {
-  margin: 16px auto 0;
+  margin: 16px 0 0;
   max-width: 52ch;
   color: var(--text-2);
 }
 
-.home-cta {
+.home-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
   margin-top: 26px;
 }
 
-.home-steps {
+.home-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #1e9eed, #0caded);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none;
+  box-shadow: 0 8px 20px -10px rgba(12, 173, 237, 0.6);
+}
+
+.home-cta:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(12, 173, 237, 0.35);
+}
+
+.home-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.home-cta-secondary:hover {
+  border-color: var(--accent-bright);
+  color: var(--accent);
+  background: #f0f9fe;
+}
+
+.home-hero-microcopy {
+  margin: 14px 0 0;
+}
+
+/* The hero product mockup (MAS-147): a static illustration of the real
+   Risk review panel, not a live embed -- see HomePage.tsx for why its
+   content is fixed and rubric-accurate rather than arbitrary. */
+.home-hero-mockup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mockup-window {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 28px 60px -32px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+}
+
+.mockup-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.mockup-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+
+.mockup-titlebar-label {
+  margin-left: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.mockup-workspace {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: 110px 1fr;
+}
+
+.mockup-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.mockup-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.mockup-sidebar-item-active {
+  background: var(--accent-soft);
+}
+
+.mockup-sidebar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.mockup-main {
+  padding: 16px;
+  min-width: 0;
+}
+
+.mockup-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.mockup-filename {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mockup-ai-notice {
+  margin: 8px 0 0;
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.mockup-panel {
+  margin-top: 14px;
+}
+
+.mockup-panel h3 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mockup-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.mockup-term {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.mockup-term dt {
+  color: var(--text-2);
+}
+
+.mockup-term dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mockup-risks {
+  gap: 8px;
+}
+
+.mockup-risks .risk {
+  padding: 8px 10px;
+}
+
+.mockup-risks .risk-reason {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+}
+
+.mockup-risks blockquote {
+  font-size: 0.8rem;
+}
+
+.mockup-caption {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* How MaSign works (MAS-147): numbered-circle icons with arrow connectors
+   between cards, replacing the old top-left number badge. */
+.home-steps-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.home-steps-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
 }
 
 .home-step {
-  position: relative;
-  /* The number badge sits at top:16px and is 26px tall, so its bottom edge
-     is at 42px -- padding-top must clear that or the heading starts under
-     it (found live: it did, by 12px, with the previous 30px value). */
-  padding-top: 48px;
+  text-align: center;
 }
 
-.home-step-number {
-  position: absolute;
-  top: 16px;
-  left: 18px;
-  width: 26px;
-  height: 26px;
+.home-step-icon-wrap {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+}
+
+.home-step-icon {
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 700;
-  font-size: 0.85rem;
   display: grid;
   place-items: center;
 }
 
-.home-step h2 {
+.home-step-number-badge {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.68rem;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 3px var(--panel);
+}
+
+.home-step h3 {
   font-size: 0.95rem;
   margin: 0 0 4px;
 }
@@ -2577,6 +2824,12 @@ button.chip.ranked {
 .home-step p {
   font-size: 0.88rem;
   color: var(--muted);
+}
+
+.home-step-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--line-2);
 }
 
 /* MAS-134: a quiet proof section that explains real MaSign behaviour without
@@ -2615,8 +2868,12 @@ button.chip.ranked {
 }
 
 .home-proof-card {
+  position: relative;
+  display: block;
   min-height: 184px;
   padding: 20px;
+  color: inherit;
+  text-decoration: none;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
@@ -2624,6 +2881,17 @@ button.chip.ranked {
   border-color: var(--accent-bright);
   box-shadow: 0 8px 24px rgba(12, 173, 237, 0.12);
   transform: translateY(-3px);
+}
+
+.home-proof-card-arrow {
+  position: absolute;
+  top: 20px;
+  right: 18px;
+  color: var(--line-2);
+}
+
+.home-proof-card:hover .home-proof-card-arrow {
+  color: var(--accent);
 }
 
 .home-proof-icon {
@@ -2667,18 +2935,111 @@ button.chip.ranked {
   color: var(--accent);
 }
 
+/* Clear expectations (MAS-147): what MaSign is honest about up front --
+   assists rather than replaces a lawyer, AI findings need verifying, and
+   what happens to the contract text. */
+.home-expectations {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.home-expectations-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.home-expectations-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.home-expectations-heading h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.home-expectations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.home-expectation {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.home-expectation-icon {
+  flex: none;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--accent);
+}
+
+.home-expectation h3 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+
+.home-expectation p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .home-hero-row {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .home-hero {
+    text-align: center;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .home-hero p {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .home-hero-mockup {
+    max-width: 480px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
 @media (max-width: 720px) {
   .homepage {
     padding: 40px 16px 56px;
     gap: 32px;
   }
 
-  .home-hero {
-    padding: 38px 20px;
+  .home-steps-row {
+    grid-template-columns: 1fr;
   }
 
-  .home-steps {
-    grid-template-columns: 1fr;
+  .home-step-arrow {
+    transform: rotate(90deg);
+    margin: -4px 0;
   }
 
   .home-proof {
@@ -2692,6 +3053,40 @@ button.chip.ranked {
 
   .home-proof-card {
     min-height: 0;
+  }
+
+  .home-expectations {
+    padding: 20px;
+  }
+
+  .home-expectations-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .mockup-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .mockup-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mockup-sidebar-item {
+    flex: none;
+  }
+
+  .mockup-sidebar-name {
+    max-width: 90px;
+  }
+
+  .mockup-term {
+    flex-wrap: wrap;
   }
 }
 
