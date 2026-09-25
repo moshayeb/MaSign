@@ -127,20 +127,21 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
-  it('keeps the downloads and Print in one Actions menu, leaving Ask MaSign the only primary button (MAS-97/125)', async () => {
+  it('keeps compact, labelled PDF and export controls behind one menu, leaving Ask MaSign the only primary button (MAS-154)', async () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
 
-    // The links live behind Actions now; the details element is closed until asked.
-    const menu = screen.getByText('Actions').closest('details')!
+    const menuButton = document.querySelector<HTMLElement>('details.actions-menu > summary')!
+    const menu = menuButton.closest('details')!
     expect(menu).not.toHaveAttribute('open')
-    await userEvent.click(within(menu).getByText('Actions'))
+    await userEvent.click(menuButton)
     expect(menu).toHaveAttribute('open')
 
-    const nav = within(menu).getByRole('navigation', { name: 'Actions for this contract' })
+    const nav = within(menu).getByRole('navigation', { name: 'Export and print options' })
+    expect(within(nav).getByRole('link', { name: 'Download PDF' })).toHaveAttribute('href', '/api/contracts/nw/export.pdf')
     expect(within(nav).getByRole('link', { name: 'Download Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
     expect(within(nav).getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
-    expect(within(nav).getByRole('link', { name: 'Download Markdown' })).toHaveAttribute('download')
+    expect(within(nav).getByRole('link', { name: 'Download PDF' })).toHaveAttribute('download')
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
     await userEvent.click(within(nav).getByRole('button', { name: 'Print' }))
     expect(print).toHaveBeenCalled()

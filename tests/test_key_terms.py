@@ -387,7 +387,11 @@ def test_export_markdown_and_csv_carry_every_finding_and_key_term_verbatim(db, f
     assert term["standard"].startswith("deviates") and term["quote"] == "fifty percent (50%) of the remaining Subscription Fees"
     assert fake_chat_model.calls == []  # exporting costs nothing
 
-    assert client.get(f"/api/contracts/{contract_id}/export.pdf").status_code == 404
+    pdf_response = client.get(f"/api/contracts/{contract_id}/export.pdf")
+    assert pdf_response.status_code == 200
+    assert pdf_response.headers["content-type"].startswith("application/pdf")
+    assert pdf_response.headers["content-disposition"] == 'attachment; filename="c-review.pdf"'
+    assert pdf_response.content.startswith(b"%PDF-")
 
 
 def test_export_404s_before_a_review_and_for_unknown_contracts(db) -> None:
@@ -395,6 +399,7 @@ def test_export_404s_before_a_review_and_for_unknown_contracts(db) -> None:
     response = client.get(f"/api/contracts/{contract_id}/export.md")
     assert response.status_code == 404 and "not been reviewed" in response.json()["detail"]
     assert client.get(f"/api/contracts/{uuid4()}/export.csv").status_code == 404
+    assert client.get(f"/api/contracts/{uuid4()}/export.pdf").status_code == 404
 
 
 # --- deadlines (MAS-100) -----------------------------------------------------------------------

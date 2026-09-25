@@ -18,3 +18,6 @@ sentence-transformers>=3.0.0
 litellm>=1.70.0
 pytest>=8.3.0
 httpx>=0.27.0
+
+# Server-generated PDF review export (MAS-154).
+reportlab>=4.2.0
