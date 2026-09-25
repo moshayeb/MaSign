@@ -412,6 +412,13 @@ is the ingestion notes.
 
 ## Contract text reader (MAS-83)
 
+For a contract bundle (MAS-140), the reader offers a document tab for the
+primary agreement and each explicitly linked document. Linking is always a
+confirmed action: a reviewer can choose an uploaded file or upload one from
+the unresolved-reference warning, then confirm the exact reference name.
+Either document can unlink the relationship. A new upload states that its
+normal review will run and uses the usual upload toast/error behaviour.
+
 `PassageReader` (a collapsible `.card.reader` below the review) loads
 `GET /api/contracts/{id}/passages` once per contract and renders every
 passage. App holds a `SourceRef {chunk_index, quote?}`; `RiskReviewPanel`

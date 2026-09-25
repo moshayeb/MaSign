@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { ApiError, getContractRisks, reviewContract, type Contract, type RiskReview } from '../api'
+import { ApiError, getContractRisks, listContractLinks, reviewContract, type Contract, type ContractLink, type RiskReview } from '../api'
+import { ContractLinks } from './ContractLinks'
 import { BriefCard } from './BriefCard'
 import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
@@ -19,6 +20,7 @@ interface Props {
   onShowSource?: (source: SourceRef) => void
   // Every review this panel reads, so the Ask tab can rank its suggestions (MAS-108).
   onReview?: (review: RiskReview | null) => void
+  contracts?: Contract[]
 }
 
 const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
@@ -27,7 +29,7 @@ const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
 // summary strip, one coverage notice, the key terms and the risk findings.
 // A clean category reads as "reviewed, nothing found" only when every
 // passage was graded — never "not looked at".
-export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview }: Props) {
+export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview, contracts = [] }: Props) {
   const [review, setReview] = useState<RiskReview | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error' | 'retrying'>('loading')
   const [pollFailures, setPollFailures] = useState(0)
@@ -42,6 +44,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   // Where a summary tile jumps to (MAS-124).
   const keyTermsRef = useRef<HTMLElement>(null)
   const reviewCardRef = useRef<HTMLElement>(null)
+  const [links, setLinks] = useState<ContractLink[]>([])
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +81,19 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   useEffect(() => {
     void load()
   }, [load])
+
+  const loadLinks = useCallback(() => {
+    // Links are stored on their primary contract. Looking through the loaded
+    // library lets either document offer Unlink without a second API route.
+    void Promise.all(contracts.map((item) => listContractLinks(item.contract_id)))
+      .then((groups) => setLinks(groups.flat().filter((link) => link.primary_contract_id === contract.contract_id || link.linked_contract_id === contract.contract_id)))
+      .catch(() => setLinks([]))
+  }, [contract.contract_id, contracts])
+
+  useEffect(() => {
+    if (contracts.length < 2) return
+    loadLinks()
+  }, [loadLinks, contracts.length])
 
   const running = review !== null && (review.status === 'pending' || review.status === 'running')
 
@@ -154,6 +170,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
         </p>
       )}
       {review?.coverage && <CoverageNotice coverage={review.coverage} onShowSource={onShowSource} ref={coverageRef} />}
+      {review?.coverage && <ContractLinks primary={contract} links={links} references={review.coverage.external_references} contracts={contracts} onChanged={() => { loadLinks(); void load() }} onUploaded={onSettled ?? (() => undefined)} />}
       {/* The contract in five facts and the checklist (MAS-105/106/111), before the details. */}
       {review && (
         <BriefCard
@@ -167,7 +184,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
         />
       )}
       {/* The key terms come from the same review row, so the card shares this panel's load and polling (MAS-82). */}
-      {review && <KeyTermsCard review={review} onShowSource={onShowSource} ref={keyTermsRef} />}
+      {review && <KeyTermsCard review={review} contracts={contracts} onShowSource={onShowSource} ref={keyTermsRef} />}
       <section className="card review" aria-live="polite" tabIndex={-1} ref={reviewCardRef}>
         <div className="answer-header">
           <h2>
@@ -272,12 +289,12 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
                 <div className="risk-head">
                   <span className="severity">{finding.severity}</span>
                   <strong>{finding.category_name}</strong>
-                  <span className="muted small">passage {finding.chunk_index + 1}</span>
+                  <span className="muted small">{sourceLabel(finding.contract_id, finding.chunk_index, contracts)}</span>
                   {onShowSource && (
                     <button
                       type="button"
                       className="link"
-                      onClick={() => onShowSource({ chunk_index: finding.chunk_index, quote: finding.quote })}
+                      onClick={() => onShowSource({ contract_id: finding.contract_id, chunk_index: finding.chunk_index, quote: finding.quote })}
                       aria-label={`Show ${finding.category_name} finding in contract`}
                     >
                       Show in contract
@@ -331,4 +348,9 @@ function formatWhen(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function sourceLabel(contractId: string | undefined, chunkIndex: number, contracts: Contract[]) {
+  const filename = contractId ? contracts.find((item) => item.contract_id === contractId)?.filename : undefined
+  return filename ? `${filename}, passage ${chunkIndex + 1}` : `passage ${chunkIndex + 1}`
 }

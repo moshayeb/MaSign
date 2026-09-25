@@ -53,7 +53,7 @@ function effectiveMilestone(review: RiskReview, term: KeyTermValue | undefined):
       date: typed.date,
       reason: null,
       how: null,
-      source: term.source ? { chunk_index: term.source.chunk_index, quote: term.source.quote } : undefined,
+      source: term.source ? { contract_id: term.source.contract_id, chunk_index: term.source.chunk_index, quote: term.source.quote } : undefined,
     }
   }
   // Stated but not as a date the quote confirms, versus not stated at all,

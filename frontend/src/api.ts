@@ -107,7 +107,7 @@ export type AnswerStatus = 'answered' | 'not_found' | 'withheld'
 export interface QueryResponse {
   answer: string
   // "withheld": every retrieved passage was withheld by the guardrail and the
-  // model was never asked — not the same fact as "not found" (MAS-93).
+  // model was never asked Ã¢â‚¬â€ not the same fact as "not found" (MAS-93).
   answer_status: AnswerStatus
   grounded: boolean
   citations: CitedChunk[]
@@ -144,6 +144,7 @@ export interface ReviewFinding {
   quote: string
   chunk_id: string
   chunk_index: number
+  contract_id?: string
 }
 
 export interface ReviewCategory {
@@ -162,6 +163,7 @@ export interface KeyTermSource {
   quote: string
   chunk_id: string
   chunk_index: number
+  contract_id?: string
   // Machine-readable value, only when every number in it was found in the quote.
   typed: Record<string, string | number> | null
 }
@@ -274,6 +276,29 @@ export interface Passage {
   text: string
   // [start, end] of each sentence the guardrail withholds from the model (MAS-99).
   withheld_spans?: number[][]
+}
+
+export interface ContractLink {
+  id: string
+  primary_contract_id: string
+  linked_contract_id: string
+  reference_name: string
+  created_at: string
+}
+
+export function listContractLinks(contractId: string): Promise<ContractLink[]> {
+  return request<ContractLink[]>(`/api/contracts/${contractId}/links`)
+}
+
+export function linkContract(contractId: string, linkedContractId: string, referenceName: string): Promise<ContractLink> {
+  return request<ContractLink>(`/api/contracts/${contractId}/links`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ linked_contract_id: linkedContractId, reference_name: referenceName }),
+  })
+}
+
+export function unlinkContract(contractId: string, linkId: string): Promise<void> {
+  return request<void>(`/api/contracts/${contractId}/links/${linkId}`, { method: 'DELETE' })
 }
 
 export function getContractPassages(contractId: string): Promise<Passage[]> {

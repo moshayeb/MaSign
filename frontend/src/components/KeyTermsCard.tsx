@@ -1,10 +1,11 @@
 import type { Ref } from 'react'
-import type { KeyTermValue, RiskReview } from '../api'
+import type { Contract, KeyTermValue, RiskReview } from '../api'
 import type { SourceRef } from './PassageReader'
 import { Timeline } from './Timeline'
 
 interface Props {
   review: RiskReview
+  contracts?: Contract[]
   onShowSource?: (source: SourceRef) => void
   // Lets a summary tile scroll to this card (MAS-124).
   ref?: Ref<HTMLElement>
@@ -16,7 +17,7 @@ interface Props {
 // tile; the terms that are not stated share one line, so an absence costs a
 // few words, not a card. Absence is only called "not stated" when every
 // passage was read; otherwise it is "not checked" (honest-outcomes).
-export function KeyTermsCard({ review, onShowSource, ref }: Props) {
+export function KeyTermsCard({ review, contracts = [], onShowSource, ref }: Props) {
   const running = review.status === 'pending' || review.status === 'running'
   const stated = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
   const notStated = review.key_terms.filter((t) => t.status === 'not_stated')
@@ -71,7 +72,7 @@ export function KeyTermsCard({ review, onShowSource, ref }: Props) {
       {stated.length > 0 && (
         <dl className="terms">
           {stated.map((term) => (
-            <TermTile key={term.id} term={term} onShowSource={onShowSource} />
+            <TermTile key={term.id} term={term} contracts={contracts} onShowSource={onShowSource} />
           ))}
         </dl>
       )}
@@ -94,7 +95,7 @@ export function KeyTermsCard({ review, onShowSource, ref }: Props) {
         </ul>
       )}
 
-      {review.status === 'done' && <Timeline review={review} onShowSource={onShowSource} />}
+      {review.status === 'done' && <Timeline review={review} contracts={contracts} onShowSource={onShowSource} />}
 
       <p className="muted disclaimer">
         Each value is quoted from the passage named beside it; nothing is inferred. Deadlines are date arithmetic over those values, standards are
@@ -104,7 +105,7 @@ export function KeyTermsCard({ review, onShowSource, ref }: Props) {
   )
 }
 
-function TermTile({ term, onShowSource }: { term: KeyTermValue; onShowSource?: (source: SourceRef) => void }) {
+function TermTile({ term, contracts, onShowSource }: { term: KeyTermValue; contracts: Contract[]; onShowSource?: (source: SourceRef) => void }) {
   const source = term.source!
   const verdict = term.standard && term.standard.status !== 'none' ? term.standard : null
   return (
@@ -120,10 +121,10 @@ function TermTile({ term, onShowSource }: { term: KeyTermValue; onShowSource?: (
             <button
               type="button"
               className="link"
-              onClick={() => onShowSource({ chunk_index: source.chunk_index, quote: source.quote })}
+              onClick={() => onShowSource({ contract_id: source.contract_id, chunk_index: source.chunk_index, quote: source.quote })}
               aria-label={`Show ${term.name} in contract`}
             >
-              passage {source.chunk_index + 1}
+              {source.contract_id ? `${contracts.find((item) => item.contract_id === source.contract_id)?.filename ?? 'contract'}, passage ${source.chunk_index + 1}` : `passage ${source.chunk_index + 1}`}
             </button>
           ) : (
             <>passage {source.chunk_index + 1}</>
