@@ -236,6 +236,39 @@ cross-document-review claims. The secondary **Open workspace** CTA links to
 `/workspace`. The grid is four columns on desktop and one column at phone
 width.
 
+### Home page hero mockup and expanded sections (MAS-147)
+
+The hero became two columns (`.home-hero-row`, single column again under
+860px): an eyebrow badge, the headline, a primary **Open workspace** CTA
+plus a new secondary **See how it works** CTA (→ `/how-it-works`), a
+"Supports PDF, DOCX and TXT files" line, and a static product-screenshot
+mockup (`HeroMockup` in `HomePage.tsx`). The mockup is `aria-hidden` and
+built from the app's own classes (`.filetype`, `.risks`/`li.risk`,
+`.severity`, `.status`) with content grounded in real behaviour rather than
+invented: the coverage notice repeats `CoverageNotice.tsx`'s exact copy
+("AI instructions detected · 1 passage withheld"), the findings use real
+rubric categories and severity thresholds, and "Deviates" is
+`KeyTermsCard.tsx`'s real standard-comparison status. It is captioned
+"Illustrative example, not a real upload" — MaSign has no customer contract
+to screenshot, and MAS-134 already decided this page claims nothing it
+can't back up. `.home-cta` got real button styling to match the new
+secondary CTA sitting next to it (previously `.primary` only styled
+`<button>`, so the link-only "Open workspace" CTA looked unstyled next to a
+real button once the two sat side by side).
+
+"How MaSign works" replaced the old top-left number badge with a numbered
+circle icon per step and arrow connectors between cards (`.home-steps-row`,
+rotates 90° and stacks under 720px). The "Why MaSign" cards are now real
+links to `/how-it-works` or `/what-masign-checks` with a chevron affordance,
+instead of static `<article>`s. A new "Clear expectations" section
+(`.home-expectations`) states three things plainly: MaSign assists rather
+than replaces a lawyer (already stated on `/about`), AI findings need
+verifying against their source passage, and contract text relevant to a
+question or review is sent to the configured AI provider — the last one is
+the CLAUDE.md LLM-decision architecture, not a new promise; it does not
+claim anything about a provider's training/retention policy the codebase
+cannot verify.
+
 ### Shared visual system (MAS-136)
 
 MaSign now shares MassQL's light brand direction: `#0caded` is the cyan used
