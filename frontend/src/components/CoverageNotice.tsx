@@ -20,12 +20,16 @@ export function CoverageNotice({ coverage, onShowSource, ref }: Props) {
   const unreadable = coverage.unreadable_passages.length
   const notes = coverage.ingestion_notes.length
   const external = coverage.external_references.map((r) => r.name)
+  const resolved = coverage.resolved_references ?? []
 
   const items: string[] = []
   // A document the contract leans on but that was never uploaded is a hole in
   // the review, not a footnote: it leads, and it turns the notice amber (MAS-123).
   if (external.length > 0) {
     items.push(`Review may be incomplete — ${joinNames(external)} ${external.length === 1 ? 'was' : 'were'} referenced but not uploaded`)
+  }
+  if (resolved.length > 0) {
+    items.push(`${joinNames(resolved.map((reference) => reference.reference_name))} linked`)
   }
   if (withheld + redacted > 0) {
     items.push('AI instructions detected')

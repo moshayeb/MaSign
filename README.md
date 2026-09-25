@@ -238,14 +238,18 @@ of the whole document, so coverage is part of every result:
 - The review lists the passages it could **not grade** — `unreadable_passages`
   (the model's reply for their batch was unusable) and `withheld_passages`
   (the guardrail withheld them) — by number, each a link into the contract
-  text, next to the review date and model.
+  text, next to the review date and model. In a linked contract bundle, each
+  location also names its source document; passage numbers alone are not unique
+  across documents.
 - **External references**: documents the text points to but that were not
   uploaded — `Schedule 2`, `Exhibit A`, `Order Form`, `Statement of Work`,
   `SLA`… — are detected by a narrow textual rule (`app/ingestion/references.py`):
   named, referred to, and never present as a heading in the text itself. They
   are shown as "Depends on a document not uploaded" on both cards, and a key
   term that is *not stated* says "may be in Order Form (not uploaded)". This
-  is an unable-to-determine state, not "the contract does not say".
+  is an unable-to-determine state, not "the contract does not say". An
+  explicit contract link resolves the named reference and includes that uploaded
+  document in the review; MaSign never assumes a match from filenames alone.
 
 ### Is it a contract at all? (MAS-107)
 

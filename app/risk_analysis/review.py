@@ -26,7 +26,7 @@ from uuid import UUID
 
 from app.answering.llm import ChatModel, ChatModelError
 from app.database import repository
-from app.database.models import RiskReview
+from app.database.models import CoveragePassage, RiskReview
 from app.database.session import get_connection
 from app.key_terms.extractor import extract_key_terms
 from app.retrieval.vector_store import ChunkHit
@@ -81,9 +81,9 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         terms_complete = True
         checked = 0
         withheld = 0
-        unreadable_chunks: list[int] = []
-        withheld_chunks: list[int] = []
-        redacted_chunks: list[int] = []
+        unreadable_chunks: list[CoveragePassage] = []
+        withheld_chunks: list[CoveragePassage] = []
+        redacted_chunks: list[CoveragePassage] = []
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start : start + batch_size]
             hits = [
@@ -110,17 +110,25 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             # Passages the guardrail withheld were never graded: they are
             # neither checked nor clean, and the review says so (MAS-94).
             withheld += len(report.blocked)
-            withheld_chunks.extend(batch[label - 1].chunk_index for label in report.blocked)
-            redacted_chunks.extend(batch[label - 1].chunk_index for label in report.redacted)
+            withheld_chunks.extend(
+                CoveragePassage(contract_id=batch[label - 1].contract_id, chunk_index=batch[label - 1].chunk_index)
+                for label in report.blocked
+            )
+            redacted_chunks.extend(
+                CoveragePassage(contract_id=batch[label - 1].contract_id, chunk_index=batch[label - 1].chunk_index)
+                for label in report.redacted
+            )
             if not report.checked:
                 # The model's reply for this batch was unusable: these
                 # passages are not reviewed, and the result must say so —
-                # by number, so the user can read them by hand (MAS-84).
-                # Known gap for a bundle (MAS-138): these are bare chunk_index
-                # ints, ambiguous if two bundle members both have that index —
-                # Coverage's own disambiguation is MAS-139's job, not this one's.
+                # with their document and passage number, so the user can read
+                # them by hand (MAS-84, MAS-139).
                 complete = False
-                unreadable_chunks.extend(c.chunk_index for label, c in enumerate(batch, start=1) if label not in report.blocked)
+                unreadable_chunks.extend(
+                    CoveragePassage(contract_id=c.contract_id, chunk_index=c.chunk_index)
+                    for label, c in enumerate(batch, start=1)
+                    if label not in report.blocked
+                )
             else:
                 complete = complete and report.complete
                 checked += len(batch) - len(report.blocked)

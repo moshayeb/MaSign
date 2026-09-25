@@ -15,11 +15,11 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary
+from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
-from app.ingestion.references import ExternalReference, find_external_references
+from app.ingestion.references import find_external_references
 from app.key_terms.deadlines import compute_deadlines
 from app.key_terms.standards import compare as compare_to_standard
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
@@ -274,9 +274,24 @@ def _same_value(a: KeyTermSource, b: KeyTermSource) -> bool:
 
 
 class ExternalReferenceOut(BaseModel):
-    # A document the text points to that was not uploaded ("Order Form", "Schedule 2").
     name: str
-    chunk_indexes: list[int]
+    passages: list["CoveragePassageOut"]
+
+
+class CoveragePassageOut(BaseModel):
+    """A passage location with its document identity (MAS-139)."""
+
+    contract_id: UUID
+    filename: str
+    chunk_index: int
+
+
+class ResolvedReferenceOut(BaseModel):
+    """An explicit contract link; never an inferred filename match."""
+
+    reference_name: str
+    linked_contract_id: UUID
+    linked_contract_filename: str
 
 
 class Coverage(BaseModel):
@@ -285,15 +300,16 @@ class Coverage(BaseModel):
     chunks_total: int
     chunks_checked: int
     # Passage indexes (0-based) whose model reply was unreadable: not graded; read them by hand.
-    unreadable_passages: list[int]
+    unreadable_passages: list[CoveragePassageOut]
     # Passage indexes the guardrail withheld: not graded.
-    withheld_passages: list[int]
+    withheld_passages: list[CoveragePassageOut]
     # Passage indexes graded minus their injected sentences (MAS-99).
-    redacted_passages: list[int]
+    redacted_passages: list[CoveragePassageOut]
     # What ingestion could not read at all (no text layer, characters removed).
     ingestion_notes: list[str]
     # Documents the text depends on that are not part of the upload.
     external_references: list[ExternalReferenceOut]
+    resolved_references: list[ResolvedReferenceOut] = []
     # Whether the file reads as a commercial contract at all (MAS-107): the
     # rubric's verdicts mean little on an invoice.
     document_kind: str | None = None
@@ -301,18 +317,48 @@ class Coverage(BaseModel):
     document_kind_reasons: list[str] = []
 
     @classmethod
-    def build(cls, review: RiskReview, contract: Contract, references: list[ExternalReference]) -> "Coverage":
+    def build(
+        cls,
+        review: RiskReview,
+        contract: Contract,
+        bundle_chunks: list[Chunk],
+        links: list[ContractLink],
+        contracts: dict[UUID, Contract],
+    ) -> "Coverage":
+        def location(contract_id: UUID, chunk_index: int) -> CoveragePassageOut:
+            # A malformed legacy row must not make an otherwise readable
+            # review endpoint fail. New rows always name a bundle member.
+            owner = contracts.get(contract_id, contract)
+            return CoveragePassageOut(contract_id=contract_id, filename=owner.filename, chunk_index=chunk_index)
+
+        # The detector returns indexes into the supplied chunk list. Map them
+        # back to physical documents before exposing coverage to a bundle.
+        references = find_external_references([chunk.chunk_text for chunk in bundle_chunks])
+        resolved = {link.reference_name: link for link in links}
         return cls(
             document_kind=contract.document_kind,
             document_looks_like=contract.document_looks_like,
             document_kind_reasons=list(contract.document_kind_reasons),
             chunks_total=review.chunks_total,
             chunks_checked=review.chunks_checked,
-            unreadable_passages=sorted(review.unreadable_chunks),
-            withheld_passages=sorted(review.withheld_chunks),
-            redacted_passages=sorted(review.redacted_chunks),
+            unreadable_passages=[location(p.contract_id, p.chunk_index) for p in review.unreadable_chunks],
+            withheld_passages=[location(p.contract_id, p.chunk_index) for p in review.withheld_chunks],
+            redacted_passages=[location(p.contract_id, p.chunk_index) for p in review.redacted_chunks],
             ingestion_notes=list(contract.ingestion_notes),
-            external_references=[ExternalReferenceOut(name=r.name, chunk_indexes=list(r.chunk_indexes)) for r in references],
+            external_references=[
+                ExternalReferenceOut(name=r.name, passages=[location(bundle_chunks[i].contract_id, bundle_chunks[i].chunk_index) for i in r.chunk_indexes])
+                for r in references
+                if r.name not in resolved
+            ],
+            resolved_references=[
+                ResolvedReferenceOut(
+                    reference_name=link.reference_name,
+                    linked_contract_id=link.linked_contract_id,
+                    linked_contract_filename=contracts[link.linked_contract_id].filename,
+                )
+                for link in links
+                if link.linked_contract_id in contracts
+            ],
         )
 
 
@@ -684,13 +730,12 @@ def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(g
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This contract has not been reviewed yet. Start a review to extract its key terms.",
         )
-    chunks = repository.list_chunks(db, contract_id)
     # See _review_response: a bundle's key terms can source a linked
     # document's own chunks, so passage numbers resolve over the bundle.
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
-    coverage = Coverage.build(review, contract, find_external_references([c.chunk_text for c in chunks]))
+    coverage = _coverage_for_review(db, review, contract)
     return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage)
 
 
@@ -714,10 +759,15 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
     terms_body = KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage)
+    documents = {
+        item.id: item.filename
+        for bundle_id in repository.bundle_contract_ids(db, contract_id)
+        if (item := repository.get_contract(db, bundle_id)) is not None
+    }
     if fmt == "md":
-        text, media = export.render_markdown(contract.filename, review_body, terms_body), "text/markdown; charset=utf-8"
+        text, media = export.render_markdown(contract.filename, review_body, terms_body, documents), "text/markdown; charset=utf-8"
     else:
-        text, media = export.render_csv(review_body, terms_body), "text/csv; charset=utf-8"
+        text, media = export.render_csv(review_body, terms_body, documents), "text/csv; charset=utf-8"
     return Response(
         content=text,
         media_type=media,
@@ -745,7 +795,6 @@ def review_contract_risks(
 
 def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewResponse:
     rows = repository.list_risk_findings(db, review.contract_id)
-    chunks = repository.list_chunks(db, review.contract_id)
     # A bundle review's findings/terms can point at a linked document's own
     # chunks (MAS-138); resolve passage numbers over the whole bundle so
     # those never silently fall back to "passage 1" (chunk_index.get default).
@@ -753,10 +802,16 @@ def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewRe
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, review.contract_id) for c in repository.list_chunks(db, cid)
     }
     contract = repository.get_contract(db, review.contract_id)
-    coverage = (
-        Coverage.build(review, contract, find_external_references([c.chunk_text for c in chunks])) if contract else None
-    )
+    coverage = _coverage_for_review(db, review, contract) if contract else None
     return RiskReviewResponse.from_models(review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage)
+
+
+def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: Contract) -> Coverage:
+    """Build coverage from every document that the review actually read."""
+    bundle_ids = repository.bundle_contract_ids(db, review.contract_id)
+    contracts = {contract_id: item for contract_id in bundle_ids if (item := repository.get_contract(db, contract_id)) is not None}
+    chunks = [chunk for contract_id in bundle_ids for chunk in repository.list_chunks(db, contract_id)]
+    return Coverage.build(review, contract, chunks, repository.list_links(db, review.contract_id), contracts)
 
 
 def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[ExtractedDocument, list[str]]:

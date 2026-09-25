@@ -165,14 +165,16 @@ text it quotes.
 `extract_document()` in `ingestion/parsing.py` returns the text plus
 `notes` (pages with no text layer, characters removed), stored as
 `contracts.ingestion_notes` (migration 007). `review.py` records
-`unreadable_chunks` and `withheld_chunks` on the review row as lists of
-passage indexes, not only counts. `ingestion/references.py` finds
+`unreadable_chunks` and `withheld_chunks` on the review row as document and
+passage locations, not only counts. `ingestion/references.py` finds
 documents the text refers to but does not contain (schedule / exhibit /
 annex / appendix / attachment / addendum + letter or number, Order Form,
 Statement of Work, SLA, Purchase Order; a heading at a line start counts as
 present). The API assembles these into `coverage` on the review and
-key-terms responses; nothing is stored for references — they are computed
-from the chunks on each read.
+key-terms responses. A `contract_links` row (migration 010) explicitly
+resolves a named reference to an uploaded document; the review uses the
+primary contract plus those linked documents. Other references are computed
+from the bundle chunks on each read and remain clearly marked as not uploaded.
 
 ## Document kind (MAS-107)
 

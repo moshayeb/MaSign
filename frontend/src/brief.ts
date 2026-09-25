@@ -207,15 +207,20 @@ export function buildChecklist(review: RiskReview, today = new Date()): CheckIte
   // before signing, not only a note above the card (MAS-123). One item per
   // document, however many passages refer to it.
   for (const reference of review.coverage?.external_references ?? []) {
-    const [first] = reference.chunk_indexes
+    const passages = reference.passages ?? reference.chunk_indexes ?? []
+    const [first] = passages
+    const passageNames = passages.map((passage) => {
+      if (typeof passage === 'number') return passage + 1
+      return `${passage.filename}, passage ${passage.chunk_index + 1}`
+    })
     items.push({
       id: `document-${reference.name}`,
       kind: 'missing_document',
       text: `Get ${reference.name} before signing`,
-      detail: `referred to in ${reference.chunk_indexes.length === 1 ? 'passage' : 'passages'} ${reference.chunk_indexes
-        .map((index) => index + 1)
-        .join(', ')} but not uploaded, so what it says could not be reviewed`,
-      source: first === undefined ? undefined : { chunk_index: first },
+      detail: `referred to in ${passages.length === 1 ? 'passage' : 'passages'} ${passageNames.join(', ')} but not uploaded, so what it says could not be reviewed`,
+      // Cross-document passage navigation belongs to the bundle reader in
+      // MAS-140. A legacy, primary-document number remains clickable here.
+      source: typeof first === 'number' ? { chunk_index: first } : undefined,
     })
   }
 

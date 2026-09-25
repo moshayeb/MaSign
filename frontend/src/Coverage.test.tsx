@@ -34,6 +34,20 @@ describe('coverage notice (MAS-123)', () => {
     expect(screen.getByText(/Review may be incomplete/)).toHaveTextContent('Order Form and Schedule 2 were referenced but not uploaded')
   })
 
+  it('shows an explicit linked document as resolved rather than as a missing-document warning', () => {
+    render(
+      <CoverageNotice
+        coverage={{
+          ...base,
+          resolved_references: [{ reference_name: 'Statement of Work', linked_contract_id: 'sow-id', linked_contract_filename: 'sow-final.docx' }],
+        }}
+      />,
+    )
+    const notice = screen.getByText('Statement of Work linked').closest('details')!
+    expect(notice).not.toHaveClass('security')
+    expect(screen.getByRole('link', { name: 'sow-final.docx' })).toHaveAttribute('href', '/workspace#sow-id/overview')
+  })
+
   it('says nothing at all when everything was read and nothing is missing', () => {
     const { container } = render(<CoverageNotice coverage={base} />)
     expect(container).toBeEmptyDOMElement()

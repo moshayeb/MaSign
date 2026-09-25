@@ -190,21 +190,44 @@ export interface KeyTermValue {
 
 export interface ExternalReference {
   name: string
-  chunk_indexes: number[]
+  // The physical passages that name this unresolved document. `chunk_index`
+  // alone is ambiguous in a bundle (MAS-139).
+  passages?: CoveragePassage[]
+  // Kept optional so cached/older API responses remain readable during a
+  // rolling update; new responses use `passages`.
+  chunk_indexes?: number[]
+}
+
+export interface CoveragePassage {
+  contract_id: string
+  filename: string
+  chunk_index: number
+}
+
+// Old reviews cached by a browser used a bare passage number. Keep the reader
+// tolerant while a deployment rolls over; newly fetched API responses always
+// use CoveragePassage (MAS-139).
+export type CoverageLocation = CoveragePassage | number
+
+export interface ResolvedReference {
+  reference_name: string
+  linked_contract_id: string
+  linked_contract_filename: string
 }
 
 export interface Coverage {
   chunks_total: number
   chunks_checked: number
   // Passage indexes (0-based) whose model reply was unreadable: not graded.
-  unreadable_passages: number[]
+  unreadable_passages: CoverageLocation[]
   // Passage indexes the guardrail withheld: not graded.
-  withheld_passages: number[]
+  withheld_passages: CoverageLocation[]
   // Passage indexes graded minus their injected sentences (MAS-99).
-  redacted_passages?: number[]
+  redacted_passages?: CoverageLocation[]
   ingestion_notes: string[]
   // Documents the text depends on that were not uploaded.
   external_references: ExternalReference[]
+  resolved_references?: ResolvedReference[]
   // Whether the file reads as a commercial contract at all (MAS-107).
   document_kind?: DocumentKind | null
   document_looks_like?: string | null
