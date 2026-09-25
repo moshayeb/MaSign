@@ -77,6 +77,27 @@ def test_headings_count_as_included_for_every_shape_of_separator() -> None:
     assert [r.name for r in find_external_references(["see Appendix B", "the Appendix B pricing applies"])] == ["Appendix B"]
 
 
+def test_wrapped_sentence_start_is_not_mistaken_for_a_statement_of_work_heading() -> None:
+    """Regression: the generated TechFlow MSA has this exact PDF line break."""
+    chunks = [
+        """The scope, deliverables, fees, and schedule are set out in a separate
+Statement of Work. The Agreement prevails on general terms."""
+    ]
+
+    refs = {reference.name: reference.chunk_indexes for reference in find_external_references(chunks)}
+
+    assert refs == {"Statement of Work": (0,)}
+
+
+def test_real_statement_of_work_heading_is_still_recognised_as_included() -> None:
+    refs = find_external_references([
+        "The scope is set out in the Statement of Work.",
+        "STATEMENT OF WORK\nProject Alpha\nThe service scope is described here.",
+    ])
+
+    assert refs == []
+
+
 # --- the review lists what it could not grade ------------------------------------------------
 
 
