@@ -2783,6 +2783,62 @@ button.chip.ranked {
   text-decoration: none;
 }
 
+/* Explicit bundle links are actions beside coverage, not a second review. */
+.contract-links {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.link-action,
+.confirm-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.link-action select {
+  max-width: 240px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
+.confirm-box { display: block; }
+.confirm-box p { margin: 0 0 8px; }
+.confirm-box button + button { margin-left: 8px; }
+
+.reader-documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 0;
+}
+
+.reader-documents button {
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: var(--panel);
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reader-documents button[aria-selected='true'] {
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
+  color: #fff;
+}
+
 @media (max-width: 760px) {
   .login-design {
     flex-direction: column;

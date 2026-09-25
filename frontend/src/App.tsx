@@ -269,7 +269,7 @@ export default function App() {
                 />
               </div>
               <TabPanel id="overview" active={tab}>
-                <RiskReviewPanel key={selected.contract_id} contract={selected} onSettled={reload} onShowSource={showSource} onReview={setReview} />
+                <RiskReviewPanel key={selected.contract_id} contract={selected} contracts={contracts ?? []} onSettled={reload} onShowSource={showSource} onReview={setReview} />
               </TabPanel>
               <TabPanel id="ask" active={tab}>
                 <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
@@ -296,7 +296,7 @@ export default function App() {
                 {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
               </TabPanel>
               <TabPanel id="text" active={tab}>
-                <PassageReader key={`reader-${selected.contract_id}`} contract={selected} target={source} open />
+                <PassageReader key={`reader-${selected.contract_id}`} contract={selected} contracts={contracts ?? []} target={source} open />
               </TabPanel>
             </>
           )}

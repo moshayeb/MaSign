@@ -1,9 +1,10 @@
-import type { RiskReview } from '../api'
+import type { Contract, RiskReview } from '../api'
 import { allPast, buildTimeline, hasAnyDate, standings } from '../timeline'
 import type { SourceRef } from './PassageReader'
 
 interface Props {
   review: RiskReview
+  contracts?: Contract[]
   onShowSource?: (source: SourceRef) => void
   // Injectable so the tests do not depend on the day they run.
   today?: Date
@@ -16,7 +17,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // effective date → notice deadline → term end → first renewal. A milestone
 // that could not be established keeps its place and says why; the line is
 // never drawn as if a contract had no dates when it simply was not read.
-export function Timeline({ review, onShowSource, today = new Date() }: Props) {
+export function Timeline({ review, contracts = [], onShowSource, today = new Date() }: Props) {
   const milestones = buildTimeline(review)
   const standing = standings(milestones, today)
   const known = hasAnyDate(milestones)
@@ -66,7 +67,7 @@ export function Timeline({ review, onShowSource, today = new Date() }: Props) {
                         onClick={() => onShowSource(milestone.source!)}
                         aria-label={`Show ${milestone.name.toLowerCase()} in contract`}
                       >
-                        passage {milestone.source.chunk_index + 1}
+                        {milestone.source.contract_id ? `${contracts.find((item) => item.contract_id === milestone.source!.contract_id)?.filename ?? 'contract'}, passage ${milestone.source.chunk_index + 1}` : `passage ${milestone.source.chunk_index + 1}`}
                       </button>
                     )}
                   </>
