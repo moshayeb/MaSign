@@ -94,9 +94,10 @@ interactive API docs stay at `/docs`.
 ### Embedding profiles
 
 The deployer picks one of two profiles (benchmark and rationale in `CLAUDE.md`,
-MAS-58). Switching changes the index fingerprint, so on the next start the
-vector index is rebuilt automatically from the stored chunk text — nothing has
-to be re-uploaded.
+MAS-58; every model tried, compared side by side, in
+[`docs/embedding-models.md`](docs/embedding-models.md)). Switching changes the
+index fingerprint, so on the next start the vector index is rebuilt
+automatically from the stored chunk text — nothing has to be re-uploaded.
 
 | Profile | Command | Model | Needs | ≈ 30-page contract |
 |---|---|---|---|---|
