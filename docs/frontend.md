@@ -269,6 +269,20 @@ the CLAUDE.md LLM-decision architecture, not a new promise; it does not
 claim anything about a provider's training/retention policy the codebase
 cannot verify.
 
+### Home page journey (MAS-158)
+
+The hero mockup already supplied the visual explanation of the product, so
+MAS-158 adds only the two missing transitions instead of repeating it. A
+three-item cyan `.home-trust-strip` sits below the hero: source-linked
+answers, customer-side risk review, and key terms together. It is a compact
+proof strip rather than another card grid, and each label describes a
+behaviour that the current product provides.
+
+The page ends, before the existing footer, with `.home-final-cta`: **Ready to
+review a contract?** and an **Open workspace** link. It contains no speed,
+accuracy, legal-advice, or security claim. Both sections stack vertically
+under 720px and make no request to the API or a model.
+
 ### Shared visual system (MAS-136)
 
 MaSign now shares MassQL's light brand direction: `#0caded` is the cyan used

@@ -2608,6 +2608,55 @@ button.chip.ranked {
   margin: 14px 0 0;
 }
 
+/* MAS-158: a short proof strip, deliberately not a second grid of cards.
+   It reinforces three real product behaviours between the hero and the
+   explanation of the workflow. */
+.home-trust-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--accent-bright);
+  box-shadow: 0 18px 34px -28px rgba(12, 173, 237, 0.9);
+}
+
+.home-trust-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px 24px;
+  color: #fff;
+}
+
+.home-trust-item + .home-trust-item {
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.home-trust-icon {
+  flex: none;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.home-trust-item h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 0.88rem;
+}
+
+.home-trust-item p {
+  margin: 2px 0 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 /* The hero product mockup (MAS-147): a static illustration of the real
    Risk review panel, not a live embed -- see HomePage.tsx for why its
    content is fixed and rubric-accurate rather than arbitrary. */
@@ -3014,6 +3063,62 @@ button.chip.ranked {
   line-height: 1.5;
 }
 
+/* A decisive final action closes the public page before the footer, without
+   adding a marketing promise that the app cannot prove. */
+.home-final-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 40px 44px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #087eac, #0caded);
+  color: #fff;
+  box-shadow: 0 22px 42px -28px rgba(12, 173, 237, 0.8);
+}
+
+.home-final-cta-eyebrow {
+  margin: 0 0 6px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-final-cta h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.3rem, 2.4vw, 1.8rem);
+}
+
+.home-final-cta > div > p:last-child {
+  max-width: 56ch;
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.home-final-cta-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--accent);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.home-final-cta-button:hover {
+  background: var(--panel-2);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
 @media (max-width: 860px) {
   .home-hero-row {
     grid-template-columns: 1fr;
@@ -3048,6 +3153,19 @@ button.chip.ranked {
     grid-template-columns: 1fr;
   }
 
+  .home-trust-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .home-trust-item {
+    padding: 18px 20px;
+  }
+
+  .home-trust-item + .home-trust-item {
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-left: 0;
+  }
+
   .home-step-arrow {
     transform: rotate(90deg);
     margin: -4px 0;
@@ -3073,6 +3191,12 @@ button.chip.ranked {
   .home-expectations-grid {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .home-final-cta {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 30px 24px;
   }
 }
 

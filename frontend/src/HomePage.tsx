@@ -46,6 +46,27 @@ const TRUST = [
   },
 ]
 
+// A compact proof strip gives first-time visitors the three things that make
+// MaSign useful before they reach the longer explanation below. These are
+// existing behaviours, not quality, speed, or security claims.
+const TRUST_STRIP = [
+  {
+    title: 'Source-linked answers',
+    text: 'Open the clause behind a result.',
+    icon: <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5" />,
+  },
+  {
+    title: 'Customer-side risk review',
+    text: 'See terms that may need attention.',
+    icon: <path d="M12 3 2.5 20h19L12 3ZM12 9v4m0 3h.01" />,
+  },
+  {
+    title: 'Key terms together',
+    text: 'Find fees, dates, renewal and notice.',
+    icon: <path d="M7 3v3m10-3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm2 8h3m-3 4h5" />,
+  },
+]
+
 const EXPECTATIONS = [
   {
     title: 'Assists, not legal advice',
@@ -190,6 +211,22 @@ export function HomePage() {
           <HeroMockup />
         </section>
 
+        <section className="home-trust-strip" aria-label="What MaSign helps you do">
+          {TRUST_STRIP.map((item) => (
+            <div key={item.title} className="home-trust-item">
+              <span className="home-trust-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {item.icon}
+                </svg>
+              </span>
+              <div>
+                <h2>{item.title}</h2>
+                <p>{item.text}</p>
+              </div>
+            </div>
+          ))}
+        </section>
+
         <section className="home-steps-section" aria-labelledby="how-it-works-title">
           <div className="home-proof-heading">
             <h2 id="how-it-works-title">How MaSign works</h2>
@@ -276,6 +313,20 @@ export function HomePage() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="home-final-cta" aria-labelledby="home-final-cta-title">
+          <div>
+            <p className="home-final-cta-eyebrow">Start with the contract you have</p>
+            <h2 id="home-final-cta-title">Ready to review a contract?</h2>
+            <p>Upload a contract to see important terms, possible risks, and their source passages together.</p>
+          </div>
+          <a className="home-final-cta-button" href="/workspace">
+            Open workspace
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </a>
         </section>
       </main>
     </PageChrome>
