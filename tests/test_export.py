@@ -11,7 +11,7 @@ import io
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.api.export import render_csv, render_markdown
+from app.api.export import render_csv, render_markdown, render_pdf
 from app.api.routes import (
     KeyTermSource,
     KeyTermsResponse,
@@ -155,3 +155,21 @@ def test_bundle_coverage_export_names_each_document() -> None:
 
     assert "main-agreement.pdf, passage 1" in markdown
     assert "statement-of-work.docx, passage 1" in markdown
+
+
+def test_pdf_export_is_a_searchable_pdf_with_contract_and_bundle_sources() -> None:
+    from pypdf import PdfReader
+
+    finding = _finding(reason="Liability is uncapped.", quote="shall be unlimited")
+    term = _term_with_source(value="EUR 18,500 per month", quote="pay EUR 18,500 per month")
+    terms = _terms([term])
+    data = render_pdf(
+        "main-agreement.pdf", _review([finding]), terms,
+        {finding.contract_id: "main-agreement.pdf", term.source.contract_id: "statement-of-work.docx"},
+    )
+
+    assert data.startswith(b"%PDF-")
+    extracted = "".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(data)).pages)
+    assert "Review of main-agreement.pdf" in extracted
+    assert "statement-of-work.docx" in extracted
+    assert "Liability is uncapped." in extracted

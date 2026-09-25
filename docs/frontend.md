@@ -302,7 +302,7 @@ The engineering-grid background is gone and the blue tint behind the page is
 softer: the app should read as a legal workspace, not a developer tool.
 
 A selected contract has **one** primary button, *Ask MaSign about this
-contract*. Download Markdown, Download CSV and Print sit in an **Actions**
+contract*. Download PDF, Markdown, CSV and Print sit behind a compact, labelled icon **Actions**
 menu (a `<details>`, so it opens by keyboard and closes on Escape without
 any focus-trap code). *Review again* deliberately stayed in the risk review
 card: it belongs beside the review it re-runs, and moving it would mean
@@ -411,7 +411,7 @@ or `Extracting…`.
 ### Download and print (MAS-97)
 
 The contract header has plain `<a download>` links to
-`/api/contracts/{id}/export.md` and `.csv` (the browser shows the download;
+`/api/contracts/{id}/export.pdf`, `.md` and `.csv` (the browser shows the download;
 no toast) and a Print button (`window.print()`). `@media print` in
 `index.css` hides the sidebar, tabs, composer, download links and action
 buttons, forces the Overview panels visible in black on white, keeps

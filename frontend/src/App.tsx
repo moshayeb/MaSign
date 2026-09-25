@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { listContracts, type Contract, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
@@ -23,6 +23,19 @@ function parseHash(): { contractId: string | null; tab: Tab } {
 }
 
 const EXAMPLES = ['What is the termination fee?', 'Is there a cap on liability?', 'When are invoices due, and what happens if we pay late?']
+
+type ExportIconName = 'more' | 'pdf' | 'markdown' | 'csv' | 'print'
+
+function ExportIcon({ name }: { name: ExportIconName }) {
+  const paths: Record<ExportIconName, ReactNode> = {
+    more: <><circle cx="5" cy="12" r="1.25" /><circle cx="12" cy="12" r="1.25" /><circle cx="19" cy="12" r="1.25" /></>,
+    pdf: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 15h6M9 18h4" /></>,
+    markdown: <><path d="M4 5h16v14H4z" /><path d="M7 15V9l3 3 3-3v6M15 12h2" /></>,
+    csv: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>,
+    print: <><path d="M7 8V3h10v5M6 18H4v-7h16v7h-2M7 15h10v6H7z" /><path d="M17 13h.01" /></>,
+  }
+  return <svg className="export-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
+}
 
 function formatUploaded(iso: string): string {
   const date = new Date(iso)
@@ -239,19 +252,22 @@ export default function App() {
                     <button type="button" className="primary ask-cta" onClick={askAbout}>
                       Ask MaSign about this contract
                     </button>
-                    {/* One primary button per screen (MAS-125): the rest live here.
-                        Plain links inside, so the browser shows the download itself (MAS-97). */}
+                    {/* One primary button per screen.  Exports stay compact, while
+                        aria-label and title keep each icon understandable (MAS-154). */}
                     <details className="actions-menu">
-                      <summary aria-label="Actions for this contract">Actions</summary>
-                      <nav className="actions-list" aria-label="Actions for this contract">
-                        <a className="link" href={`/api/contracts/${selected.contract_id}/export.md`} download>
-                          Download Markdown
+                      <summary aria-label="Export and print options" title="Export and print options"><ExportIcon name="more" /></summary>
+                      <nav className="actions-list" aria-label="Export and print options">
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.pdf`} download aria-label="Download PDF" title="Download PDF">
+                          <ExportIcon name="pdf" />
                         </a>
-                        <a className="link" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
-                          Download CSV
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.md`} download aria-label="Download Markdown" title="Download Markdown">
+                          <ExportIcon name="markdown" />
                         </a>
-                        <button type="button" className="link" onClick={() => window.print()}>
-                          Print
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.csv`} download aria-label="Download CSV" title="Download CSV">
+                          <ExportIcon name="csv" />
+                        </a>
+                        <button type="button" className="export-action" onClick={() => window.print()} aria-label="Print" title="Print">
+                          <ExportIcon name="print" />
                         </button>
                       </nav>
                     </details>
