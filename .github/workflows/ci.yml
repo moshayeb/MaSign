@@ -52,8 +52,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
       # GitHub-hosted runners have far less RAM than a dev machine; the
-      # default multi-worker jsdom run OOMs (SIGABRT, "Ineffective
-      # mark-compacts near heap limit") on the heavier suites like
+      # default multi-worker jsdom run OOMs on the heavier suites like
       # Reader.test.tsx. One worker, no file parallelism, is slower but fits.
       - run: npm test -- --pool=forks --maxWorkers=1 --no-file-parallelism
       - run: npm run build
