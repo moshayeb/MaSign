@@ -180,6 +180,12 @@ a {
   color: var(--accent);
 }
 
+.topnav-link.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
 .topnav-cta {
   display: inline-flex;
   align-items: center;
@@ -246,6 +252,11 @@ a {
 
   .topnav-mobile-list .topnav-cta {
     margin-top: 4px;
+  }
+
+  .topnav-mobile-list .link.active {
+    color: var(--accent);
+    font-weight: 600;
   }
 }
 
@@ -2307,6 +2318,184 @@ button.chip.ranked {
 @media (max-width: 720px) {
   .staticpage {
     padding: 28px 16px 40px;
+  }
+}
+
+/* Public content pages (MAS-142): the shared layout for How it works, What
+   MaSign checks and Documentation — a hero plus card grids, distinct from
+   the workspace but reusing the same visual language as the home page
+   (MAS-133/134) rather than duplicating its classes. */
+.pubpage {
+  flex: 1 0 auto;
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 48px 28px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.pubpage-hero {
+  max-width: 640px;
+}
+
+.pubpage-eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pubpage-hero h1 {
+  margin: 0;
+}
+
+.pubpage-subtitle {
+  margin: 12px 0 0;
+  max-width: 56ch;
+  color: var(--text-2);
+}
+
+.pubpage-cta {
+  margin-top: 22px;
+}
+
+.pubpage-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.pubpage-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pubpage-card {
+  padding: 20px;
+}
+
+.pubpage-card h2,
+.pubpage-card h3 {
+  margin: 16px 0 6px;
+  font-size: 1rem;
+}
+
+.pubpage-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.pubpage-card .link {
+  margin-top: 10px;
+  display: inline-block;
+}
+
+.pubpage-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pubpage-callout {
+  padding: 24px 28px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-light);
+}
+
+.pubpage-callout h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.pubpage-callout p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.pubpage-section h2 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+}
+
+.pubpage-section > p:first-of-type {
+  margin-top: 0;
+  color: var(--text-2);
+}
+
+.pubpage-terms-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pubpage-term-chip {
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.pubpage-legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pubpage-legend-item {
+  padding: 14px 16px;
+}
+
+.pubpage-legend-item .severity {
+  display: inline-block;
+}
+
+.severity-none {
+  background: var(--line-2);
+}
+
+.pubpage-legend-item p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .pubpage-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pubpage-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .pubpage {
+    padding: 32px 16px 48px;
+    gap: 32px;
+  }
+
+  .pubpage-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .pubpage-legend {
+    grid-template-columns: 1fr;
+  }
+
+  .pubpage-callout {
+    padding: 20px;
   }
 }
 
