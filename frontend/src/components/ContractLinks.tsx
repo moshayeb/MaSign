@@ -71,40 +71,48 @@ export function ContractLinks({ primary, links, references, contracts, onChanged
   return (
     <section className="contract-links" aria-label="Related documents">
       {references.map((reference) => (
-        <div key={reference.name} className="link-action">
-          <strong>{reference.name}</strong>
-          <label>
-            <span className="sr-only">Choose a document to link as {reference.name}</span>
-            <select value={candidate[reference.name] ?? ''} onChange={(event) => setCandidate({ ...candidate, [reference.name]: event.target.value })}>
-              <option value="">Pick an uploaded document…</option>
-              {choices.map((contract) => <option key={contract.contract_id} value={contract.contract_id}>{contract.filename}</option>)}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="link"
-            disabled={!candidate[reference.name]}
-            onClick={() => {
-              const contract = choices.find((item) => item.contract_id === candidate[reference.name])
-              if (contract) setConfirming({ reference: reference.name, contract })
-            }}
-          >
-            Link the document
-          </button>
-          <input
-            ref={input}
-            className="sr-only"
-            type="file"
-            accept=".txt,.pdf,.docx"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) void uploadForReference(file, reference.name)
-            }}
-          />
-          <button type="button" className="link" disabled={uploadingFor !== null} onClick={() => input.current?.click()}>
-            {uploadingFor === reference.name ? 'Uploading…' : 'Upload the document'}
-          </button>
-          <span className="muted small">Uploading starts its normal review (about 2 model calls per up to 8 passages).</span>
+        <div key={reference.name} className="link-action link-action-unresolved">
+          <div className="link-action-copy">
+            <h3>{reference.name}</h3>
+            <p>Choose an uploaded document to add it to this review.</p>
+          </div>
+          <div className="link-action-main">
+            <label>
+              <span className="sr-only">Choose a document to link as {reference.name}</span>
+              <select value={candidate[reference.name] ?? ''} onChange={(event) => setCandidate({ ...candidate, [reference.name]: event.target.value })}>
+                <option value="">Choose an uploaded document</option>
+                {choices.map((contract) => <option key={contract.contract_id} value={contract.contract_id}>{contract.filename}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="primary link-confirm-button"
+              disabled={!candidate[reference.name]}
+              onClick={() => {
+                const contract = choices.find((item) => item.contract_id === candidate[reference.name])
+                if (contract) setConfirming({ reference: reference.name, contract })
+              }}
+            >
+              Link document
+            </button>
+          </div>
+          <div className="link-action-alternative">
+            <span className="muted">Do not have it uploaded?</span>
+            <input
+              ref={input}
+              hidden
+              type="file"
+              accept=".txt,.pdf,.docx"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void uploadForReference(file, reference.name)
+              }}
+            />
+            <button type="button" className="link" disabled={uploadingFor !== null} onClick={() => input.current?.click()}>
+              {uploadingFor === reference.name ? 'Uploading...' : 'Upload a document'}
+            </button>
+            <span className="muted small">Upload starts its normal review (about 2 model calls for up to 8 passages).</span>
+          </div>
         </div>
       ))}
       {links.map((link) => (
