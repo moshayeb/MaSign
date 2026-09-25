@@ -58,11 +58,14 @@ def _terms(values: list[KeyTermValue]) -> KeyTermsResponse:
 
 
 def _finding(reason: str, quote: str) -> ReviewFinding:
-    return ReviewFinding(category="liability", category_name="Liability cap", severity="High", reason=reason, quote=quote, chunk_id=uuid4(), chunk_index=0)
+    return ReviewFinding(
+        category="liability", category_name="Liability cap", severity="High", reason=reason, quote=quote,
+        chunk_id=uuid4(), chunk_index=0, contract_id=uuid4(),
+    )
 
 
 def _term_with_source(value: str, quote: str, others: list[KeyTermSource] | None = None) -> KeyTermValue:
-    source = KeyTermSource(value=value, quote=quote, chunk_id=uuid4(), chunk_index=0, typed=None)
+    source = KeyTermSource(value=value, quote=quote, chunk_id=uuid4(), chunk_index=0, contract_id=uuid4(), typed=None)
     return KeyTermValue(id="recurring_fee", name="Recurring fee", kind="text", status="found", value=value, source=source, others=others or [], standard=NONE_STANDARD)
 
 
@@ -89,7 +92,7 @@ def test_a_key_term_value_and_quote_starting_with_a_formula_trigger_are_escaped(
 
 
 def test_an_others_quote_starting_with_a_formula_trigger_is_also_escaped() -> None:
-    other = KeyTermSource(value="=1+1", quote="ordinary quote", chunk_id=uuid4(), chunk_index=1, typed=None)
+    other = KeyTermSource(value="=1+1", quote="ordinary quote", chunk_id=uuid4(), chunk_index=1, contract_id=uuid4(), typed=None)
     terms = _terms([_term_with_source(value="EUR 100", quote="ordinary quote", others=[other])])
     rows = _rows(_review([]), terms)
 

@@ -15,6 +15,10 @@ try/except blocks per batch: they are independent model calls, so a
 key-terms-only failure marks key terms incomplete without discarding this
 batch's (or any prior batch's) already-verified risk findings and without
 marking the whole review "failed" — only a risk-grading failure does that.
+Since MAS-138, when the contract has documents linked to it (MAS-137) the
+review reads every bundle member's chunks as one unit, stored under the
+primary contract — a linked document opened on its own still keeps its own
+independent review.
 """
 
 import logging
@@ -38,6 +42,14 @@ BATCH_SIZE = 8
 def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BATCH_SIZE) -> RiskReview:
     """Run the rubric over all of a contract's chunks and store the result.
 
+    When `contract_id` has documents linked to it (MAS-137), every bundle
+    member's chunks are read as one review unit and stored under
+    `contract_id` — the primary — while each finding and key term still
+    points at its real chunk, so which document it came from is never lost
+    (`ReviewFinding`/`KeyTermSource` resolve it from the chunk's own
+    contract_id, app/api/routes.py). A linked document opened on its own
+    keeps its own independent review.
+
     Opens its own connection: it runs as a background task after the upload
     response, when the request's connection is already closed.
     """
@@ -45,7 +57,9 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         contract = repository.get_contract(db, contract_id)
         if contract is None:
             raise LookupError(f"Contract {contract_id} not found")
-        chunks = repository.list_chunks(db, contract_id)
+        bundle_ids = repository.bundle_contract_ids(db, contract_id)
+        filenames = {cid: c.filename for cid in bundle_ids if (c := repository.get_contract(db, cid)) is not None}
+        chunks = [chunk for cid in bundle_ids for chunk in repository.list_chunks(db, cid)]
         repository.start_risk_review(db, contract_id, status="running")
         repository.update_risk_review(
             db,
@@ -77,7 +91,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 for c in batch
             ]
             try:
-                report = analyze_risks(hits, model, filenames={contract_id: contract.filename})
+                report = analyze_risks(hits, model, filenames=filenames)
             except ChatModelError as error:
                 logger.warning("Risk review of %s failed at passage %d: %s", contract.filename, start + 1, error)
                 repository.replace_risk_findings(db, contract_id, findings)
@@ -102,6 +116,9 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 # The model's reply for this batch was unusable: these
                 # passages are not reviewed, and the result must say so —
                 # by number, so the user can read them by hand (MAS-84).
+                # Known gap for a bundle (MAS-138): these are bare chunk_index
+                # ints, ambiguous if two bundle members both have that index —
+                # Coverage's own disambiguation is MAS-139's job, not this one's.
                 complete = False
                 unreadable_chunks.extend(c.chunk_index for label, c in enumerate(batch, start=1) if label not in report.blocked)
             else:
@@ -118,7 +135,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             # unusable reply already does below, so the card says "Not
             # checked" instead of silently reading "not stated" (MAS-82).
             try:
-                term_report = extract_key_terms(hits, model, filenames={contract_id: contract.filename})
+                term_report = extract_key_terms(hits, model, filenames=filenames)
             except ChatModelError as error:
                 logger.warning("Key-term extraction of %s failed at passage %d: %s", contract.filename, start + 1, error)
                 terms_complete = False
@@ -154,8 +171,9 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             key_terms_complete=terms_complete and withheld == 0,
         )
         logger.info(
-            "Risk review of %s: %d finding(s), %d key term(s) over %d/%d passages%s%s%s",
+            "Risk review of %s%s: %d finding(s), %d key term(s) over %d/%d passages%s%s%s",
             contract.filename,
+            f" (bundle of {len(bundle_ids)})" if len(bundle_ids) > 1 else "",
             len(findings),
             len(terms),
             checked,

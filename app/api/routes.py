@@ -209,6 +209,11 @@ class ReviewFinding(BaseModel):
     quote: str
     chunk_id: UUID
     chunk_index: int
+    # The document the passage itself belongs to (MAS-138: a bundle review's
+    # findings can come from more than one contract). The frontend resolves
+    # this to a filename from the already-loaded contract list, the same
+    # pattern used for cross-contract citations (AnswerView.tsx).
+    contract_id: UUID
 
 
 class ReviewCategory(BaseModel):
@@ -224,6 +229,9 @@ class KeyTermSource(BaseModel):
     quote: str
     chunk_id: UUID
     chunk_index: int
+    # The document the passage itself belongs to (MAS-138: a bundle review's
+    # key terms can come from more than one contract).
+    contract_id: UUID
     # Machine-readable value, present only when every number in it was found
     # in the quote (MAS-82 typed addition); otherwise the term is text only.
     typed: dict | None
@@ -256,7 +264,14 @@ class KeyTermValue(BaseModel):
     def from_rows(cls, term_id: str, rows: list[KeyTermRow], chunk_index: dict[UUID, int], *, checked: bool) -> "KeyTermValue":
         term = TERM_BY_ID[term_id]
         sources = [
-            KeyTermSource(value=r.value, quote=r.quote, chunk_id=r.chunk_id, chunk_index=chunk_index.get(r.chunk_id, 0), typed=r.typed)
+            KeyTermSource(
+                value=r.value,
+                quote=r.quote,
+                chunk_id=r.chunk_id,
+                chunk_index=chunk_index.get(r.chunk_id, 0),
+                contract_id=r.source_contract_id,
+                typed=r.typed,
+            )
             for r in rows
         ]
         if not sources:
@@ -435,6 +450,7 @@ class RiskReviewResponse(BaseModel):
                 quote=row.quote,
                 chunk_id=row.chunk_id,
                 chunk_index=chunk_index.get(row.chunk_id, 0),
+                contract_id=row.source_contract_id,
             )
             for row in rows
         ]
@@ -704,7 +720,11 @@ def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(g
             detail="This contract has not been reviewed yet. Start a review to extract its key terms.",
         )
     chunks = repository.list_chunks(db, contract_id)
-    chunk_index = {chunk.id: chunk.chunk_index for chunk in chunks}
+    # See _review_response: a bundle's key terms can source a linked
+    # document's own chunks, so passage numbers resolve over the bundle.
+    chunk_index = {
+        c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
+    }
     coverage = Coverage.build(review, contract, find_external_references([c.chunk_text for c in chunks]))
     return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage)
 
@@ -724,8 +744,10 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
             detail="This contract has not been reviewed yet. Start a review before exporting it.",
         )
     review_body = _review_response(db, review)
-    chunks = repository.list_chunks(db, contract_id)
-    chunk_index = {chunk.id: chunk.chunk_index for chunk in chunks}
+    # See _review_response: resolve passage numbers over the whole bundle.
+    chunk_index = {
+        c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
+    }
     terms_body = KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage)
     if fmt == "md":
         text, media = export.render_markdown(contract.filename, review_body, terms_body), "text/markdown; charset=utf-8"
@@ -759,7 +781,12 @@ def review_contract_risks(
 def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewResponse:
     rows = repository.list_risk_findings(db, review.contract_id)
     chunks = repository.list_chunks(db, review.contract_id)
-    chunk_index = {chunk.id: chunk.chunk_index for chunk in chunks}
+    # A bundle review's findings/terms can point at a linked document's own
+    # chunks (MAS-138); resolve passage numbers over the whole bundle so
+    # those never silently fall back to "passage 1" (chunk_index.get default).
+    chunk_index = {
+        c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, review.contract_id) for c in repository.list_chunks(db, cid)
+    }
     contract = repository.get_contract(db, review.contract_id)
     coverage = (
         Coverage.build(review, contract, find_external_references([c.chunk_text for c in chunks])) if contract else None
@@ -874,11 +901,14 @@ def _retrieve_and_answer(
 def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore) -> list[ChunkHit]:
     if request.contract_id is not None and repository.get_contract(db, request.contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    # A contract's bundle (MAS-137/138) is itself plus any linked documents;
+    # a contract with no links is a bundle of one, same search as before.
+    bundle_ids = repository.bundle_contract_ids(db, request.contract_id) if request.contract_id is not None else None
     return retrieve_contract_context(
         request.question,
         db=db,
         embedder=embedder,
         store=store,
-        contract_id=request.contract_id,
+        contract_ids=bundle_ids,
         limit=request.limit,
     )

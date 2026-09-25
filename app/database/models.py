@@ -90,10 +90,16 @@ class RiskSummary:
 
 @dataclass(frozen=True)
 class RiskFindingRow:
-    """One verified rubric finding stored for a contract (MAS-81)."""
+    """One verified rubric finding stored for a contract (MAS-81).
+
+    `contract_id` is the contract whose review stored this row; `source_contract_id`
+    is the document the passage itself belongs to (MAS-138) -- the same
+    contract for a solo review, or a bundle member's id for a bundle review.
+    """
 
     id: UUID
     contract_id: UUID
+    source_contract_id: UUID
     chunk_id: UUID
     category: str
     severity: str
@@ -104,10 +110,15 @@ class RiskFindingRow:
 
 @dataclass(frozen=True)
 class KeyTermRow:
-    """One verified key term stored for a contract (MAS-82)."""
+    """One verified key term stored for a contract (MAS-82).
+
+    `contract_id` is the contract whose review stored this row; `source_contract_id`
+    is the document the passage itself belongs to (MAS-138) -- see `RiskFindingRow`.
+    """
 
     id: UUID
     contract_id: UUID
+    source_contract_id: UUID
     chunk_id: UUID
     term: str
     value: str
