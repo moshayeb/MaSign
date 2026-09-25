@@ -409,8 +409,9 @@ with a shield when the guardrail was involved, grey otherwise) — and the
 <ingestion note>", "Not graded — … passages 5, 6", "Withheld from the
 model — passage 12 …", "Depends on a document not uploaded: Order Form
 (referred to in passage 2)". A passage in the primary contract remains a link
-into the reader (`onShowSource`, accessible name `Show passage n in contract`);
-a linked document is named in place until the multi-document reader in MAS-140.
+into the reader (`onShowSource`, accessible name `Show passage n in contract`).
+A source location from a linked document includes its document id, so selecting
+it opens that document in the multi-document reader.
 The review
 shows "Reviewed <date> by <model> · n of m passages graded"; the
 "Not stated" line of the key terms adds "— may be in <document> (not
@@ -423,8 +424,12 @@ For a contract bundle (MAS-140), the reader offers a document tab for the
 primary agreement and each explicitly linked document. Linking is always a
 confirmed action: a reviewer can choose an uploaded file or upload one from
 the unresolved-reference warning, then confirm the exact reference name.
-Either document can unlink the relationship. A new upload states that its
-normal review will run and uses the usual upload toast/error behaviour.
+Choosing a file does not link it by itself; the confirmation names both the
+reference and selected document. Either document can unlink the relationship.
+A new upload states that its normal review will run and uses the usual upload
+toast/error behaviour. Unlinking changes the primary contract's review to an
+honest "review again" state, because any earlier result may have used the
+removed document.
 
 `PassageReader` (a collapsible `.card.reader` below the review) loads
 `GET /api/contracts/{id}/passages` once per contract and renders every
