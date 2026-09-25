@@ -84,6 +84,17 @@ describe('the shell', () => {
     expect(screen.getByText('A clear first read of your contract, with sources you can open.')).toBeInTheDocument()
     expect(screen.getByText('MaSign clearly says when the contract does not contain enough information.')).toBeInTheDocument()
   })
+
+  it('uses a compact proof strip and a final workspace action (MAS-158)', () => {
+    render(<HomePage />)
+
+    for (const heading of ['Source-linked answers', 'Customer-side risk review', 'Key terms together']) {
+      expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
+    }
+    expect(screen.getByRole('heading', { name: 'Ready to review a contract?' })).toBeInTheDocument()
+    expect(screen.getByText('Upload a contract to see important terms, possible risks, and their source passages together.')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Open workspace' }).at(-1)).toHaveAttribute('href', '/workspace')
+  })
 })
 
 describe('the version in the footer', () => {
