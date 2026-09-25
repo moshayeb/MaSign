@@ -302,9 +302,11 @@ The engineering-grid background is gone and the blue tint behind the page is
 softer: the app should read as a legal workspace, not a developer tool.
 
 A selected contract has **one** primary button, *Ask MaSign about this
-contract*. Download PDF, Markdown, CSV and Print sit behind a compact, labelled icon **Actions**
-menu (a `<details>`, so it opens by keyboard and closes on Escape without
-any focus-trap code). *Review again* deliberately stayed in the risk review
+contract*. Its compact icon **Actions** trigger opens a vertical, labelled menu:
+**Export PDF**, **Export Markdown**, **Export CSV**, and **Print review**. Each
+row has a matching icon and separator, so the action remains clear without a
+large permanent control (a `<details>`, so it opens by keyboard and closes on
+Escape without any focus-trap code). *Review again* deliberately stayed in the risk review
 card: it belongs beside the review it re-runs, and moving it would mean
 lifting the review state into `App` — structural work that belongs to
 MAS-126. The third tab is **Sources** (the hash keeps the id `text`, so

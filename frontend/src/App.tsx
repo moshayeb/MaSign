@@ -252,22 +252,26 @@ export default function App() {
                     <button type="button" className="primary ask-cta" onClick={askAbout}>
                       Ask MaSign about this contract
                     </button>
-                    {/* One primary button per screen.  Exports stay compact, while
-                        aria-label and title keep each icon understandable (MAS-154). */}
+                    {/* One primary button per screen. The trigger stays compact;
+                        the open menu gives every export a clear icon and label. */}
                     <details className="actions-menu">
                       <summary aria-label="Export and print options" title="Export and print options"><ExportIcon name="more" /></summary>
                       <nav className="actions-list" aria-label="Export and print options">
-                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.pdf`} download aria-label="Download PDF" title="Download PDF">
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.pdf`} download>
                           <ExportIcon name="pdf" />
+                          <span>Export PDF</span>
                         </a>
-                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.md`} download aria-label="Download Markdown" title="Download Markdown">
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.md`} download>
                           <ExportIcon name="markdown" />
+                          <span>Export Markdown</span>
                         </a>
-                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.csv`} download aria-label="Download CSV" title="Download CSV">
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
                           <ExportIcon name="csv" />
+                          <span>Export CSV</span>
                         </a>
-                        <button type="button" className="export-action" onClick={() => window.print()} aria-label="Print" title="Print">
+                        <button type="button" className="export-action" onClick={() => window.print()}>
                           <ExportIcon name="print" />
+                          <span>Print review</span>
                         </button>
                       </nav>
                     </details>
