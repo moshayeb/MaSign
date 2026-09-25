@@ -66,6 +66,13 @@ describe('the shell', () => {
     for (const link of workspaceLinks) expect(link).toHaveAttribute('href', '/workspace')
   })
 
+  it('shows the not-legal-advice notice above the fold, not only in the footer (MAS-155)', () => {
+    render(<HomePage />)
+
+    expect(screen.getByText(/Educational tool — not legal advice\./)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Full disclaimer' })).toHaveAttribute('href', '/educational-disclaimer')
+  })
+
   it('explains four real MaSign behaviours without unsupported claims (MAS-134)', () => {
     render(<HomePage />)
 
