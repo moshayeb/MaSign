@@ -184,6 +184,38 @@ has real links for How it works, What MaSign checks and Documentation, plus
 an **Open workspace** CTA; on a phone they collapse into a keyboard-accessible
 menu. `StaticPage.tsx` gives the static pages a narrow readable column
 (`.staticpage`, max 720px) instead of the workspace's sidebar layout.
+The active page gets a `.active`/`aria-current="page"` highlight in both the
+desktop nav and the phone menu (MAS-142).
+
+### Public content pages (MAS-142)
+
+How it works, What MaSign checks and Documentation moved off `StaticPage`'s
+single prose column onto a second shared layout, `PublicPage.tsx`
+(`.pubpage`): a hero (eyebrow, `<h1>`, subtitle, optional CTA) over one or
+more card-grid sections (`.pubpage-grid-3`, `.pubpage-card`,
+`.pubpage-icon`), reusing the home page's (MAS-133/134) visual language —
+line icons in a soft cyan tile, `.card` surfaces — without sharing its CSS
+classes, since the two pages are laid out differently. `About`, `Privacy`
+and the educational disclaimer stay on `StaticPage`: each is a single
+statement to read top to bottom, not a set of distinct facts to scan.
+
+- **How it works** collapses to the three steps the ticket names — Upload,
+  Review, Check sources — folding "ask a question" into "check sources"
+  rather than keeping it a fourth step, plus a callout repeating the
+  honest-unknowns behaviour ("Not found in contract.").
+- **What MaSign checks** renders all seven `RISK_CATEGORIES`
+  (`app/risk_analysis/rubric.py`) as cards, the nine `KEY_TERMS`
+  (`app/key_terms/terms.py`) as a plain list, and a four-item legend for
+  High / Medium / Low / Not checked (`.pubpage-legend`, reusing the
+  workspace's `.severity`/`.severity-high|medium|low` pill styling plus a
+  new neutral `.severity-none` for "Not checked" — colours are not
+  reinvented per page). Category and term names and wording are read
+  straight from those two modules' definitions, not restated from memory,
+  so the page cannot drift from what the model is actually asked to find.
+- **Documentation** keeps the real README/`docs/` GitHub links and adds two
+  in-app cross-links (How it works, What MaSign checks) as the third
+  "resource" alongside the technical docs.
+
 ### Public home and workspace (MAS-133)
 
 `/` is a small public home page: its purpose is to explain MaSign and lead a
