@@ -69,10 +69,10 @@ class RiskReview:
     key_terms_complete: bool = False
     # Passage indexes (0-based) whose model reply was unreadable, and those the
     # guardrail withheld — listed, not only counted (MAS-84).
-    unreadable_chunks: list[int] = field(default_factory=list)
-    withheld_chunks: list[int] = field(default_factory=list)
+    unreadable_chunks: list["CoveragePassage"] = field(default_factory=list)
+    withheld_chunks: list["CoveragePassage"] = field(default_factory=list)
     # Passages graded minus their injected sentences (MAS-99).
-    redacted_chunks: list[int] = field(default_factory=list)
+    redacted_chunks: list["CoveragePassage"] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,18 @@ class RiskSummary:
     chunks_total: int
     key_terms_complete: bool = False
     high_findings: int = 0
+
+
+@dataclass(frozen=True)
+class CoveragePassage:
+    """One physical passage a review could not fully grade.
+
+    Chunk indexes restart at zero for every uploaded document. A bundle must
+    therefore keep the owning contract with the index (MAS-139).
+    """
+
+    contract_id: UUID
+    chunk_index: int
 
 
 @dataclass(frozen=True)

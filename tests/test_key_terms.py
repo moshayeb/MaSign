@@ -369,10 +369,10 @@ def test_export_markdown_and_csv_carry_every_finding_and_key_term_verbatim(db, f
     assert md.headers["content-disposition"] == 'attachment; filename="c-review.md"'
     text = md.text
     assert "# Review of c.txt" in text and "3 of 3 passages graded" in text
-    assert "| Recurring fee | EUR 18,500 per month |  | 1 | pay EUR 18,500 per month |" in text
-    assert "| Termination cost | 50% of remaining fees | deviates: 50% of the remaining fees is payable (standard: no early-termination fee) | 3 |" in text
+    assert "| Recurring fee | EUR 18,500 per month |  | c.txt, passage 1 | pay EUR 18,500 per month |" in text
+    assert "| Termination cost | 50% of remaining fees | deviates: 50% of the remaining fees is payable (standard: no early-termination fee) | c.txt, passage 3 |" in text
     assert "| One-off fees | *Not stated in the reviewed text* |" in text
-    assert "### Medium" in text and "**Payment terms** (passage 2): Late interest at the top of the range." in text
+    assert "### Medium" in text and "**Payment terms** (c.txt, passage 2): Late interest at the top of the range." in text
     assert "> interest at 1.5% per month" in text
     assert "| Liability cap | Nothing found |" in text
     assert "not legal advice" in text

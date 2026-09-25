@@ -97,12 +97,14 @@ def test_review_lists_unreadable_and_withheld_passages_by_number(db, fake_chat_m
     review = review_contract(contract_id, fake_chat_model, batch_size=1)
 
     assert (review.chunks_checked, review.chunks_withheld, review.complete) == (2, 1, False)
-    assert review.unreadable_chunks == [3] and review.withheld_chunks == [2]
+    assert [(p.contract_id, p.chunk_index) for p in review.unreadable_chunks] == [(contract_id, 3)]
+    assert [(p.contract_id, p.chunk_index) for p in review.withheld_chunks] == [(contract_id, 2)]
 
     body = client.get(f"/api/contracts/{contract_id}/risks").json()
     coverage = body["coverage"]
-    assert coverage["unreadable_passages"] == [3] and coverage["withheld_passages"] == [2]
-    assert coverage["external_references"] == [{"name": "Order Form", "chunk_indexes": [1]}]
+    assert coverage["unreadable_passages"] == [{"contract_id": str(contract_id), "filename": "c.txt", "chunk_index": 3}]
+    assert coverage["withheld_passages"] == [{"contract_id": str(contract_id), "filename": "c.txt", "chunk_index": 2}]
+    assert coverage["external_references"] == [{"name": "Order Form", "passages": [{"contract_id": str(contract_id), "filename": "c.txt", "chunk_index": 1}]}]
     assert coverage["ingestion_notes"] == []
     terms = client.get(f"/api/contracts/{contract_id}/key-terms").json()
     assert terms["coverage"]["external_references"] == coverage["external_references"]
@@ -112,4 +114,32 @@ def test_a_batch_that_is_unreadable_lists_every_passage_in_it(db, fake_chat_mode
     contract_id = _stored(db, "1. A.", "2. B.", "3. C.")
     fake_chat_model.risk_reply = json.dumps({"not": "an array"})
     review = review_contract(contract_id, fake_chat_model, batch_size=8)
-    assert review.unreadable_chunks == [0, 1, 2] and review.chunks_checked == 0
+    assert [p.chunk_index for p in review.unreadable_chunks] == [0, 1, 2] and review.chunks_checked == 0
+
+
+def test_bundle_coverage_names_the_document_for_same_numbered_passages_and_resolved_links(db, fake_chat_model: FakeChatModel) -> None:
+    primary_id = _stored(db, "Fees are in the Order Form. Scope is in the Statement of Work.")
+    linked = repository.create_contract(
+        db,
+        filename="sow-final.docx",
+        file_type="docx",
+        size_bytes=1,
+        character_count=1,
+        chunks=["Statement of Work\nThe service scope is described here."],
+    )
+    repository.create_link(db, primary_contract_id=primary_id, linked_contract_id=linked.id, reference_name="Statement of Work")
+    db.commit()
+    fake_chat_model.risk_reply = "not json"
+
+    review = review_contract(primary_id, fake_chat_model, batch_size=1)
+
+    assert {(p.contract_id, p.chunk_index) for p in review.unreadable_chunks} == {(primary_id, 0), (linked.id, 0)}
+    coverage = client.get(f"/api/contracts/{primary_id}/risks").json()["coverage"]
+    assert {(p["contract_id"], p["filename"], p["chunk_index"]) for p in coverage["unreadable_passages"]} == {
+        (str(primary_id), "c.txt", 0),
+        (str(linked.id), "sow-final.docx", 0),
+    }
+    assert coverage["external_references"] == [{"name": "Order Form", "passages": [{"contract_id": str(primary_id), "filename": "c.txt", "chunk_index": 0}]}]
+    assert coverage["resolved_references"] == [
+        {"reference_name": "Statement of Work", "linked_contract_id": str(linked.id), "linked_contract_filename": "sow-final.docx"}
+    ]

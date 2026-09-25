@@ -11,7 +11,7 @@ import io
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.api.export import render_csv
+from app.api.export import render_csv, render_markdown
 from app.api.routes import (
     KeyTermSource,
     KeyTermsResponse,
@@ -19,6 +19,9 @@ from app.api.routes import (
     ReviewFinding,
     RiskReviewResponse,
     StandardVerdict,
+    DeadlineOut,
+    Coverage,
+    CoveragePassageOut,
 )
 
 NOW = datetime.now(timezone.utc)
@@ -109,3 +112,46 @@ def test_ordinary_values_are_left_unchanged() -> None:
     assert (finding["value_or_reason"], finding["quote"]) == ("Liability is uncapped.", "shall be unlimited")
     term = next(r for r in rows if r["kind"] == "key_term")
     assert (term["value_or_reason"], term["quote"]) == ("EUR 18,500 per month", "pay EUR 18,500 per month")
+
+
+def test_bundle_exports_name_the_source_document_for_findings_terms_and_deadlines() -> None:
+    finding = _finding(reason="Liability is uncapped.", quote="shall be unlimited")
+    term = _term_with_source(value="36 months", quote="initial term is 36 months")
+    terms = _terms([term])
+    terms.deadlines = [DeadlineOut(id="term_end", name="Initial term ends", date=None, computed_from=["recurring_fee"], reason="effective date not stated", how=None)]
+    documents = {finding.contract_id: "main-agreement.pdf", term.source.contract_id: "statement-of-work.docx"}
+
+    markdown = render_markdown("main-agreement.pdf", _review([finding]), terms, documents)
+    csv_rows = list(csv.DictReader(io.StringIO(render_csv(_review([finding]), terms, documents))))
+
+    assert "## Documents in this review" in markdown
+    assert "main-agreement.pdf" in markdown and "statement-of-work.docx" in markdown
+    assert "main-agreement.pdf, passage 1" in markdown
+    assert "statement-of-work.docx, passage 1" in markdown
+    assert next(row for row in csv_rows if row["kind"] == "finding")["source_document"] == "main-agreement.pdf"
+    assert next(row for row in csv_rows if row["kind"] == "key_term")["source_document"] == "statement-of-work.docx"
+    assert next(row for row in csv_rows if row["kind"] == "deadline")["source_document"] == "statement-of-work.docx"
+
+
+def test_bundle_coverage_export_names_each_document() -> None:
+    main_id, linked_id = uuid4(), uuid4()
+    review = _review([])
+    review.coverage = Coverage(
+        chunks_total=2,
+        chunks_checked=0,
+        unreadable_passages=[
+            CoveragePassageOut(contract_id=main_id, filename="main-agreement.pdf", chunk_index=0),
+            CoveragePassageOut(contract_id=linked_id, filename="statement-of-work.docx", chunk_index=0),
+        ],
+        withheld_passages=[],
+        redacted_passages=[],
+        ingestion_notes=[],
+        external_references=[],
+    )
+
+    markdown = render_markdown(
+        "main-agreement.pdf", review, _terms([]), {main_id: "main-agreement.pdf", linked_id: "statement-of-work.docx"}
+    )
+
+    assert "main-agreement.pdf, passage 1" in markdown
+    assert "statement-of-work.docx, passage 1" in markdown

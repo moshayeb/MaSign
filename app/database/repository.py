@@ -6,7 +6,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
+from app.database.models import CoveragePassage, Chunk, Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
 from app.ingestion.document_type import DocumentKind, classify_document
 
 
@@ -266,6 +266,33 @@ def set_vector_index(connection: psycopg.Connection, index: VectorIndex) -> None
 # --- risk reviews (MAS-81) ------------------------------------------------------
 
 
+def _coverage_passages(values: list[object], primary_contract_id: UUID) -> list[CoveragePassage]:
+    """Read both MAS-139 locations and older integer-only coverage rows."""
+    result: list[CoveragePassage] = []
+    for value in values:
+        if isinstance(value, int):
+            result.append(CoveragePassage(contract_id=primary_contract_id, chunk_index=value))
+        elif isinstance(value, dict) and isinstance(value.get("chunk_index"), int):
+            try:
+                result.append(CoveragePassage(contract_id=UUID(str(value["contract_id"])), chunk_index=value["chunk_index"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return result
+
+
+def _risk_review(row: dict) -> RiskReview:
+    """Normalise JSONB coverage locations when a review row leaves Postgres."""
+    row = dict(row)
+    primary = row["contract_id"]
+    for name in ("unreadable_chunks", "withheld_chunks", "redacted_chunks"):
+        row[name] = _coverage_passages(row.get(name) or [], primary)
+    return RiskReview(**row)
+
+
+def _coverage_json(passages: list[CoveragePassage]) -> list[dict[str, object]]:
+    return [{"contract_id": str(p.contract_id), "chunk_index": p.chunk_index} for p in passages]
+
+
 def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, status: str = "pending") -> RiskReview:
     """Create or reset the contract's review row; the runner fills it in."""
     with connection.transaction():
@@ -282,7 +309,7 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
                 """,
                 (contract_id, status),
             )
-            return RiskReview(**cursor.fetchone())
+            return _risk_review(cursor.fetchone())
 
 
 def claim_risk_review(connection: psycopg.Connection, contract_id: UUID) -> RiskReview | None:
@@ -304,7 +331,7 @@ def claim_risk_review(connection: psycopg.Connection, contract_id: UUID) -> Risk
                 (contract_id,),
             )
             row = cursor.fetchone()
-    return RiskReview(**row) if row else None
+    return _risk_review(row) if row else None
 
 
 def update_risk_review(
@@ -318,9 +345,9 @@ def update_risk_review(
     chunks_withheld: int | None = None,
     complete: bool | None = None,
     key_terms_complete: bool | None = None,
-    unreadable_chunks: list[int] | None = None,
-    withheld_chunks: list[int] | None = None,
-    redacted_chunks: list[int] | None = None,
+    unreadable_chunks: list[CoveragePassage] | None = None,
+    withheld_chunks: list[CoveragePassage] | None = None,
+    redacted_chunks: list[CoveragePassage] | None = None,
     error: str | None = None,
 ) -> RiskReview:
     with connection.transaction():
@@ -345,23 +372,23 @@ def update_risk_review(
                 """,
                 (
                     status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete,
-                    Jsonb(unreadable_chunks) if unreadable_chunks is not None else None,
-                    Jsonb(withheld_chunks) if withheld_chunks is not None else None,
-                    Jsonb(redacted_chunks) if redacted_chunks is not None else None,
+                    Jsonb(_coverage_json(unreadable_chunks)) if unreadable_chunks is not None else None,
+                    Jsonb(_coverage_json(withheld_chunks)) if withheld_chunks is not None else None,
+                    Jsonb(_coverage_json(redacted_chunks)) if redacted_chunks is not None else None,
                     error, contract_id,
                 ),
             )
             row = cursor.fetchone()
     if row is None:
         raise LookupError(f"No risk review for contract {contract_id}")
-    return RiskReview(**row)
+    return _risk_review(row)
 
 
 def get_risk_review(connection: psycopg.Connection, contract_id: UUID) -> RiskReview | None:
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM risk_reviews WHERE contract_id = %s", (contract_id,))
         row = cursor.fetchone()
-    return RiskReview(**row) if row else None
+    return _risk_review(row) if row else None
 
 
 def fail_interrupted_risk_reviews(connection: psycopg.Connection) -> int:

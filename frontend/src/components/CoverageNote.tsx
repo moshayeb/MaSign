@@ -1,4 +1,4 @@
-import type { Coverage } from '../api'
+import type { Coverage, CoverageLocation } from '../api'
 import type { SourceRef } from './PassageReader'
 
 interface Props {
@@ -45,8 +45,15 @@ export function CoverageNote({ coverage, subject, onShowSource }: Props) {
   for (const ref of coverage.external_references) {
     lines.push(
       <li key={`ref-${ref.name}`}>
-        Depends on a document not uploaded: <strong>{ref.name}</strong> (referred to in {passageList(ref.chunk_indexes, onShowSource)}). What it
+        Depends on a document not uploaded: <strong>{ref.name}</strong> (referred to in {passageList(ref.passages ?? ref.chunk_indexes ?? [], onShowSource)}). What it
         says could not be determined.
+      </li>,
+    )
+  }
+  for (const reference of coverage.resolved_references ?? []) {
+    lines.push(
+      <li key={`resolved-${reference.reference_name}`}>
+        <strong>{reference.reference_name}</strong> â€” linked: <a className="link" href={`/workspace#${reference.linked_contract_id}/overview`}>{reference.linked_contract_filename}</a>.
       </li>,
     )
   }
@@ -58,23 +65,29 @@ export function CoverageNote({ coverage, subject, onShowSource }: Props) {
   )
 }
 
-function passageList(indexes: number[], onShowSource?: (source: SourceRef) => void) {
-  const label = indexes.length === 1 ? 'passage' : 'passages'
+function passageList(passages: CoverageLocation[], onShowSource?: (source: SourceRef) => void) {
+  const label = passages.length === 1 ? 'passage' : 'passages'
   return (
     <>
       {label}{' '}
-      {indexes.map((index, position) => (
-        <span key={index}>
-          {position > 0 ? ', ' : ''}
-          {onShowSource ? (
-            <button type="button" className="link" onClick={() => onShowSource({ chunk_index: index })} aria-label={`Show passage ${index + 1} in contract`}>
-              {index + 1}
-            </button>
-          ) : (
-            index + 1
-          )}
-        </span>
-      ))}
+      {passages.map((passage, position) => {
+        const location = typeof passage === 'number' ? undefined : passage
+        const index = typeof passage === 'number' ? passage : passage.chunk_index
+        return (
+          <span key={location ? `${location.contract_id}-${index}` : index}>
+            {position > 0 ? ', ' : ''}
+            {location ? (
+              <>{location.filename}, passage {index + 1}</>
+            ) : onShowSource ? (
+              <button type="button" className="link" onClick={() => onShowSource({ chunk_index: index })} aria-label={`Show passage ${index + 1} in contract`}>
+                {index + 1}
+              </button>
+            ) : (
+              index + 1
+            )}
+          </span>
+        )
+      })}
     </>
   )
 }

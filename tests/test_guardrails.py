@@ -320,7 +320,10 @@ def test_the_e_contract_is_answered_with_only_its_injected_sentences_cut(db, fak
     for _, sent in fake_chat_model.calls:
         assert "ignore all previous instructions" not in sent and "EUR 0" not in sent and "EUR 18,500" in sent
     review = client.get(f"/api/contracts/{contract_id}/risks").json()
-    assert (review["chunks_checked"], review["chunks_withheld"], review["coverage"]["redacted_passages"]) == (1, 0, [0])
+    assert (review["chunks_checked"], review["chunks_withheld"]) == (1, 0)
+    assert review["coverage"]["redacted_passages"] == [
+        {"contract_id": contract_id, "filename": "E-Contract.txt", "chunk_index": 0}
+    ]
     passages = client.get(f"/api/contracts/{contract_id}/passages").json()
     spans = passages[0]["withheld_spans"]
     assert len(spans) == 2 and all("AI" in text[a:b] or "instructions" in text[a:b].lower() for a, b in spans)
@@ -390,7 +393,8 @@ def test_the_whole_contract_review_still_withholds_a_pure_injection_passage(db, 
 
     review = review_contract(contract.id, GuardedChatModel(fake_chat_model), batch_size=8)
 
-    assert (review.chunks_checked, review.chunks_withheld, review.withheld_chunks, review.redacted_chunks, review.complete) == (1, 1, [1], [], False)
+    assert (review.chunks_checked, review.chunks_withheld, review.redacted_chunks, review.complete) == (1, 1, [], False)
+    assert [(location.contract_id, location.chunk_index) for location in review.withheld_chunks] == [(contract.id, 1)]
     assert all(PURE_INJECTION not in sent for _, sent in fake_chat_model.calls)
 
 

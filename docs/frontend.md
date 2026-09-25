@@ -390,7 +390,11 @@ Deviations tile of the summary strip.
 ## Coverage (MAS-84)
 
 `CoverageNotice` (MAS-104) renders `review.coverage` once for the whole
-Overview as one line. Since MAS-123 a document the contract refers to but
+Overview as one line. Since MAS-139 this is bundle-aware: every coverage
+location names its source document as well as its passage number, because each
+linked document starts again at passage 1. A named reference only counts as
+resolved after the user created an explicit contract link; it then appears as
+"Statement of Work — linked: sow-final.docx". Since MAS-123 a document the contract refers to but
 that nobody uploaded **leads** that line and turns the notice amber —
 "Review may be incomplete — Service Level Schedule was referenced but not
 uploaded" — because it is a hole in the review, not a footnote; the same
@@ -404,8 +408,10 @@ with a shield when the guardrail was involved, grey otherwise) — and the
 `<details>` open to `CoverageNote`, the per-passage list: "Not reviewed:
 <ingestion note>", "Not graded — … passages 5, 6", "Withheld from the
 model — passage 12 …", "Depends on a document not uploaded: Order Form
-(referred to in passage 2)". Every passage number is a link into the reader
-(`onShowSource`, accessible name `Show passage n in contract`). The review
+(referred to in passage 2)". A passage in the primary contract remains a link
+into the reader (`onShowSource`, accessible name `Show passage n in contract`);
+a linked document is named in place until the multi-document reader in MAS-140.
+The review
 shows "Reviewed <date> by <model> · n of m passages graded"; the
 "Not stated" line of the key terms adds "— may be in <document> (not
 uploaded)"; the contract list shows a *Partly readable* badge whose title
