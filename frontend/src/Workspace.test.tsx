@@ -157,7 +157,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(head).toHaveTextContent('1 B · 2 passages · uploaded')
     expect(within(head).getByText('Reviewed · High risk')).toHaveClass('status', 'warn')
 
-    await userEvent.click(within(head).getByRole('button', { name: 'Ask MaSign about this contract' }))
+    await userEvent.click(within(head).getByRole('button', { name: 'Ask a question about this contract' }))
     expect(screen.getByRole('tab', { name: 'Ask MaSign' })).toHaveAttribute('aria-selected', 'true')
     await waitFor(() => expect(screen.getByLabelText('Ask about the contract')).toHaveFocus())
   })

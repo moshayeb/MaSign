@@ -1245,6 +1245,26 @@ li.risk blockquote {
   margin-left: 0;
 }
 
+/* The selected contract is already named in the workspace header. A key-term
+   tile therefore shows only its passage. Linked-document sources retain a
+   clipped filename, with the full name available through the button title. */
+.term-meta .term-source-link {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.term-source-document {
+  min-width: 0;
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .term-quote {
   margin: 8px 0 0;
   padding: 0 0 0 10px;

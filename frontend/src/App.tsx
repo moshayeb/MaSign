@@ -249,8 +249,8 @@ export default function App() {
                     </p>
                   </div>
                   <div className="contract-head-actions">
-                    <button type="button" className="primary ask-cta" onClick={askAbout}>
-                      Ask MaSign about this contract
+                    <button type="button" className="primary ask-cta" onClick={askAbout} aria-label="Ask a question about this contract" title="Ask MaSign about this contract">
+                      Ask a question
                     </button>
                     {/* One primary button per screen. The trigger stays compact;
                         the open menu gives every export a clear icon and label. */}
