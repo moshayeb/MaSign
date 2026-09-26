@@ -51,6 +51,10 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* .home-final-cta breaks out to full viewport width via 100vw; on a page
+     with a vertical scrollbar, 100vw is very slightly wider than the visible
+     viewport (100%), which would otherwise add a stray horizontal scrollbar. */
+  overflow-x: hidden;
   background:
     radial-gradient(900px 420px at 18% -140px, rgba(12, 173, 237, 0.08), transparent 68%),
     var(--bg);
@@ -3090,11 +3094,17 @@ button.chip.ranked {
   align-items: center;
   justify-content: space-between;
   gap: 28px;
-  padding: 40px 44px;
-  border-radius: var(--radius);
+  padding: 40px clamp(28px, 8vw, 120px);
   background: linear-gradient(135deg, #087eac, #0caded);
   color: #fff;
   box-shadow: 0 22px 42px -28px rgba(12, 173, 237, 0.8);
+  /* Break out of .homepage's centred, padded column to the true viewport
+     edge on every width, not just up to the 1180px container. This exact
+     formula cancels the parent's own padding regardless of its value, as
+     long as the parent is itself centred with margin: 0 auto. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
 }
 
 .home-final-cta-eyebrow {
@@ -3216,7 +3226,7 @@ button.chip.ranked {
   .home-final-cta {
     align-items: flex-start;
     flex-direction: column;
-    padding: 30px 24px;
+    padding: 30px clamp(16px, 6vw, 44px);
   }
 }
 
