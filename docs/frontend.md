@@ -98,9 +98,10 @@ badge already says, or when there is no review yet (`ContractList.tsx`,
 
 Selecting a contract replaces the landing with the contract header
 (MAS-104: file name, type tag, size · passages · upload date, the
-Reviewed / Not reviewed pill read from the contract list, the **Ask MaSign
-about this contract** button that opens the Ask tab with the cursor in the
-composer, and the Download links) and a tab bar (`components/Tabs.tsx`,
+Reviewed / Not reviewed pill read from the contract list, the **Ask a
+question** button (its accessible name and tooltip still say "about this
+contract") that opens the Ask tab with the cursor in the composer, and the
+Download links) and a tab bar (`components/Tabs.tsx`,
 WAI-ARIA `tablist`/`tab`/`tabpanel`; arrow keys, Home and End move, only
 the active tab is in the tab order):
 
@@ -315,8 +316,9 @@ screenshot, never a live URL.
 The engineering-grid background is gone and the blue tint behind the page is
 softer: the app should read as a legal workspace, not a developer tool.
 
-A selected contract has **one** primary button, *Ask MaSign about this
-contract*. Its compact icon **Actions** trigger opens a vertical, labelled menu:
+A selected contract has **one** primary button, *Ask a question*. Its
+accessible name and tooltip say that it is about the selected contract.
+Its compact icon **Actions** trigger opens a vertical, labelled menu:
 **Export PDF**, **Export Markdown**, **Export CSV**, and **Print review**. Each
 row has a matching icon and separator, so the action remains clear without a
 large permanent control (a `<details>`, so it opens by keyboard and closes on
@@ -414,9 +416,13 @@ review finishes"; a failed one the failure, verbatim. Dates use the same
 `KeyTermsCard` renders above the Risk review from the same `RiskReview`
 response (`key_terms`, `key_terms_complete`), so it shares the panel's load
 and polling. Since MAS-104 only stated terms get a tile: name in small
-caps, the value prominent, `passage n` link and the standard pill inline,
-the verbatim quote under it, and for `conflicting` an amber tag plus "Also
-stated in passage m" lines. The terms that are `not_stated` share one line
+caps, the value prominent, a `passage n` link and the standard pill inline.
+The selected contract is already named in the workspace header, so its tiles
+show only the passage. A linked-document source keeps its filename (clipped
+visually if needed, with the full name in its tooltip and accessible name),
+then its passage number. This preserves bundle provenance without overflowing
+the tile. The verbatim quote sits beneath it; `conflicting` terms add an amber
+tag plus "Also stated in passage m" lines. The terms that are `not_stated` share one line
 ("Not stated in the reviewed text: One-off fees, Price changes") — only sent
 when the pass completed — and `unchecked` terms another ("Not checked: …")
 with an amber notice that some passages could not be checked — never

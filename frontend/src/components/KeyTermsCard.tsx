@@ -72,7 +72,7 @@ export function KeyTermsCard({ review, contracts = [], onShowSource, ref }: Prop
       {stated.length > 0 && (
         <dl className="terms">
           {stated.map((term) => (
-            <TermTile key={term.id} term={term} contracts={contracts} onShowSource={onShowSource} />
+            <TermTile key={term.id} term={term} contracts={contracts} onShowSource={onShowSource} reviewingContractId={review.contract_id} />
           ))}
         </dl>
       )}
@@ -105,9 +105,12 @@ export function KeyTermsCard({ review, contracts = [], onShowSource, ref }: Prop
   )
 }
 
-function TermTile({ term, contracts, onShowSource }: { term: KeyTermValue; contracts: Contract[]; onShowSource?: (source: SourceRef) => void }) {
+function TermTile({ term, contracts, onShowSource, reviewingContractId }: { term: KeyTermValue; contracts: Contract[]; onShowSource?: (source: SourceRef) => void; reviewingContractId: string }) {
   const source = term.source!
   const verdict = term.standard && term.standard.status !== 'none' ? term.standard : null
+  const sourceFilename = source.contract_id ? contracts.find((item) => item.contract_id === source.contract_id)?.filename : null
+  const isLinkedDocument = Boolean(source.contract_id && source.contract_id !== reviewingContractId)
+  const passageLabel = `passage ${source.chunk_index + 1}`
   return (
     <div className={`term ${term.status}${verdict?.status === 'deviates' ? ' deviates' : ''}`}>
       <dt>
@@ -120,11 +123,19 @@ function TermTile({ term, contracts, onShowSource }: { term: KeyTermValue; contr
           {onShowSource ? (
             <button
               type="button"
-              className="link"
+              className="link term-source-link"
               onClick={() => onShowSource({ contract_id: source.contract_id, chunk_index: source.chunk_index, quote: source.quote })}
-              aria-label={`Show ${term.name} in contract`}
+              aria-label={isLinkedDocument ? `Show ${term.name} in ${sourceFilename ?? 'linked document'}, ${passageLabel}` : `Show ${term.name} in contract`}
+              title={isLinkedDocument ? `${sourceFilename ?? 'Linked document'}, ${passageLabel}` : undefined}
             >
-              {source.contract_id ? `${contracts.find((item) => item.contract_id === source.contract_id)?.filename ?? 'contract'}, passage ${source.chunk_index + 1}` : `passage ${source.chunk_index + 1}`}
+              {isLinkedDocument ? (
+                <>
+                  <span className="term-source-document">{sourceFilename ?? 'Linked document'}</span>
+                  <span aria-hidden="true"> · {passageLabel}</span>
+                </>
+              ) : (
+                passageLabel
+              )}
             </button>
           ) : (
             <>passage {source.chunk_index + 1}</>
