@@ -2573,6 +2573,11 @@ button.chip.ranked {
 
 .home-hero h1 {
   max-width: none;
+  /* Bigger than the shared .hero h1 (used on pages with less room, like
+     the workspace's empty state): the homepage hero has the whole column
+     to itself, so the headline can lead harder. */
+  font-size: clamp(2.4rem, 4.6vw, 3.4rem);
+  line-height: 1.08;
 }
 
 .home-hero p {
@@ -2640,9 +2645,16 @@ button.chip.ranked {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  border-radius: var(--radius);
   background: var(--accent-bright);
   box-shadow: 0 18px 34px -28px rgba(12, 173, 237, 0.9);
+  /* Full-bleed band, same technique and reasoning as .home-final-cta
+     (MAS-160): breaks out of .homepage's centred, padded column to the
+     true viewport edge on every width. Each .home-trust-item keeps its
+     own padding, so the three columns simply spread across the full
+     width instead of needing a centred inner wrapper. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
 }
 
 .home-trust-item {
