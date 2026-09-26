@@ -3090,21 +3090,30 @@ button.chip.ranked {
 /* A decisive final action closes the public page before the footer, without
    adding a marketing promise that the app cannot prove. */
 .home-final-cta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-  padding: 40px clamp(28px, 8vw, 120px);
+  padding: 40px 28px;
   background: linear-gradient(135deg, #087eac, #0caded);
   color: #fff;
   box-shadow: 0 22px 42px -28px rgba(12, 173, 237, 0.8);
   /* Break out of .homepage's centred, padded column to the true viewport
      edge on every width, not just up to the 1180px container. This exact
      formula cancels the parent's own padding regardless of its value, as
-     long as the parent is itself centred with margin: 0 auto. */
+     long as the parent is itself centred with margin: 0 auto. The 28px
+     padding here matches .homepage's own gutter (max-width 1180 minus its
+     28px side padding), so home-final-cta-inner's max-width below lines its
+     content up with the hero, steps and every other homepage section even
+     though the blue background runs edge to edge. */
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+}
+
+.home-final-cta-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  max-width: 1124px;
+  margin: 0 auto;
 }
 
 .home-final-cta-eyebrow {
@@ -3122,7 +3131,7 @@ button.chip.ranked {
   font-size: clamp(1.3rem, 2.4vw, 1.8rem);
 }
 
-.home-final-cta > div > p:last-child {
+.home-final-cta-inner > div > p:last-child {
   max-width: 56ch;
   margin: 8px 0 0;
   color: rgba(255, 255, 255, 0.9);
@@ -3224,9 +3233,12 @@ button.chip.ranked {
   }
 
   .home-final-cta {
+    padding: 30px 16px;
+  }
+
+  .home-final-cta-inner {
     align-items: flex-start;
     flex-direction: column;
-    padding: 30px clamp(16px, 6vw, 44px);
   }
 }
 

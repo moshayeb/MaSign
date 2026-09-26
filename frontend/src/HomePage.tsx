@@ -316,17 +316,19 @@ export function HomePage() {
         </section>
 
         <section className="home-final-cta" aria-labelledby="home-final-cta-title">
-          <div>
-            <p className="home-final-cta-eyebrow">Start with the contract you have</p>
-            <h2 id="home-final-cta-title">Ready to review a contract?</h2>
-            <p>Upload a contract to see important terms, possible risks, and their source passages together.</p>
+          <div className="home-final-cta-inner">
+            <div>
+              <p className="home-final-cta-eyebrow">Start with the contract you have</p>
+              <h2 id="home-final-cta-title">Ready to review a contract?</h2>
+              <p>Upload a contract to see important terms, possible risks, and their source passages together.</p>
+            </div>
+            <a className="home-final-cta-button" href="/workspace">
+              Open workspace
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </a>
           </div>
-          <a className="home-final-cta-button" href="/workspace">
-            Open workspace
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </a>
         </section>
       </main>
     </PageChrome>
