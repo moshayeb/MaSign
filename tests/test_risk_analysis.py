@@ -165,6 +165,46 @@ def test_duplicate_category_per_passage_is_reported_once() -> None:
     assert len(report.findings) == 1
 
 
+def test_a_verified_60_day_mutual_notice_finding_is_corrected_to_low_severity() -> None:
+    """MAS-152: a live review graded this exact pattern as Medium ("exceeding the low-risk
+    threshold"), when the rubric's termination Low band is explicitly 30-60 days' notice."""
+    notice = (
+        "8. Termination. Either party may terminate this Agreement for convenience upon 60 days' "
+        "written notice, without payment of any fee."
+    )
+    hits = _hits(notice)
+    model = _model([
+        {"category": "termination", "severity": "Medium", "reason": "Notice period is exceeding the low-risk threshold.",
+         "passage": 1, "quote": "Either party may terminate this Agreement for convenience upon 60 days' written notice, "
+         "without payment of any fee."},
+    ])
+
+    report = analyze_risks(hits, model)
+
+    assert report.checked is True
+    assert len(report.findings) == 1
+    assert report.findings[0].severity == "Low"
+    assert "corrected" in report.findings[0].reason.lower()
+
+
+def test_a_verified_90_day_mutual_notice_finding_stays_medium() -> None:
+    notice = (
+        "8. Termination. Either party may terminate this Agreement for convenience upon 90 days' "
+        "written notice, without payment of any fee."
+    )
+    hits = _hits(notice)
+    model = _model([
+        {"category": "termination", "severity": "Medium", "reason": "Notice period exceeds 60 days.", "passage": 1,
+         "quote": "Either party may terminate this Agreement for convenience upon 90 days' written notice, "
+         "without payment of any fee."},
+    ])
+
+    report = analyze_risks(hits, model)
+
+    assert report.findings[0].severity == "Medium"
+    assert report.findings[0].reason == "Notice period exceeds 60 days."
+
+
 @pytest.mark.parametrize("reply", ["I found nothing risky.", '{"category": "liability"}', "", "```json\nnot json\n```"])
 def test_an_unreadable_reply_marks_the_analysis_unavailable(reply: str, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level("WARNING"):
