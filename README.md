@@ -136,6 +136,20 @@ Interactive docs at `http://localhost:8000/docs`.
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |
 | `GET`  | `/ready` | Readiness: Postgres and Qdrant answer (200) or the failing one is named (503); also reports which chat model is configured. Use this, not `/health`, to know whether requests will succeed. |
 
+## Contract bundles
+
+Some agreements depend on a separate Statement of Work, Order Form, or SLA.
+When the review identifies one that was not uploaded, MaSign keeps the warning
+visible until a reviewer explicitly links an uploaded document to that exact
+reference. MaSign never decides from matching filenames or content alone.
+
+The primary agreement and its directly linked documents are then reviewed and
+searched together. Each citation, risk finding, key term, coverage item, and
+export row still names the document and passage it came from. A linked document
+also keeps its own separate review when opened on its own. Removing a link
+marks the primary agreement's existing review as needing a new review, because
+it may have relied on text that is no longer part of the bundle.
+
 ## Evaluation
 
 `docs/evaluation/` holds the question set, the results and how to run the

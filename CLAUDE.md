@@ -265,6 +265,25 @@ human-typed code.
 React + Vite, served by FastAPI; **sonner** toasts for every user action, error
 toasts show the API's `detail` verbatim. See `docs/frontend.md`.
 
+
+## Contract bundles (MAS-137–141, 2026-09-25)
+
+Owner decision (2026-09-25): build full contract bundles, not just the
+single-reference warning from MAS-84. A reviewed contract that names a
+separate Statement of Work, Order Form, or SLA it depends on stays flagged
+as incomplete until a reviewer explicitly links an uploaded document to that
+exact reference (`contract_links`, migration 010) — MaSign never matches by
+filename or content similarity. Linking is one level deep only: a document
+linked to a primary agreement does not pull in whatever that second document
+is itself linked to. The primary and its linked documents are then reviewed,
+searched, and exported together, while every finding, key term, coverage
+item, citation, and export row keeps the source document and passage it came
+from. Unlinking invalidates the primary's existing review rather than let it
+keep claiming coverage of a bundle it no longer includes.
+
+
+
+
 ### Visual system (MAS-136, 2026-09-24)
 
 The owner approved a MassQL-aligned update to the earlier MAS-95 palette.

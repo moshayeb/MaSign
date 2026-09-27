@@ -212,6 +212,12 @@ key-terms responses. A `contract_links` row (migration 010) explicitly
 resolves a named reference to an uploaded document; the review uses the
 primary contract plus those linked documents. Other references are computed
 from the bundle chunks on each read and remain clearly marked as not uploaded.
+The link is only one level deep: a document linked to a primary agreement does
+not automatically pull in documents linked from that second document. Each
+review record belongs to its primary contract, while findings, terms, coverage
+locations, citations, and exports retain the source contract id of the chunk
+that produced them. Removing a link invalidates the primary review rather than
+leaving it to claim coverage of the former bundle.
 
 ## Document kind (MAS-107)
 
