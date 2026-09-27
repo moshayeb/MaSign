@@ -140,6 +140,17 @@ keeps the findings that arrived whole and reports `risks_complete: false`
 (MAS-80). `app/actions/workflow.py` turns the findings into suggested next
 steps.
 
+A verified quote can still carry a severity that contradicts the rubric's own
+numeric boundary -- a live review once graded a 60-day mutual, fee-free
+termination notice as Medium, when the rubric's Low band is explicitly
+30-60 days (MAS-152). `severity_rules.py` corrects this one well-defined
+case deterministically after quote verification, and only when the quote
+itself makes the day count, mutuality and fee-free status unambiguous;
+anything less clear (a one-sided clause, an unclear fee, no day count) is
+left exactly as the model graded it, on the same honest-outcomes principle
+as the rest of the review -- an unverifiable correction would be worse than
+the bug it fixes.
+
 `review.py` is the whole-contract review (MAS-81): after every upload a
 background task sends all of the contract's chunks through the same
 `analyze_risks` in batches of 8 and stores the verified findings in
