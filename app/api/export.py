@@ -1,6 +1,6 @@
-"""Export a contract's review as Markdown or CSV (MAS-97).
+"""Export a contract's review as PDF, Markdown or CSV (MAS-154).
 
-Both renderings are built from the same response models the UI reads
+All renderings are built from the same response models the UI reads
 (`RiskReviewResponse`, `KeyTermsResponse`), so a file can never say
 something the screen does not. No model call is involved.
 """
@@ -10,9 +10,16 @@ from __future__ import annotations
 import csv
 import io
 import re
+from html import escape
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
+
+from reportlab.lib.colors import HexColor
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 if TYPE_CHECKING:
     from app.api.routes import KeyTermsResponse, RiskReviewResponse
@@ -92,6 +99,36 @@ def render_markdown(
 
     lines += ["", f"_{NOT_ADVICE}_", ""]
     return "\n".join(lines)
+
+
+def render_pdf(
+    filename: str, review: RiskReviewResponse, terms: KeyTermsResponse, documents: dict[UUID, str] | None = None
+) -> bytes:
+    """Render the same no-cost review data as a readable, downloadable PDF."""
+    source = render_markdown(filename, review, terms, documents)
+    output = io.BytesIO()
+    document = SimpleDocTemplate(output, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("MaSignTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=HexColor("#111111"), spaceAfter=10)
+    heading = ParagraphStyle("MaSignHeading", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=12, leading=16, textColor=HexColor("#087eac"), spaceBefore=12, spaceAfter=5)
+    body = ParagraphStyle("MaSignBody", parent=styles["BodyText"], fontName="Helvetica", fontSize=9, leading=13, textColor=HexColor("#333333"), spaceAfter=3)
+    story = []
+    for raw in source.splitlines():
+        line = raw.strip()
+        if not line:
+            story.append(Spacer(1, 3))
+        elif line.startswith("# "):
+            story.append(Paragraph(escape(line[2:]), title))
+        elif line.startswith("## ") or line.startswith("### "):
+            story.append(Paragraph(escape(line.lstrip("# ")), heading))
+        else:
+            line = line.strip("|").replace("|", "  ?  ")
+            if set(line.replace("?", "").replace(" ", "")) <= {"-"}:
+                continue
+            line = line.replace("**", "").replace("*", "").replace("`", "").replace("???", "?")
+            story.append(Paragraph(escape(line), body))
+    document.build(story)
+    return output.getvalue()
 
 
 _FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")

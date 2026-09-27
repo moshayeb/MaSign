@@ -59,6 +59,19 @@ can cite the exact clause and the answer step (MAS-13) can quote it. Verified
 against `data/sample_contracts/northwind_master_services_agreement.txt`: eight
 questions, including four on financial terms, all rank the right clause first.
 
+**What's retrieved, in plain terms (teacher question, 2026-09-25):** the
+corpus is not one fixed collection — it is whatever the current user has
+uploaded, one Qdrant point per chunk (~512 tokens each, see the token-budget
+chunking above), retrieved by cosine similarity. The UI always scopes a
+question to the open contract (or its linked bundle, MAS-138); the API can
+search across every stored contract when no `contract_id` is given, but the
+frontend never calls it that way. Default `limit` is 5 (`DEFAULT_LIMIT`,
+`app/retrieval/retriever.py`) — the top 5 chunks by cosine score, not the
+whole document. As a snapshot, not a fixed number — it grows with usage: the
+dev deployment held 29 contracts / 107 chunks total on 2026-09-25 (`curl
+localhost:6333/collections/contract_chunks`); a real 30-page contract runs
+roughly 10–20 chunks on its own, per the chunker's token budget.
+
 At startup the API loads the model and compares the collection's recorded
 fingerprint (`vector_index`: backend, model, dimension, token limit, prompt
 format) with the configured embedder. Any difference — or a missing collection — rebuilds the
@@ -139,6 +152,19 @@ schedules the background task, so concurrent requests produce one 202 and
 one 409 rather than two model jobs; the contract list carries `risk_status`,
 `risk_worst_severity`, `risk_complete` and checked/total passage counts, so
 an incomplete result cannot look clean.
+
+**Which of the three approaches this is (teacher question, 2026-09-25):**
+neither clause-by-clause with running memory, nor one call per rubric
+category, nor a single big-bang prompt over the whole document. It's a
+**batch sweep**: fixed windows of 8 chunks, and each call checks that window
+against *all seven* rubric categories at once — batches exist only because a
+full contract's chunks plus a useful reply wouldn't fit one call's token
+budget. The real limitation this creates, stated rather than hidden: batches
+are graded **independently** — nothing found in batch 1 is passed to the
+model when it grades batch 4, so a clause whose risk only reads correctly
+together with a definition several batches earlier could be misjudged.
+Carrying a short summary of already-found findings into later batches would
+close most of that gap; it isn't implemented (parked, not started).
 
 ## Key terms (MAS-82)
 

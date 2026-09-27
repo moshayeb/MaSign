@@ -66,6 +66,13 @@ describe('the shell', () => {
     for (const link of workspaceLinks) expect(link).toHaveAttribute('href', '/workspace')
   })
 
+  it('shows the not-legal-advice notice above the fold, not only in the footer (MAS-155)', () => {
+    render(<HomePage />)
+
+    expect(screen.getByText(/Educational tool — not legal advice\./)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Full disclaimer' })).toHaveAttribute('href', '/educational-disclaimer')
+  })
+
   it('explains four real MaSign behaviours without unsupported claims (MAS-134)', () => {
     render(<HomePage />)
 
@@ -76,6 +83,17 @@ describe('the shell', () => {
     expect(screen.getByText('Open the exact clause behind every answer.')).toBeInTheDocument()
     expect(screen.getByText('A clear first read of your contract, with sources you can open.')).toBeInTheDocument()
     expect(screen.getByText('MaSign clearly says when the contract does not contain enough information.')).toBeInTheDocument()
+  })
+
+  it('uses a compact proof strip and a final workspace action (MAS-158)', () => {
+    render(<HomePage />)
+
+    for (const heading of ['Source-linked answers', 'Customer-side risk review', 'Key terms together']) {
+      expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
+    }
+    expect(screen.getByRole('heading', { name: 'Ready to review a contract?' })).toBeInTheDocument()
+    expect(screen.getByText('Upload a contract to see important terms, possible risks, and their source passages together.')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Open workspace' }).at(-1)).toHaveAttribute('href', '/workspace')
   })
 })
 

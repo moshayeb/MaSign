@@ -51,6 +51,10 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* .home-final-cta breaks out to full viewport width via 100vw; on a page
+     with a vertical scrollbar, 100vw is very slightly wider than the visible
+     viewport (100%), which would otherwise add a stray horizontal scrollbar. */
+  overflow-x: hidden;
   background:
     radial-gradient(900px 420px at 18% -140px, rgba(12, 173, 237, 0.08), transparent 68%),
     var(--bg);
@@ -180,6 +184,12 @@ a {
   color: var(--accent);
 }
 
+.topnav-link.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
 .topnav-cta {
   display: inline-flex;
   align-items: center;
@@ -246,6 +256,11 @@ a {
 
   .topnav-mobile-list .topnav-cta {
     margin-top: 4px;
+  }
+
+  .topnav-mobile-list .link.active {
+    color: var(--accent);
+    font-weight: 600;
   }
 }
 
@@ -1232,6 +1247,26 @@ li.risk blockquote {
 
 .term-meta .link {
   margin-left: 0;
+}
+
+/* The selected contract is already named in the workspace header. A key-term
+   tile therefore shows only its passage. Linked-document sources retain a
+   clipped filename, with the full name available through the button title. */
+.term-meta .term-source-link {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.term-source-document {
+  min-width: 0;
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .term-quote {
@@ -2310,11 +2345,189 @@ button.chip.ranked {
   }
 }
 
+/* Public content pages (MAS-142): the shared layout for How it works, What
+   MaSign checks and Documentation — a hero plus card grids, distinct from
+   the workspace but reusing the same visual language as the home page
+   (MAS-133/134) rather than duplicating its classes. */
+.pubpage {
+  flex: 1 0 auto;
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 48px 28px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.pubpage-hero {
+  max-width: 640px;
+}
+
+.pubpage-eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pubpage-hero h1 {
+  margin: 0;
+}
+
+.pubpage-subtitle {
+  margin: 12px 0 0;
+  max-width: 56ch;
+  color: var(--text-2);
+}
+
+.pubpage-cta {
+  margin-top: 22px;
+}
+
+.pubpage-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.pubpage-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pubpage-card {
+  padding: 20px;
+}
+
+.pubpage-card h2,
+.pubpage-card h3 {
+  margin: 16px 0 6px;
+  font-size: 1rem;
+}
+
+.pubpage-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.pubpage-card .link {
+  margin-top: 10px;
+  display: inline-block;
+}
+
+.pubpage-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pubpage-callout {
+  padding: 24px 28px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-light);
+}
+
+.pubpage-callout h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.pubpage-callout p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.pubpage-section h2 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+}
+
+.pubpage-section > p:first-of-type {
+  margin-top: 0;
+  color: var(--text-2);
+}
+
+.pubpage-terms-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pubpage-term-chip {
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.pubpage-legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pubpage-legend-item {
+  padding: 14px 16px;
+}
+
+.pubpage-legend-item .severity {
+  display: inline-block;
+}
+
+.severity-none {
+  background: var(--line-2);
+}
+
+.pubpage-legend-item p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .pubpage-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pubpage-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .pubpage {
+    padding: 32px 16px 48px;
+    gap: 32px;
+  }
+
+  .pubpage-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .pubpage-legend {
+    grid-template-columns: 1fr;
+  }
+
+  .pubpage-callout {
+    padding: 20px;
+  }
+}
+
 /* Public home page (MAS-133): centred, no sidebar, generous padding — a
    landing page, not the workspace it sends visitors to. */
 .homepage {
   flex: 1 0 auto;
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
   width: 100%;
   padding: 56px 28px 72px;
@@ -2322,65 +2535,377 @@ button.chip.ranked {
   background: var(--bg);
 }
 
+.home-hero-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 40px;
+}
+
 .home-hero {
-  text-align: center;
-  padding: 52px 32px;
-  max-width: 640px;
-  margin: 0 auto;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius);
-  background: #e6f7ff;
+  text-align: left;
+  padding: 0;
+  max-width: 480px;
+  margin: 0;
+}
+
+.home-legal-notice {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.home-legal-notice a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.home-eyebrow {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .home-hero h1 {
   max-width: none;
-}
-
-.home-hero h1 .glow {
-  background: none;
-  color: var(--accent);
+  /* Bigger than the shared .hero h1 (used on pages with less room, like
+     the workspace's empty state): the homepage hero has the whole column
+     to itself, so the headline can lead harder. */
+  font-size: clamp(2.4rem, 4.6vw, 3.4rem);
+  line-height: 1.08;
 }
 
 .home-hero p {
-  margin: 16px auto 0;
+  margin: 16px 0 0;
   max-width: 52ch;
   color: var(--text-2);
 }
 
-.home-cta {
+.home-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
   margin-top: 26px;
 }
 
-.home-steps {
+.home-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #1e9eed, #0caded);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none;
+  box-shadow: 0 8px 20px -10px rgba(12, 173, 237, 0.6);
+}
+
+.home-cta:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(12, 173, 237, 0.35);
+}
+
+.home-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.home-cta-secondary:hover {
+  border-color: var(--accent-bright);
+  color: var(--accent);
+  background: #f0f9fe;
+}
+
+.home-hero-microcopy {
+  margin: 14px 0 0;
+}
+
+/* MAS-158: a short proof strip, deliberately not a second grid of cards.
+   It reinforces three real product behaviours between the hero and the
+   explanation of the workflow. */
+.home-trust-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--accent-bright);
+  box-shadow: 0 18px 34px -28px rgba(12, 173, 237, 0.9);
+}
+
+.home-trust-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px 24px;
+  color: #fff;
+}
+
+.home-trust-item + .home-trust-item {
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.home-trust-icon {
+  flex: none;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.home-trust-item h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 0.88rem;
+}
+
+.home-trust-item p {
+  margin: 2px 0 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* The hero product mockup (MAS-147): a static illustration of the real
+   Risk review panel, not a live embed -- see HomePage.tsx for why its
+   content is fixed and rubric-accurate rather than arbitrary. */
+.home-hero-mockup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mockup-window {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 28px 60px -32px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+}
+
+.mockup-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.mockup-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+
+.mockup-titlebar-label {
+  margin-left: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.mockup-workspace {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+}
+
+.mockup-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.mockup-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.mockup-sidebar-item-active {
+  background: var(--accent-soft);
+}
+
+.mockup-sidebar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.mockup-main {
+  padding: 16px;
+  min-width: 0;
+}
+
+.mockup-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.mockup-filename {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mockup-ai-notice {
+  margin: 8px 0 0;
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.mockup-panel {
+  margin-top: 14px;
+}
+
+.mockup-panel h3 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mockup-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.mockup-term {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.mockup-term dt {
+  color: var(--text-2);
+}
+
+.mockup-term dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mockup-risks {
+  gap: 8px;
+}
+
+.mockup-risks .risk {
+  padding: 8px 10px;
+}
+
+.mockup-risks .risk-reason {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+}
+
+.mockup-risks blockquote {
+  font-size: 0.8rem;
+}
+
+.mockup-caption {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* How MaSign works (MAS-147): numbered-circle icons with arrow connectors
+   between cards, replacing the old top-left number badge. */
+.home-steps-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.home-steps-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
 }
 
 .home-step {
-  position: relative;
-  /* The number badge sits at top:16px and is 26px tall, so its bottom edge
-     is at 42px -- padding-top must clear that or the heading starts under
-     it (found live: it did, by 12px, with the previous 30px value). */
-  padding-top: 48px;
+  text-align: center;
 }
 
-.home-step-number {
-  position: absolute;
-  top: 16px;
-  left: 18px;
-  width: 26px;
-  height: 26px;
+.home-step-icon-wrap {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+}
+
+.home-step-icon {
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 700;
-  font-size: 0.85rem;
   display: grid;
   place-items: center;
 }
 
-.home-step h2 {
+.home-step-number-badge {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.68rem;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 3px var(--panel);
+}
+
+.home-step h3 {
   font-size: 0.95rem;
   margin: 0 0 4px;
 }
@@ -2388,6 +2913,12 @@ button.chip.ranked {
 .home-step p {
   font-size: 0.88rem;
   color: var(--muted);
+}
+
+.home-step-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--line-2);
 }
 
 /* MAS-134: a quiet proof section that explains real MaSign behaviour without
@@ -2426,8 +2957,12 @@ button.chip.ranked {
 }
 
 .home-proof-card {
+  position: relative;
+  display: block;
   min-height: 184px;
   padding: 20px;
+  color: inherit;
+  text-decoration: none;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
@@ -2435,6 +2970,17 @@ button.chip.ranked {
   border-color: var(--accent-bright);
   box-shadow: 0 8px 24px rgba(12, 173, 237, 0.12);
   transform: translateY(-3px);
+}
+
+.home-proof-card-arrow {
+  position: absolute;
+  top: 20px;
+  right: 18px;
+  color: var(--line-2);
+}
+
+.home-proof-card:hover .home-proof-card-arrow {
+  color: var(--accent);
 }
 
 .home-proof-icon {
@@ -2478,18 +3024,195 @@ button.chip.ranked {
   color: var(--accent);
 }
 
+/* Clear expectations (MAS-147): what MaSign is honest about up front --
+   assists rather than replaces a lawyer, AI findings need verifying, and
+   what happens to the contract text. */
+.home-expectations {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.home-expectations-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.home-expectations-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.home-expectations-heading h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.home-expectations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.home-expectation {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.home-expectation-icon {
+  flex: none;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--accent);
+}
+
+.home-expectation h3 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+
+.home-expectation p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* A decisive final action closes the public page before the footer, without
+   adding a marketing promise that the app cannot prove. */
+.home-final-cta {
+  padding: 40px 28px;
+  background: linear-gradient(135deg, #087eac, #0caded);
+  color: #fff;
+  box-shadow: 0 22px 42px -28px rgba(12, 173, 237, 0.8);
+  /* Break out of .homepage's centred, padded column to the true viewport
+     edge on every width, not just up to the 1180px container. This exact
+     formula cancels the parent's own padding regardless of its value, as
+     long as the parent is itself centred with margin: 0 auto. The 28px
+     padding here matches .homepage's own gutter (max-width 1180 minus its
+     28px side padding), so home-final-cta-inner's max-width below lines its
+     content up with the hero, steps and every other homepage section even
+     though the blue background runs edge to edge. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+.home-final-cta-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  max-width: 1124px;
+  margin: 0 auto;
+}
+
+.home-final-cta-eyebrow {
+  margin: 0 0 6px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-final-cta h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.3rem, 2.4vw, 1.8rem);
+}
+
+.home-final-cta-inner > div > p:last-child {
+  max-width: 56ch;
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.home-final-cta-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--accent);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.home-final-cta-button:hover {
+  background: var(--panel-2);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 860px) {
+  .home-hero-row {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .home-hero {
+    text-align: center;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .home-hero p {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .home-hero-mockup {
+    max-width: 480px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
 @media (max-width: 720px) {
   .homepage {
     padding: 40px 16px 56px;
     gap: 32px;
   }
 
-  .home-hero {
-    padding: 38px 20px;
+  .home-steps-row {
+    grid-template-columns: 1fr;
   }
 
-  .home-steps {
+  .home-trust-strip {
     grid-template-columns: 1fr;
+  }
+
+  .home-trust-item {
+    padding: 18px 20px;
+  }
+
+  .home-trust-item + .home-trust-item {
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-left: 0;
+  }
+
+  .home-step-arrow {
+    transform: rotate(90deg);
+    margin: -4px 0;
   }
 
   .home-proof {
@@ -2504,82 +3227,136 @@ button.chip.ranked {
   .home-proof-card {
     min-height: 0;
   }
+
+  .home-expectations {
+    padding: 20px;
+  }
+
+  .home-expectations-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .home-final-cta {
+    padding: 30px 16px;
+  }
+
+  .home-final-cta-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
-/* Actions menu (MAS-125): one primary button per screen, the rest in here */
-.actions-menu {
-  position: relative;
+@media (max-width: 480px) {
+  .mockup-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .mockup-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mockup-sidebar-item {
+    flex: none;
+  }
+
+  .mockup-sidebar-name {
+    max-width: 90px;
+  }
+
+  .mockup-term {
+    flex-wrap: wrap;
+  }
 }
+
+/* Compact export menu (MAS-154): the trigger is small, while the open menu
+   uses an icon plus a plain label per row so each export is immediately clear. */
+.actions-menu { position: relative; }
 
 .actions-menu > summary {
   list-style: none;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 1px solid var(--line-2);
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
   background: var(--panel);
-  color: var(--text);
-  font-size: 0.88rem;
-  font-weight: 500;
+  color: var(--text-2);
 }
 
-.actions-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.actions-menu > summary::after {
-  content: '▾';
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.actions-menu > summary:hover {
-  background: var(--bg-2);
-}
-
-.actions-menu[open] > summary {
+.actions-menu > summary::-webkit-details-marker { display: none; }
+.actions-menu > summary:hover, .actions-menu[open] > summary {
   border-color: var(--accent-line);
+  color: var(--accent);
+  background: var(--accent-light);
 }
+
+.export-icon { width: 18px; height: 18px; display: block; }
 
 .actions-list {
   position: absolute;
   right: 0;
   z-index: 5;
   margin-top: 6px;
-  min-width: 190px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
-  padding: 6px;
+  min-width: 190px;
+  padding: 4px 0;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--panel);
   box-shadow: 0 12px 28px -16px rgba(15, 23, 42, 0.4);
 }
 
-.actions-list .link {
-  margin-left: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  text-align: left;
+.export-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
   font-size: 0.88rem;
-}
-
-.actions-list .link:hover {
-  background: var(--panel-2);
+  font-weight: 500;
   text-decoration: none;
 }
 
-@media (max-width: 720px) {
-  .actions-list {
-    right: auto;
-    left: 0;
-  }
+.export-action:hover, .export-action:focus-visible {
+  color: var(--accent);
+  background: var(--accent-light);
+  text-decoration: none;
+  outline: none;
 }
+
+.export-action + .export-action {
+  border-top: 1px solid var(--line);
+}
+
+.export-action .export-icon {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+
+.export-action:hover .export-icon, .export-action:focus-visible .export-icon {
+  color: var(--accent);
+}
+
+@media (max-width: 720px) { .actions-list { right: auto; left: 0; } }
 
 /* The upload card keeps its rectangle but carries less weight (MAS-125) */
 .card.upload {
@@ -2786,25 +3563,73 @@ button.chip.ranked {
 /* Explicit bundle links are actions beside coverage, not a second review. */
 .contract-links {
   display: grid;
-  gap: 8px;
-  margin: 10px 0;
+  gap: 10px;
+  margin: 12px 0;
 }
 
 .link-action,
 .confirm-box {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   background: var(--panel);
 }
 
+.link-action-unresolved {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.link-action-copy h3 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.link-action-copy p {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.link-action-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.link-action-main label {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.link-action-alternative {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-2);
+  font-size: 0.875rem;
+}
+
 .link-action select {
-  max-width: 240px;
-  padding: 5px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   background: var(--panel);
@@ -2812,9 +3637,29 @@ button.chip.ranked {
   font: inherit;
 }
 
-.confirm-box { display: block; }
+.link-confirm-button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.confirm-box {
+  display: block;
+  padding: 14px 16px;
+}
 .confirm-box p { margin: 0 0 8px; }
 .confirm-box button + button { margin-left: 8px; }
+
+@media (max-width: 560px) {
+  .link-action-main {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .link-confirm-button {
+    width: 100%;
+  }
+}
 
 .reader-documents {
   display: flex;

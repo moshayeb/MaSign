@@ -20,9 +20,12 @@ _NAMED = re.compile(
 )
 _UNNAMED = re.compile(r"\b(Order Form|Statement of Work|SOW|Service Level Agreement|SLA|Purchase Order)\b")
 # A heading is the name at the start of a line, on its own or followed by a
-# separator — that means the document is included in the upload.
+# structural separator — that means the document is included in the upload.
+# A full stop is deliberately not structural here.  PDF text extraction can
+# wrap a normal sentence so that ``Statement of Work.`` starts a new line;
+# treating that as a heading hides a genuinely missing document (MAS-146).
 _HEADING = re.compile(r"(?m)^\s*((?i:Schedule|Exhibit|Annex|Appendix|Attachment|Addendum))\s+([A-Z]|[0-9]{1,2})\s*(?:[-–—:.]|$)")
-_UNNAMED_HEADING = re.compile(r"(?mi)^\s*(Order Form|Statement of Work|Service Level Agreement|Purchase Order)\s*(?:[-–—:.]|$)")
+_UNNAMED_HEADING = re.compile(r"(?mi)^[ \t]*(Order Form|Statement of Work|Service Level Agreement|Purchase Order)[ \t]*(?:[-–—:]|$)")
 
 
 @dataclass(frozen=True)
@@ -54,4 +57,11 @@ def find_external_references(chunk_texts: list[str]) -> list[ExternalReference]:
 
 
 def _canonical(name: str) -> str:
-    return {"SOW": "Statement of Work", "SLA": "Service Level Agreement"}.get(name, name)
+    return {
+        "sow": "Statement of Work",
+        "sla": "Service Level Agreement",
+        "order form": "Order Form",
+        "statement of work": "Statement of Work",
+        "service level agreement": "Service Level Agreement",
+        "purchase order": "Purchase Order",
+    }.get(name.casefold(), name.title())

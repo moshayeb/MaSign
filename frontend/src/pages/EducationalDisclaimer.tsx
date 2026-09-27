@@ -9,6 +9,11 @@ export function EducationalDisclaimerPage() {
         understanding a contract, not legal advice, and should not be relied on as a substitute for review by a qualified professional
         before signing anything.
       </p>
+      <p>
+        Regardless of how MaSign was accessed or used, to the fullest extent permitted by law, its creator accepts no liability for
+        any loss, damage or decision arising from reliance on its output — including a contract signed, rejected or renegotiated on
+        the basis of an answer, risk finding or key term it produced.
+      </p>
       <p className="muted small">Verify anything that matters against the actual contract — every answer and finding links back to the exact passage it came from for that reason.</p>
     </StaticPage>
   )

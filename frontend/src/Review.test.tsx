@@ -295,6 +295,33 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText(/One term is stated differently/)).toBeInTheDocument()
   })
 
+  it('keeps selected-contract sources compact and identifies linked documents (MAS-159)', async () => {
+    const longLinkedName = 'Master_Services_Agreement_TechFlow_Nordic_Statement_of_Work_Project_Alpha.pdf'
+    const linkedContract = { ...northwind, contract_id: 'sow', filename: longLinkedName }
+    const primaryTerm = stated(TERMS[0], 'EUR 18,500 per month', 1, 'Customer shall pay EUR 18,500 per month')
+    primaryTerm.source = { ...primaryTerm.source!, contract_id: 'nw' }
+    const linkedTerm = stated(TERMS[2], '30 days', 2, 'Invoices shall be payable within thirty days')
+    linkedTerm.source = { ...linkedTerm.source!, contract_id: 'sow' }
+    const terms = TERMS.map((term) =>
+      term[0] === 'recurring_fee' ? primaryTerm : term[0] === 'payment_deadline' ? linkedTerm : notStated(term),
+    )
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: true, key_terms: terms })))
+    const onShowSource = vi.fn()
+
+    render(<RiskReviewPanel contract={northwind} contracts={[northwind, linkedContract]} onShowSource={onShowSource} />)
+
+    const card = (await screen.findByText('Key terms', { selector: 'h2' })).closest('section')!
+    const primarySource = within(card).getByRole('button', { name: 'Show Recurring fee in contract' })
+    expect(primarySource).toHaveTextContent('passage 2')
+    expect(primarySource).not.toHaveTextContent('northwind.txt')
+
+    const linkedSource = within(card).getByRole('button', { name: `Show Payment deadline in ${longLinkedName}, passage 3` })
+    expect(linkedSource).toHaveAttribute('title', `${longLinkedName}, passage 3`)
+    expect(within(linkedSource).getByText(longLinkedName)).toHaveClass('term-source-document')
+    await userEvent.click(linkedSource)
+    expect(onShowSource).toHaveBeenCalledWith(expect.objectContaining({ contract_id: 'sow', chunk_index: 2 }))
+  })
+
   it('shows the standard verdict on a key term and counts deviations in the pill (MAS-96)', async () => {
     const terms = TERMS.map((t) =>
       t[0] === 'late_payment'
