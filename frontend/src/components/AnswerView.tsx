@@ -2,16 +2,20 @@ import { Fragment, useState } from 'react'
 import { toast } from 'sonner'
 import type { CitedChunk, Contract, RetrievedChunk } from '../api'
 import type { Asked } from './QuestionPanel'
+import type { SourceRef } from './PassageReader'
 
 interface Props {
   asked: Asked
   contracts: Contract[] // to name each passage's source file
+  // Opens the contract text at a citation or risk flag's exact passage (MAS-109);
+  // the answer's own [n] markers still jump within this tab to the citation card.
+  onShowSource?: (source: SourceRef) => void
 }
 
 const NOT_FOUND = 'Not found in contract.'
 const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]/g
 
-export function AnswerView({ asked, contracts }: Props) {
+export function AnswerView({ asked, contracts, onShowSource }: Props) {
   const { question, contract, response } = asked
   const [highlighted, setHighlighted] = useState<number | null>(null)
   // A withheld answer's whole point is the passage the user must read: open it.
@@ -137,6 +141,16 @@ export function AnswerView({ asked, contracts }: Props) {
                   <button type="button" className="link" onClick={() => void copy(citation)}>
                     Copy
                   </button>
+                  {onShowSource && (
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={() => onShowSource({ contract_id: citation.contract_id, chunk_index: citation.chunk_index, quote: citation.text })}
+                      aria-label={`Show citation ${citation.label} in contract`}
+                    >
+                      Show in contract
+                    </button>
+                  )}
                 </div>
                 <blockquote>{citation.text}</blockquote>
               </li>
@@ -212,6 +226,16 @@ export function AnswerView({ asked, contracts }: Props) {
                 <button type="button" className="cite-marker" onClick={() => jumpTo(risk.label)} aria-label={`Show passage ${risk.label}`}>
                   [{risk.label}]
                 </button>
+                {onShowSource && (
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => onShowSource({ contract_id: risk.contract_id, chunk_index: risk.chunk_index, quote: risk.quote })}
+                    aria-label={`Show ${risk.category_name} finding in contract`}
+                  >
+                    Show in contract
+                  </button>
+                )}
               </div>
               <p className="risk-reason">{risk.reason}</p>
               <blockquote>“{risk.quote}”</blockquote>

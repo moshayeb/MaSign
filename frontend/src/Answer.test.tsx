@@ -325,4 +325,66 @@ describe('asking a question', () => {
     expect(writeText).toHaveBeenCalledWith('"2. Fees. The Subscription Fee is EUR 18,500 per month." — northwind.txt, passage 2')
     expect(toast.success).toHaveBeenCalledWith('Citation [1] copied')
   })
+
+  // MAS-109: citations and risk flags in an answer open the actual contract
+  // text at their exact passage, same as findings/key terms already do (MAS-83).
+  describe('click-to-source from an answer (MAS-109)', () => {
+    const passages = [
+      { chunk_id: 'c1', chunk_index: 1, text: '2. Fees. The Subscription Fee is EUR 18,500 per month.' },
+      { chunk_id: 'c2', chunk_index: 2, text: '2.3 Late payment shall accrue interest at 1.5% per month.' },
+      { chunk_id: 'c9', chunk_index: 9, text: '10. Insurance. …' },
+    ]
+
+    async function renderAnsweredWithPassages() {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        const url = String(input)
+        if (url.endsWith('/risks')) return json(404, { detail: 'This contract has not been reviewed for risks yet.' })
+        if (url.endsWith('/passages')) return json(200, passages)
+        if (url === '/api/contracts') return json(200, [northwind])
+        if (url === '/api/query') return json(200, answered)
+        return json(404, { detail: `unexpected ${url}` })
+      })
+      render(<App />)
+      await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+      await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
+      await userEvent.type(screen.getByLabelText('Ask about the contract'), 'fee?')
+      await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+      await screen.findByText(/The monthly fee is EUR 18,500 per month/)
+    }
+
+    it('opens the contract text at a citation\'s exact passage, and Back returns to Ask MaSign', async () => {
+      await renderAnsweredWithPassages()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show citation 1 in contract' }))
+
+      expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+      expect(document.getElementById('passage-1')).toHaveClass('highlighted')
+      expect(screen.getByTestId('quote')).toHaveTextContent('The Subscription Fee is EUR 18,500 per month.')
+
+      await userEvent.click(screen.getByRole('button', { name: '← Back to Ask MaSign' }))
+      expect(screen.getByRole('tab', { name: /^Ask MaSign/ })).toHaveAttribute('aria-selected', 'true')
+    })
+
+    it('keeps two citations distinguishable: each opens its own passage and quote', async () => {
+      await renderAnsweredWithPassages()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show citation 1 in contract' }))
+      expect(document.getElementById('passage-1')).toHaveClass('highlighted')
+      expect(screen.getByTestId('quote')).toHaveTextContent('The Subscription Fee is EUR 18,500 per month.')
+
+      await userEvent.click(screen.getByRole('tab', { name: /^Ask MaSign/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Show citation 2 in contract' }))
+      expect(document.getElementById('passage-2')).toHaveClass('highlighted')
+      expect(screen.getByTestId('quote')).toHaveTextContent('Late payment shall accrue interest at 1.5% per month.')
+    })
+
+    it('opens the contract text at a risk flag\'s exact passage', async () => {
+      await renderAnsweredWithPassages()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
+
+      expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+      expect(document.getElementById('passage-9')).toHaveClass('highlighted')
+    })
+  })
 })

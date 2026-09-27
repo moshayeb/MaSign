@@ -515,15 +515,27 @@ normal review will run and uses the usual upload toast/error behaviour.
 
 `PassageReader` (a collapsible `.card.reader` below the review) loads
 `GET /api/contracts/{id}/passages` once per contract and renders every
-passage. App holds a `SourceRef {chunk_index, quote?}`; `RiskReviewPanel`
-and `KeyTermsCard` receive `onShowSource` and call it from the finding's
-"Show in contract" button and the key term's passage link (accessible
-names `Show <category> finding in contract`, `Show <term> in contract`). A
-new target opens the reader, scrolls the passage into view, focuses it
-(`tabIndex=-1`, `aria-current`) and wraps the quote in `<mark>` via
-`findQuote` in `src/quote.tsx` (exact match, then whitespace/quote-style
-tolerant). Selecting another contract clears the target. The answer view's
-`[n]` markers keep their own in-card highlighting.
+passage. App holds a `SourceRef {chunk_index, quote?}`; `RiskReviewPanel`,
+`KeyTermsCard`, `CoverageNote`, `Timeline` and `AnswerView` all receive
+`onShowSource` and call it from a "Show in contract" button (accessible
+names `Show <category> finding in contract`, `Show <term> in contract`,
+`Show citation <n> in contract`, and so on). A new target opens the reader,
+scrolls the passage into view, focuses it (`tabIndex=-1`, `aria-current`)
+and wraps the quote in `<mark>` via `findQuote` in `src/quote.tsx` (exact
+match, then whitespace/quote-style tolerant) — so two different citations
+onto different passages/quotes stay visually distinguishable, one at a
+time. Selecting another contract clears the target. The answer view's own
+`[n]` markers still jump within the Ask tab to the citation card first
+(MAS-83's original in-card highlighting); the citation card's own "Show in
+contract" button is what opens the actual contract text (MAS-109).
+
+Since MAS-109, App also remembers which tab (Overview or Ask MaSign) a
+source click came from (`returnTab`) and the Sources tab shows a "← Back
+to Overview"/"← Back to Ask MaSign" link above the reader so the click is
+not a one-way trip. Any tab change made directly — clicking a tab, the
+header's "Ask a question" CTA, selecting a different contract — retires
+that link; only a `showSource` call sets it, and only when the click did
+not originate from the Sources tab itself.
 
 ## Risk review (MAS-81)
 

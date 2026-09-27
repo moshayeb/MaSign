@@ -89,6 +89,35 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(window.location.hash).toBe('#nw/text')
   })
 
+  it('offers a way back to where a source click came from (MAS-109)', async () => {
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await screen.findByText('Half the fees.')
+    expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
+
+    const back = screen.getByRole('button', { name: '← Back to Overview' })
+    await userEvent.click(back)
+
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
+  })
+
+  it('remembers Ask MaSign, not Overview, when a source is opened from a cited answer', async () => {
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
+
+    expect(screen.getByRole('button', { name: '← Back to Overview' })).toBeInTheDocument()
+
+    // Manually switching tabs (not the back link) retires the affordance.
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
+    expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
+  })
+
   it('moves between tabs with the keyboard and keeps the draft question', async () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))

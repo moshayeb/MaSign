@@ -52,6 +52,9 @@ export default function App() {
   const [askAllContracts, setAskAllContracts] = useState(false)
   // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
   const [source, setSource] = useState<SourceRef | null>(null)
+  // Where a source click came from, so Sources can offer a way back to it (MAS-109).
+  // Cleared by any manual tab change so a stale "Back to" never lingers.
+  const [returnTab, setReturnTab] = useState<Tab | null>(null)
   const [draft, setDraft] = useState('')
   // The selected contract's stored review, as the Overview last read it (MAS-108).
   const [review, setReview] = useState<RiskReview | null>(null)
@@ -59,6 +62,13 @@ export default function App() {
   const setTab = useCallback((next: Tab) => {
     setTabState(next)
   }, [])
+  // Any tab change the user makes directly (a tab click, the header CTA, a
+  // new selection) retires the "Back to" affordance a source click left
+  // behind; showSource manages returnTab itself instead of going through this.
+  const changeTab = useCallback((next: Tab) => {
+    setReturnTab(null)
+    setTab(next)
+  }, [setTab])
   // Keep the hash in step with the view; clear it when nothing is selected.
   useEffect(() => {
     const next = selected ? `#${selected.contract_id}/${tab}` : ''
@@ -130,23 +140,26 @@ export default function App() {
     })
     setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
     setSource(null)
+    setReturnTab(null)
     setReview(null)
     setAskAllContracts(false)
   }, [setTab])
 
-  // A finding or key term was clicked: show the text at that passage (MAS-83/95).
+  // A finding or key term was clicked: show the text at that passage (MAS-83/95),
+  // remembering where the click came from so Sources can offer a way back (MAS-109).
   const showSource = useCallback(
     (ref: SourceRef) => {
       setSource(ref)
+      setReturnTab((current) => (tab === 'text' ? current : tab))
       setTab('text')
     },
-    [setTab],
+    [setTab, tab],
   )
   // The header's CTA (MAS-104): open the Ask tab with the cursor in the composer.
   const askAbout = useCallback(() => {
-    setTab('ask')
+    changeTab('ask')
     requestAnimationFrame(() => document.getElementById('question-text')?.focus())
-  }, [setTab])
+  }, [changeTab])
   // After a selection the workspace must be where the reader is looking: the
   // heading takes focus (so the keyboard follows the eye), and on a phone —
   // where the sidebar sits above the workspace — it is scrolled into view.
@@ -280,7 +293,7 @@ export default function App() {
                 <Tabs
                   label="Contract workspace"
                   active={tab}
-                  onChange={setTab}
+                  onChange={changeTab}
                   tabs={[
                     { id: 'overview', label: 'Overview' },
                     { id: 'ask', label: 'Ask MaSign', hint: asked ? '· answered' : undefined },
@@ -313,9 +326,14 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
+                {asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />}
               </TabPanel>
               <TabPanel id="text" active={tab}>
+                {returnTab && (
+                  <button type="button" className="back-to-context" onClick={() => changeTab(returnTab)}>
+                    ← Back to {returnTab === 'ask' ? 'Ask MaSign' : 'Overview'}
+                  </button>
+                )}
                 <PassageReader key={`reader-${selected.contract_id}`} contract={selected} contracts={contracts ?? []} target={source} open />
               </TabPanel>
             </>
