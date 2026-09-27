@@ -7,6 +7,12 @@ interface Props {
   selectedId: string | null
   onSelect: (contract: Contract) => void
   onReload: () => void
+  // Compare mode (MAS-113): picking exactly two contracts instead of one.
+  comparing?: boolean
+  compareIds?: string[]
+  onToggleCompare?: (contract: Contract) => void
+  onStartCompare?: () => void
+  onCancelCompare?: () => void
 }
 
 type SortOption = 'newest' | 'risk' | 'deviations'
@@ -53,7 +59,7 @@ function formatShortDate(iso: string): string {
 // The sidebar list (MAS-104): a search box once there is more than one
 // contract, and one line per contract — type, name, review state. Size,
 // passage count and date moved to the contract header.
-export function ContractList({ contracts, selectedId, onSelect, onReload }: Props) {
+export function ContractList({ contracts, selectedId, onSelect, onReload, comparing = false, compareIds = [], onToggleCompare, onStartCompare, onCancelCompare }: Props) {
   const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('newest')
   const needle = query.trim().toLowerCase()
@@ -74,10 +80,25 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
         <h2 className="card-title">
           Contracts{contracts ? <span className="count">{contracts.length}</span> : null}
         </h2>
-        <button type="button" className="ghost" onClick={onReload} disabled={contracts === null}>
-          Refresh
-        </button>
+        <span className="card-header-actions">
+          {onStartCompare && contracts && contracts.length > 1 && !comparing && (
+            <button type="button" className="ghost" onClick={onStartCompare}>
+              Compare
+            </button>
+          )}
+          <button type="button" className="ghost" onClick={onReload} disabled={contracts === null}>
+            Refresh
+          </button>
+        </span>
       </div>
+      {comparing && (
+        <div className="compare-picker" role="status">
+          <span>Select two contracts to compare · {compareIds.length} of 2</span>
+          <button type="button" className="link" onClick={onCancelCompare}>
+            Cancel
+          </button>
+        </div>
+      )}
       {contracts && contracts.length > 1 && (
         <div className="contract-list-controls">
           <input
@@ -108,14 +129,26 @@ export function ContractList({ contracts, selectedId, onSelect, onReload }: Prop
         <ul className="contract-rows">
           {shown!.map((contract) => {
             const badge = reviewBadge(contract)
+            const checked = compareIds.includes(contract.contract_id)
+            const disabled = comparing && !checked && compareIds.length >= 2
             return (
               <li key={contract.contract_id}>
                 <button
                   type="button"
-                  className={contract.contract_id === selectedId ? 'contract selected' : 'contract'}
-                  aria-pressed={contract.contract_id === selectedId}
-                  onClick={() => onSelect(contract)}
+                  className={comparing ? `contract${checked ? ' compare-checked' : ''}` : contract.contract_id === selectedId ? 'contract selected' : 'contract'}
+                  aria-pressed={comparing ? checked : contract.contract_id === selectedId}
+                  disabled={disabled}
+                  onClick={() => (comparing ? onToggleCompare?.(contract) : onSelect(contract))}
                 >
+                  {comparing && (
+                    <span className="compare-checkbox" aria-hidden="true">
+                      {checked && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      )}
+                    </span>
+                  )}
                   <span className={`filetype ${contract.file_type.toLowerCase()}`}>{contract.file_type.toUpperCase()}</span>
                   <span className="contract-text">
                     <span className="contract-name">{contract.filename}</span>

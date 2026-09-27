@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { listContracts, type Contract, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
+import { CompareView } from './components/CompareView'
 import { ContractList } from './components/ContractList'
 import { PageChrome } from './components/PageChrome'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
@@ -50,6 +51,11 @@ export default function App() {
   // secondary trigger rather than being the default view (MAS-133): a new
   // visitor sees "pick or upload a contract" first, not a question box.
   const [askAllContracts, setAskAllContracts] = useState(false)
+  // Up to two contracts picked for side-by-side comparison (MAS-113). Two
+  // picks replace the main view with CompareView; picking a contract while
+  // one is selected does not clear that selection until the comparison closes.
+  const [compareIds, setCompareIds] = useState<string[]>([])
+  const [comparePicking, setComparePicking] = useState(false)
   // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
   const [source, setSource] = useState<SourceRef | null>(null)
   // Where a source click came from, so Sources can offer a way back to it (MAS-109).
@@ -143,6 +149,8 @@ export default function App() {
     setReturnTab(null)
     setReview(null)
     setAskAllContracts(false)
+    setCompareIds([])
+    setComparePicking(false)
   }, [setTab])
 
   // A finding or key term was clicked: show the text at that passage (MAS-83/95),
@@ -155,6 +163,34 @@ export default function App() {
     },
     [setTab, tab],
   )
+  // A source clicked from the comparison view (MAS-113) selects that
+  // contract and opens it there, leaving the comparison.
+  const showSourceInCompared = useCallback(
+    (contract: Contract, ref: SourceRef) => {
+      select(contract)
+      showSource(ref)
+    },
+    [select, showSource],
+  )
+  const toggleCompare = useCallback(
+    (contract: Contract) => {
+      if (compareIds.includes(contract.contract_id)) {
+        setCompareIds(compareIds.filter((id) => id !== contract.contract_id))
+        return
+      }
+      if (compareIds.length >= 2) return // pick two first; a third click does nothing until one is dropped
+      const next = [...compareIds, contract.contract_id]
+      setCompareIds(next)
+      // Two picks are enough: drop back out of pick mode so the sidebar
+      // reads normally again while CompareView takes over the main column.
+      if (next.length === 2) setComparePicking(false)
+    },
+    [compareIds],
+  )
+  const closeCompare = useCallback(() => {
+    setCompareIds([])
+    setComparePicking(false)
+  }, [])
   // The header's CTA (MAS-104): open the Ask tab with the cursor in the composer.
   const askAbout = useCallback(() => {
     changeTab('ask')
@@ -183,6 +219,8 @@ export default function App() {
 
   // The list is what refreshes when a review settles; the selected object may be older.
   const current = selected ? (contracts?.find((c) => c.contract_id === selected.contract_id) ?? selected) : null
+  const comparePair = compareIds.length === 2 ? (compareIds.map((id) => contracts?.find((c) => c.contract_id === id)) as [Contract | undefined, Contract | undefined]) : null
+  const compareContracts: [Contract, Contract] | null = comparePair && comparePair[0] && comparePair[1] ? [comparePair[0], comparePair[1]] : null
   const answered = useCallback(
     (next: Asked | null) => {
       setAsked(next)
@@ -201,11 +239,23 @@ export default function App() {
               void reload()
             }}
           />
-          <ContractList contracts={contracts} selectedId={selected?.contract_id ?? null} onSelect={select} onReload={refresh} />
+          <ContractList
+            contracts={contracts}
+            selectedId={selected?.contract_id ?? null}
+            onSelect={select}
+            onReload={refresh}
+            comparing={comparePicking}
+            compareIds={compareIds}
+            onToggleCompare={toggleCompare}
+            onStartCompare={() => setComparePicking(true)}
+            onCancelCompare={closeCompare}
+          />
         </aside>
 
         <main className="content">
-          {!selected ? (
+          {compareContracts ? (
+            <CompareView contracts={compareContracts} onShowSource={showSourceInCompared} onClose={closeCompare} />
+          ) : !selected ? (
             <>
               {!askAllContracts && !asked && (
                 // The composer is not the first thing a new visitor sees

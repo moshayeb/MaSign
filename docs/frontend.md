@@ -537,6 +537,40 @@ header's "Ask a question" CTA, selecting a different contract — retires
 that link; only a `showSource` call sets it, and only when the click did
 not originate from the Sources tab itself.
 
+## Compare two contracts (MAS-113)
+
+The sidebar's "Compare" button (shown once 2+ contracts exist) puts
+`ContractList` into a picking mode: a status bar reads "Select two contracts
+to compare · n of 2", each row becomes a checkbox-style toggle instead of a
+select action, and a second click on an already-picked row drops it and frees
+the slot. Picking a second contract closes picking mode automatically and
+replaces the main column with `CompareView`; "Cancel" (while picking) or
+"Exit comparison" (once shown) both return to normal browsing. Selecting a
+different contract elsewhere resets any in-progress or completed comparison.
+
+`CompareView` fetches each side's `GET /api/contracts/{id}/risks`
+independently (`useReview`, a small hook wrapping the same review states
+`RiskReviewPanel` uses) and renders two tables as CSS grid rows shared across
+a fixed 3-column layout (label, side A, side B): key terms (union of both
+sides' terms, side A's order first) and the seven rubric categories in rubric
+order. Every cell states what that side actually has and nothing else:
+**Not reviewed** (no review has ever run), **Not checked** (reviewed, this
+key term's extraction pass did not cover it), **Not stated** (reviewed, the
+term does not appear), or the quoted value with a "Show in contract" link —
+the same three-way distinction `KeyTermsCard` uses, never collapsed into a
+single blank state. A row is highlighted (amber) only when both sides have a
+found value and the values differ — never for a side that is merely missing
+data, since that is not a difference, it's an unknown. Findings from both
+reviews are listed underneath in two columns, reusing `AnswerView`'s risk-flag
+styling. A closing disclaimer states plainly that nothing here is scored,
+ranked, or inferred, and that the view does not say which contract is legally
+better.
+
+A "Show in contract" click here calls `onShowSource(contract, ref)`, which
+selects that contract (exiting the comparison) and then calls the normal
+`showSource` — landing on that contract's own Sources tab via the MAS-83/
+MAS-109 machinery unchanged, rather than a parallel in-place viewer.
+
 ## Risk review (MAS-81)
 
 Selecting a contract mounts `RiskReviewPanel` (keyed by contract id) which

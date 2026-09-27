@@ -3726,3 +3726,129 @@ button.chip.ranked {
     padding: 32px 20px;
   }
 }
+
+/* --- Contract comparison (MAS-113) --------------------------------------- */
+
+.card-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.compare-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.compare-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: 1.5px solid var(--line-2);
+  border-radius: 5px;
+  color: #fff;
+  margin-right: 2px;
+}
+
+button.contract.compare-checked .compare-checkbox {
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
+}
+
+.compare {
+  overflow-x: hidden;
+}
+
+.compare-table {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(0, 1.3fr) minmax(0, 1.3fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: 8px 0 20px;
+}
+
+.compare-heads {
+  margin: 12px 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.compare-table + .compare-table {
+  margin-top: 8px;
+}
+
+.compare-head {
+  background: var(--panel-2);
+  padding: 8px 10px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  overflow-wrap: break-word;
+}
+
+.compare-row {
+  display: contents;
+}
+
+.compare-label,
+.compare-value {
+  background: var(--panel);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.compare-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.compare-row.differs .compare-label,
+.compare-row.differs .compare-value {
+  background: var(--warn-bg);
+}
+
+.compare-findings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 8px 0 16px;
+}
+
+.compare-findings-column h4 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 640px) {
+  .compare-table {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-heads {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .compare-findings {
+    grid-template-columns: 1fr;
+  }
+}
