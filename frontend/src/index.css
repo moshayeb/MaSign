@@ -1344,6 +1344,23 @@ li.risk blockquote {
   content: '▾';
 }
 
+.back-to-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.back-to-context:hover {
+  text-decoration: underline;
+}
+
 .passages {
   list-style: none;
   margin: 12px 0 0;
