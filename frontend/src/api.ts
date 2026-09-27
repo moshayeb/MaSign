@@ -113,7 +113,7 @@ export type AnswerStatus = 'answered' | 'not_found' | 'withheld'
 export interface QueryResponse {
   answer: string
   // "withheld": every retrieved passage was withheld by the guardrail and the
-  // model was never asked Ã¢â‚¬â€ not the same fact as "not found" (MAS-93).
+  // model was never asked — not the same fact as "not found" (MAS-93).
   answer_status: AnswerStatus
   grounded: boolean
   citations: CitedChunk[]

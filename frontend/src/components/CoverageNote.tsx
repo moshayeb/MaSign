@@ -53,7 +53,7 @@ export function CoverageNote({ coverage, subject, onShowSource }: Props) {
   for (const reference of coverage.resolved_references ?? []) {
     lines.push(
       <li key={`resolved-${reference.reference_name}`}>
-        <strong>{reference.reference_name}</strong> â€” linked: <a className="link" href={`/workspace#${reference.linked_contract_id}/overview`}>{reference.linked_contract_filename}</a>.
+        <strong>{reference.reference_name}</strong> — linked: <a className="link" href={`/workspace#${reference.linked_contract_id}/overview`}>{reference.linked_contract_filename}</a>.
       </li>,
     )
   }
