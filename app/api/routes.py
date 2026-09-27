@@ -738,7 +738,10 @@ def search_contract(
     """Retrieval only — the passages a question would be answered from, best first. No model call (MAS-91)."""
     if repository.get_contract(db, contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    hits = retrieve_contract_context(q, db=db, embedder=embedder, store=store, contract_id=contract_id, limit=limit)
+    # Same bundle scope as /api/query's _retrieve (MAS-151): itself plus any
+    # linked documents, so the two retrieval paths agree for the same contract.
+    bundle_ids = repository.bundle_contract_ids(db, contract_id)
+    hits = retrieve_contract_context(q, db=db, embedder=embedder, store=store, contract_ids=bundle_ids, limit=limit)
     return [RetrievedChunk.from_hit(hit) for hit in hits]
 
 

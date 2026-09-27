@@ -158,6 +158,28 @@ def test_query_scoped_to_a_contract_with_no_links_only_searches_that_contract(db
     assert {hit["contract_id"] for hit in response.json()["retrieved_context"]} == {str(solo_id)}
 
 
+def test_search_scoped_to_a_bundle_retrieves_the_linked_documents_passages_too(db) -> None:
+    """MAS-151: /search must agree with /api/query's bundle scope for the same contract."""
+    primary_id = _upload("main.txt", PRIMARY_TEXT)
+    linked_id = _upload("order-form.txt", LINKED_TEXT)
+    _link(primary_id, linked_id)
+
+    response = client.get(f"/api/contracts/{primary_id}/search", params={"q": "EUR 18,500 per month"})
+
+    assert response.status_code == 200
+    contract_ids = {hit["contract_id"] for hit in response.json()}
+    assert contract_ids == {str(primary_id), str(linked_id)}
+
+
+def test_search_scoped_to_a_contract_with_no_links_only_searches_that_contract(db) -> None:
+    solo_id = _upload("solo.txt", PRIMARY_TEXT)
+    _upload("other.txt", "Completely unrelated text about widgets and gadgets.")
+
+    response = client.get(f"/api/contracts/{solo_id}/search", params={"q": "unlimited liability"})
+
+    assert {hit["contract_id"] for hit in response.json()} == {str(solo_id)}
+
+
 # --- repository ------------------------------------------------------------------------------
 
 
