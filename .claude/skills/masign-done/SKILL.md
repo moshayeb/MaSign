@@ -53,10 +53,27 @@ now lie.
 
 ## 5. Rebuild and look
 
-`docker compose up -d --build` (≈1 min; first start after a fresh volume also
-downloads ModernBERT). Check `/ready`, then the log for the startup lines.
-For UI changes take screenshots (`ui-preview`); for API changes hit the
-endpoint with curl and paste the real response into the Jira comment.
+**Never run `docker compose up`/`--build` against this repo's
+`docker-compose.yml` from a per-ticket worktree.** `container_name` in that
+file is hardcoded (`masign-api`, etc.) — it is not scoped by directory or
+`COMPOSE_PROJECT_NAME` — so the command recreates the one shared, live
+container everyone uses on port 8000, no matter which worktree you run it
+from. Done twice for real, both times silently dropping the GPU "quality"
+embedding profile (Qwen3-Embedding-4B via `llama-server`, MAS-58/61) back to
+default ModernBERT and re-indexing every stored contract on the wrong model,
+because the plain command omits `-f docker-compose.quality.yml`.
+
+- For UI changes: use `ui-preview` (canned-API, zero build, zero spend) —
+  never the live container.
+- For API changes: run the test suite (step 1) and, if you need a live HTTP
+  round-trip, hit the *existing* running container's endpoint with curl —
+  do not rebuild it.
+- The live container is only rebuilt **after** a PR is merged to `main`, from
+  the dedicated `main-live` worktree, by whoever owns that step, with both
+  compose files and the shared project name so the profile survives:
+  `COMPOSE_PROJECT_NAME=masign docker compose -f docker-compose.yml -f docker-compose.quality.yml up -d --no-deps api`.
+  Check `docker logs masign-api` for the embedder line (`backend='openai-compatible'`,
+  not `'sentence-transformers'`) before calling it healthy.
 
 ## 6. Evidence comment on the ticket, then hand over
 
