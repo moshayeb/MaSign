@@ -18,6 +18,7 @@ from app.answering.llm import ChatModel
 from app.guardrails.prompt_injection import withheld_labels
 from app.retrieval.vector_store import ChunkHit
 from app.risk_analysis.rubric import CATEGORY_BY_ID, SEVERITIES, rubric_text
+from app.risk_analysis.severity_rules import correct_termination_notice_severity
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,10 @@ def analyze_risks(
             logger.warning("Dropped risk finding from %s: %.200r", model.model_name, item)
             dropped += 1
             continue
+        # A verified quote can still carry a severity that contradicts the
+        # rubric's own numeric boundary (MAS-152); correct only what is
+        # unambiguous, never invent or guess.
+        finding = correct_termination_notice_severity(finding)
         if (finding.category, finding.label) in seen:
             continue
         seen.add((finding.category, finding.label))

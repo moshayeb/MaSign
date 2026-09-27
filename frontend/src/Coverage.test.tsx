@@ -46,6 +46,8 @@ describe('coverage notice (MAS-123)', () => {
     const notice = screen.getByText('Statement of Work linked').closest('details')!
     expect(notice).not.toHaveClass('security')
     expect(screen.getByRole('link', { name: 'sow-final.docx' })).toHaveAttribute('href', '/workspace#sow-id/overview')
+    // Regression: MAS-150 found a mojibake separator (â€”) in the detail line below.
+    expect(notice).toHaveTextContent('Statement of Work — linked: sow-final.docx')
   })
 
   it('says nothing at all when everything was read and nothing is missing', () => {

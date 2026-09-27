@@ -675,6 +675,9 @@ def link_contract(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A contract cannot be linked to itself.")
     if repository.get_contract(db, body.linked_contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The document to link was not found.")
+    current_review = repository.get_risk_review(db, contract_id)
+    if current_review is not None and current_review.status in ("pending", "running"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wait for the current review to finish before changing linked documents.")
 
     chunks = repository.list_chunks(db, contract_id)
     unresolved = {r.name for r in find_external_references([c.chunk_text for c in chunks])} - {
@@ -735,7 +738,10 @@ def search_contract(
     """Retrieval only — the passages a question would be answered from, best first. No model call (MAS-91)."""
     if repository.get_contract(db, contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    hits = retrieve_contract_context(q, db=db, embedder=embedder, store=store, contract_id=contract_id, limit=limit)
+    # Same bundle scope as /api/query's _retrieve (MAS-151): itself plus any
+    # linked documents, so the two retrieval paths agree for the same contract.
+    bundle_ids = repository.bundle_contract_ids(db, contract_id)
+    hits = retrieve_contract_context(q, db=db, embedder=embedder, store=store, contract_ids=bundle_ids, limit=limit)
     return [RetrievedChunk.from_hit(hit) for hit in hits]
 
 
@@ -776,9 +782,9 @@ def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(g
 
 @router.get("/contracts/{contract_id}/export.{fmt}")
 def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection = Depends(get_db)) -> Response:
-    """The review as a file: `export.md` (Markdown) or `export.csv`. Same data as /risks and /key-terms (MAS-97)."""
-    if fmt not in ("md", "csv"):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md or csv.")
+    """The review as Markdown, CSV, or PDF. Same data as /risks and /key-terms."""
+    if fmt not in ("md", "csv", "pdf"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md, csv or pdf.")
     contract = repository.get_contract(db, contract_id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
@@ -800,11 +806,13 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
         if (item := repository.get_contract(db, bundle_id)) is not None
     }
     if fmt == "md":
-        text, media = export.render_markdown(contract.filename, review_body, terms_body, documents), "text/markdown; charset=utf-8"
+        content, media = export.render_markdown(contract.filename, review_body, terms_body, documents), "text/markdown; charset=utf-8"
+    elif fmt == "csv":
+        content, media = export.render_csv(review_body, terms_body, documents), "text/csv; charset=utf-8"
     else:
-        text, media = export.render_csv(review_body, terms_body, documents), "text/csv; charset=utf-8"
+        content, media = export.render_pdf(contract.filename, review_body, terms_body, documents), "application/pdf"
     return Response(
-        content=text,
+        content=content,
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{export.safe_filename(contract.filename, fmt)}"'},
     )

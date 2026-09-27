@@ -89,6 +89,35 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(window.location.hash).toBe('#nw/text')
   })
 
+  it('offers a way back to where a source click came from (MAS-109)', async () => {
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await screen.findByText('Half the fees.')
+    expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
+
+    const back = screen.getByRole('button', { name: '← Back to Overview' })
+    await userEvent.click(back)
+
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
+  })
+
+  it('remembers Ask MaSign, not Overview, when a source is opened from a cited answer', async () => {
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
+
+    expect(screen.getByRole('button', { name: '← Back to Overview' })).toBeInTheDocument()
+
+    // Manually switching tabs (not the back link) retires the affordance.
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
+    expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
+  })
+
   it('moves between tabs with the keyboard and keeps the draft question', async () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
@@ -127,22 +156,23 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
-  it('keeps the downloads and Print in one Actions menu, leaving Ask MaSign the only primary button (MAS-97/125)', async () => {
+  it('shows labelled, row-based PDF and export controls behind one compact menu (MAS-154)', async () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
 
-    // The links live behind Actions now; the details element is closed until asked.
-    const menu = screen.getByText('Actions').closest('details')!
+    const menuButton = document.querySelector<HTMLElement>('details.actions-menu > summary')!
+    const menu = menuButton.closest('details')!
     expect(menu).not.toHaveAttribute('open')
-    await userEvent.click(within(menu).getByText('Actions'))
+    await userEvent.click(menuButton)
     expect(menu).toHaveAttribute('open')
 
-    const nav = within(menu).getByRole('navigation', { name: 'Actions for this contract' })
-    expect(within(nav).getByRole('link', { name: 'Download Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
-    expect(within(nav).getByRole('link', { name: 'Download CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
-    expect(within(nav).getByRole('link', { name: 'Download Markdown' })).toHaveAttribute('download')
+    const nav = within(menu).getByRole('navigation', { name: 'Export and print options' })
+    expect(within(nav).getByRole('link', { name: 'Export PDF' })).toHaveAttribute('href', '/api/contracts/nw/export.pdf')
+    expect(within(nav).getByRole('link', { name: 'Export Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
+    expect(within(nav).getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
+    expect(within(nav).getByRole('link', { name: 'Export PDF' })).toHaveAttribute('download')
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
-    await userEvent.click(within(nav).getByRole('button', { name: 'Print' }))
+    await userEvent.click(within(nav).getByRole('button', { name: 'Print review' }))
     expect(print).toHaveBeenCalled()
   })
 
@@ -156,7 +186,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(head).toHaveTextContent('1 B · 2 passages · uploaded')
     expect(within(head).getByText('Reviewed · High risk')).toHaveClass('status', 'warn')
 
-    await userEvent.click(within(head).getByRole('button', { name: 'Ask MaSign about this contract' }))
+    await userEvent.click(within(head).getByRole('button', { name: 'Ask a question about this contract' }))
     expect(screen.getByRole('tab', { name: 'Ask MaSign' })).toHaveAttribute('aria-selected', 'true')
     await waitFor(() => expect(screen.getByLabelText('Ask about the contract')).toHaveFocus())
   })

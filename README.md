@@ -94,9 +94,10 @@ interactive API docs stay at `/docs`.
 ### Embedding profiles
 
 The deployer picks one of two profiles (benchmark and rationale in `CLAUDE.md`,
-MAS-58). Switching changes the index fingerprint, so on the next start the
-vector index is rebuilt automatically from the stored chunk text — nothing has
-to be re-uploaded.
+MAS-58; every model tried, compared side by side, in
+[`docs/embedding-models.md`](docs/embedding-models.md)). Switching changes the
+index fingerprint, so on the next start the vector index is rebuilt
+automatically from the stored chunk text — nothing has to be re-uploaded.
 
 | Profile | Command | Model | Needs | ≈ 30-page contract |
 |---|---|---|---|---|
@@ -126,10 +127,10 @@ Interactive docs at `http://localhost:8000/docs`.
 | `POST` | `/api/contracts/{contract_id}/links` | `{"linked_contract_id", "reference_name"}` → link an already-uploaded contract as the resolution of a named reference. `reference_name` must be one of this contract's current, unresolved external references (never inferred from filename or content) — 400 otherwise; 404 if either contract is unknown. |
 | `DELETE` | `/api/contracts/{contract_id}/links/{link_id}` | Remove a link. Invalidates this contract's existing risk review (`status: failed`) so it is never left silently claiming coverage of a document it no longer includes. |
 | `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`, and the `document_kind` of MAS-107). Runs automatically after upload. |
-| `GET`  | `/api/contracts/{contract_id}/search` | `?q=<question>&limit=5` → the passages the question would be answered from, best first, with scores. Retrieval only, no model call (MAS-91). |
+| `GET`  | `/api/contracts/{contract_id}/search` | `?q=<question>&limit=5` → the passages the question would be answered from, best first, with scores. Retrieval only, no model call (MAS-91). Scoped to the contract's bundle (itself plus any linked documents), same as `/api/query` (MAS-151). |
 | `GET`  | `/api/contracts/{contract_id}/passages` | Every stored passage of the contract in order (`chunk_id`, `chunk_index`, `text`) — the text behind each citation, finding and key term (MAS-83). |
 | `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
-| `GET`  | `/api/contracts/{contract_id}/export.md` · `export.csv` | The review as a file (MAS-97): Markdown with coverage, the key-terms table (value, standard verdict, passage, quote) and the findings by severity; or CSV with one row per finding and key term. Same data as `/risks` + `/key-terms`; 404 before a review. |
+| `GET`  | `/api/contracts/{contract_id}/export.pdf` ? `export.md` ? `export.csv` | The review as a file (MAS-154): searchable PDF or Markdown with coverage, key terms and findings, or CSV with one row per finding and key term. Same data as `/risks` + `/key-terms`; 404 before a review. |
 | `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction. The start is atomic: one request gets 202; concurrent attempts get 409 while it runs. |
 | `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` with `[n]` citations resolved in `citations`; `grounded` requires valid citations, a complete reply, and every detected money amount, percentage, date and duration to occur in a cited passage. It is false for "Not found in contract.". `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. |
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |

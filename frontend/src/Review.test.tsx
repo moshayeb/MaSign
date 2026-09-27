@@ -209,8 +209,8 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(empty).getAllByText('Not reviewed')).toHaveLength(4)
   })
 
-  it('shows the failure reason verbatim and lets the user run the review again', async () => {
-    const failed = review({ status: 'failed', chunks_checked: 0, complete: false, error: 'Chat model is not configured: set ANTHROPIC_API_KEY' })
+  it('shows a linked-document change as needing a cost-confirmed review again', async () => {
+    const failed = review({ status: 'failed', chunks_checked: 0, complete: false, error: 'Linked documents changed. Run the review again.' })
     let started = false
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
       if (init?.method === 'POST') {
@@ -223,7 +223,7 @@ describe('whole-contract risk review (MAS-81)', () => {
     render(<RiskReviewPanel contract={northwind} pollMs={10} />)
 
     expect(await screen.findByText('Review failed', { selector: '.status' })).toBeInTheDocument()
-    expect(screen.getAllByText(/set ANTHROPIC_API_KEY/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Linked documents changed/).length).toBeGreaterThan(0)
 
     // Re-reviewing re-spends what the first run cost, so it is asked for twice (MAS-122).
     await userEvent.click(screen.getByRole('button', { name: 'Review again — ≈ 4 model calls' }))
@@ -293,6 +293,33 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText('Conflicting')).toBeInTheDocument()
     expect(within(card).getByText(/Also stated in passage 10: “60 days”/)).toBeInTheDocument()
     expect(within(card).getByText(/One term is stated differently/)).toBeInTheDocument()
+  })
+
+  it('keeps selected-contract sources compact and identifies linked documents (MAS-159)', async () => {
+    const longLinkedName = 'Master_Services_Agreement_TechFlow_Nordic_Statement_of_Work_Project_Alpha.pdf'
+    const linkedContract = { ...northwind, contract_id: 'sow', filename: longLinkedName }
+    const primaryTerm = stated(TERMS[0], 'EUR 18,500 per month', 1, 'Customer shall pay EUR 18,500 per month')
+    primaryTerm.source = { ...primaryTerm.source!, contract_id: 'nw' }
+    const linkedTerm = stated(TERMS[2], '30 days', 2, 'Invoices shall be payable within thirty days')
+    linkedTerm.source = { ...linkedTerm.source!, contract_id: 'sow' }
+    const terms = TERMS.map((term) =>
+      term[0] === 'recurring_fee' ? primaryTerm : term[0] === 'payment_deadline' ? linkedTerm : notStated(term),
+    )
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: true, key_terms: terms })))
+    const onShowSource = vi.fn()
+
+    render(<RiskReviewPanel contract={northwind} contracts={[northwind, linkedContract]} onShowSource={onShowSource} />)
+
+    const card = (await screen.findByText('Key terms', { selector: 'h2' })).closest('section')!
+    const primarySource = within(card).getByRole('button', { name: 'Show Recurring fee in contract' })
+    expect(primarySource).toHaveTextContent('passage 2')
+    expect(primarySource).not.toHaveTextContent('northwind.txt')
+
+    const linkedSource = within(card).getByRole('button', { name: `Show Payment deadline in ${longLinkedName}, passage 3` })
+    expect(linkedSource).toHaveAttribute('title', `${longLinkedName}, passage 3`)
+    expect(within(linkedSource).getByText(longLinkedName)).toHaveClass('term-source-document')
+    await userEvent.click(linkedSource)
+    expect(onShowSource).toHaveBeenCalledWith(expect.objectContaining({ contract_id: 'sow', chunk_index: 2 }))
   })
 
   it('shows the standard verdict on a key term and counts deviations in the pill (MAS-96)', async () => {

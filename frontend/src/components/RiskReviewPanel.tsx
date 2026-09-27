@@ -25,11 +25,15 @@ interface Props {
 
 const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
 
+// See PassageReader.tsx: a literal `[]` default is a new reference every
+// render, which would make `loadLinks` (and effects depending on it) churn.
+const NO_CONTRACTS: Contract[] = []
+
 // The Overview tab (MAS-104): the stored whole-contract review (MAS-81) as a
 // summary strip, one coverage notice, the key terms and the risk findings.
 // A clean category reads as "reviewed, nothing found" only when every
 // passage was graded — never "not looked at".
-export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview, contracts = [] }: Props) {
+export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview, contracts = NO_CONTRACTS }: Props) {
   const [review, setReview] = useState<RiskReview | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error' | 'retrying'>('loading')
   const [pollFailures, setPollFailures] = useState(0)

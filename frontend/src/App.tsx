@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { listContracts, type Contract, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
+import { CompareView } from './components/CompareView'
 import { ContractList } from './components/ContractList'
 import { PageChrome } from './components/PageChrome'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
@@ -24,6 +25,19 @@ function parseHash(): { contractId: string | null; tab: Tab } {
 
 const EXAMPLES = ['What is the termination fee?', 'Is there a cap on liability?', 'When are invoices due, and what happens if we pay late?']
 
+type ExportIconName = 'more' | 'pdf' | 'markdown' | 'csv' | 'print'
+
+function ExportIcon({ name }: { name: ExportIconName }) {
+  const paths: Record<ExportIconName, ReactNode> = {
+    more: <><circle cx="5" cy="12" r="1.25" /><circle cx="12" cy="12" r="1.25" /><circle cx="19" cy="12" r="1.25" /></>,
+    pdf: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 15h6M9 18h4" /></>,
+    markdown: <><path d="M4 5h16v14H4z" /><path d="M7 15V9l3 3 3-3v6M15 12h2" /></>,
+    csv: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>,
+    print: <><path d="M7 8V3h10v5M6 18H4v-7h16v7h-2M7 15h10v6H7z" /><path d="M17 13h.01" /></>,
+  }
+  return <svg className="export-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
+}
+
 function formatUploaded(iso: string): string {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
@@ -37,8 +51,16 @@ export default function App() {
   // secondary trigger rather than being the default view (MAS-133): a new
   // visitor sees "pick or upload a contract" first, not a question box.
   const [askAllContracts, setAskAllContracts] = useState(false)
+  // Up to two contracts picked for side-by-side comparison (MAS-113). Two
+  // picks replace the main view with CompareView; picking a contract while
+  // one is selected does not clear that selection until the comparison closes.
+  const [compareIds, setCompareIds] = useState<string[]>([])
+  const [comparePicking, setComparePicking] = useState(false)
   // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
   const [source, setSource] = useState<SourceRef | null>(null)
+  // Where a source click came from, so Sources can offer a way back to it (MAS-109).
+  // Cleared by any manual tab change so a stale "Back to" never lingers.
+  const [returnTab, setReturnTab] = useState<Tab | null>(null)
   const [draft, setDraft] = useState('')
   // The selected contract's stored review, as the Overview last read it (MAS-108).
   const [review, setReview] = useState<RiskReview | null>(null)
@@ -46,6 +68,13 @@ export default function App() {
   const setTab = useCallback((next: Tab) => {
     setTabState(next)
   }, [])
+  // Any tab change the user makes directly (a tab click, the header CTA, a
+  // new selection) retires the "Back to" affordance a source click left
+  // behind; showSource manages returnTab itself instead of going through this.
+  const changeTab = useCallback((next: Tab) => {
+    setReturnTab(null)
+    setTab(next)
+  }, [setTab])
   // Keep the hash in step with the view; clear it when nothing is selected.
   useEffect(() => {
     const next = selected ? `#${selected.contract_id}/${tab}` : ''
@@ -117,23 +146,56 @@ export default function App() {
     })
     setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
     setSource(null)
+    setReturnTab(null)
     setReview(null)
     setAskAllContracts(false)
+    setCompareIds([])
+    setComparePicking(false)
   }, [setTab])
 
-  // A finding or key term was clicked: show the text at that passage (MAS-83/95).
+  // A finding or key term was clicked: show the text at that passage (MAS-83/95),
+  // remembering where the click came from so Sources can offer a way back (MAS-109).
   const showSource = useCallback(
     (ref: SourceRef) => {
       setSource(ref)
+      setReturnTab((current) => (tab === 'text' ? current : tab))
       setTab('text')
     },
-    [setTab],
+    [setTab, tab],
   )
+  // A source clicked from the comparison view (MAS-113) selects that
+  // contract and opens it there, leaving the comparison.
+  const showSourceInCompared = useCallback(
+    (contract: Contract, ref: SourceRef) => {
+      select(contract)
+      showSource(ref)
+    },
+    [select, showSource],
+  )
+  const toggleCompare = useCallback(
+    (contract: Contract) => {
+      if (compareIds.includes(contract.contract_id)) {
+        setCompareIds(compareIds.filter((id) => id !== contract.contract_id))
+        return
+      }
+      if (compareIds.length >= 2) return // pick two first; a third click does nothing until one is dropped
+      const next = [...compareIds, contract.contract_id]
+      setCompareIds(next)
+      // Two picks are enough: drop back out of pick mode so the sidebar
+      // reads normally again while CompareView takes over the main column.
+      if (next.length === 2) setComparePicking(false)
+    },
+    [compareIds],
+  )
+  const closeCompare = useCallback(() => {
+    setCompareIds([])
+    setComparePicking(false)
+  }, [])
   // The header's CTA (MAS-104): open the Ask tab with the cursor in the composer.
   const askAbout = useCallback(() => {
-    setTab('ask')
+    changeTab('ask')
     requestAnimationFrame(() => document.getElementById('question-text')?.focus())
-  }, [setTab])
+  }, [changeTab])
   // After a selection the workspace must be where the reader is looking: the
   // heading takes focus (so the keyboard follows the eye), and on a phone —
   // where the sidebar sits above the workspace — it is scrolled into view.
@@ -157,6 +219,8 @@ export default function App() {
 
   // The list is what refreshes when a review settles; the selected object may be older.
   const current = selected ? (contracts?.find((c) => c.contract_id === selected.contract_id) ?? selected) : null
+  const comparePair = compareIds.length === 2 ? (compareIds.map((id) => contracts?.find((c) => c.contract_id === id)) as [Contract | undefined, Contract | undefined]) : null
+  const compareContracts: [Contract, Contract] | null = comparePair && comparePair[0] && comparePair[1] ? [comparePair[0], comparePair[1]] : null
   const answered = useCallback(
     (next: Asked | null) => {
       setAsked(next)
@@ -175,11 +239,23 @@ export default function App() {
               void reload()
             }}
           />
-          <ContractList contracts={contracts} selectedId={selected?.contract_id ?? null} onSelect={select} onReload={refresh} />
+          <ContractList
+            contracts={contracts}
+            selectedId={selected?.contract_id ?? null}
+            onSelect={select}
+            onReload={refresh}
+            comparing={comparePicking}
+            compareIds={compareIds}
+            onToggleCompare={toggleCompare}
+            onStartCompare={() => setComparePicking(true)}
+            onCancelCompare={closeCompare}
+          />
         </aside>
 
         <main className="content">
-          {!selected ? (
+          {compareContracts ? (
+            <CompareView contracts={compareContracts} onShowSource={showSourceInCompared} onClose={closeCompare} />
+          ) : !selected ? (
             <>
               {!askAllContracts && !asked && (
                 // The composer is not the first thing a new visitor sees
@@ -236,22 +312,29 @@ export default function App() {
                     </p>
                   </div>
                   <div className="contract-head-actions">
-                    <button type="button" className="primary ask-cta" onClick={askAbout}>
-                      Ask MaSign about this contract
+                    <button type="button" className="primary ask-cta" onClick={askAbout} aria-label="Ask a question about this contract" title="Ask MaSign about this contract">
+                      Ask a question
                     </button>
-                    {/* One primary button per screen (MAS-125): the rest live here.
-                        Plain links inside, so the browser shows the download itself (MAS-97). */}
+                    {/* One primary button per screen. The trigger stays compact;
+                        the open menu gives every export a clear icon and label. */}
                     <details className="actions-menu">
-                      <summary aria-label="Actions for this contract">Actions</summary>
-                      <nav className="actions-list" aria-label="Actions for this contract">
-                        <a className="link" href={`/api/contracts/${selected.contract_id}/export.md`} download>
-                          Download Markdown
+                      <summary aria-label="Export and print options" title="Export and print options"><ExportIcon name="more" /></summary>
+                      <nav className="actions-list" aria-label="Export and print options">
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.pdf`} download>
+                          <ExportIcon name="pdf" />
+                          <span>Export PDF</span>
                         </a>
-                        <a className="link" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
-                          Download CSV
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.md`} download>
+                          <ExportIcon name="markdown" />
+                          <span>Export Markdown</span>
                         </a>
-                        <button type="button" className="link" onClick={() => window.print()}>
-                          Print
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
+                          <ExportIcon name="csv" />
+                          <span>Export CSV</span>
+                        </a>
+                        <button type="button" className="export-action" onClick={() => window.print()}>
+                          <ExportIcon name="print" />
+                          <span>Print review</span>
                         </button>
                       </nav>
                     </details>
@@ -260,7 +343,7 @@ export default function App() {
                 <Tabs
                   label="Contract workspace"
                   active={tab}
-                  onChange={setTab}
+                  onChange={changeTab}
                   tabs={[
                     { id: 'overview', label: 'Overview' },
                     { id: 'ask', label: 'Ask MaSign', hint: asked ? '· answered' : undefined },
@@ -293,9 +376,14 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {asked && <AnswerView asked={asked} contracts={contracts ?? []} />}
+                {asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />}
               </TabPanel>
               <TabPanel id="text" active={tab}>
+                {returnTab && (
+                  <button type="button" className="back-to-context" onClick={() => changeTab(returnTab)}>
+                    ← Back to {returnTab === 'ask' ? 'Ask MaSign' : 'Overview'}
+                  </button>
+                )}
                 <PassageReader key={`reader-${selected.contract_id}`} contract={selected} contracts={contracts ?? []} target={source} open />
               </TabPanel>
             </>

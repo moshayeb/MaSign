@@ -17,6 +17,8 @@ const NAV_LINKS = [
 // keyboard-accessible pattern the workspace's own Actions menu already uses,
 // so this needed no new interaction code.
 export function PageChrome({ children }: { children: ReactNode }) {
+  const path = typeof window !== 'undefined' ? window.location.pathname : ''
+
   return (
     <>
       <Toaster position="top-right" theme="light" richColors closeButton />
@@ -27,7 +29,12 @@ export function PageChrome({ children }: { children: ReactNode }) {
           </a>
           <nav className="topnav" aria-label="Main">
             {NAV_LINKS.map((link) => (
-              <a key={link.href} className="topnav-link" href={link.href}>
+              <a
+                key={link.href}
+                className={`topnav-link${path === link.href ? ' active' : ''}`}
+                href={link.href}
+                aria-current={path === link.href ? 'page' : undefined}
+              >
                 {link.label}
               </a>
             ))}
@@ -43,7 +50,12 @@ export function PageChrome({ children }: { children: ReactNode }) {
             </summary>
             <nav className="topnav-mobile-list" aria-label="Main">
               {NAV_LINKS.map((link) => (
-                <a key={link.href} className="link" href={link.href}>
+                <a
+                  key={link.href}
+                  className={`link${path === link.href ? ' active' : ''}`}
+                  href={link.href}
+                  aria-current={path === link.href ? 'page' : undefined}
+                >
                   {link.label}
                 </a>
               ))}

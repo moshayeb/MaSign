@@ -98,9 +98,10 @@ badge already says, or when there is no review yet (`ContractList.tsx`,
 
 Selecting a contract replaces the landing with the contract header
 (MAS-104: file name, type tag, size · passages · upload date, the
-Reviewed / Not reviewed pill read from the contract list, the **Ask MaSign
-about this contract** button that opens the Ask tab with the cursor in the
-composer, and the Download links) and a tab bar (`components/Tabs.tsx`,
+Reviewed / Not reviewed pill read from the contract list, the **Ask a
+question** button (its accessible name and tooltip still say "about this
+contract") that opens the Ask tab with the cursor in the composer, and the
+Download links) and a tab bar (`components/Tabs.tsx`,
 WAI-ARIA `tablist`/`tab`/`tabpanel`; arrow keys, Home and End move, only
 the active tab is in the tab order):
 
@@ -184,6 +185,38 @@ has real links for How it works, What MaSign checks and Documentation, plus
 an **Open workspace** CTA; on a phone they collapse into a keyboard-accessible
 menu. `StaticPage.tsx` gives the static pages a narrow readable column
 (`.staticpage`, max 720px) instead of the workspace's sidebar layout.
+The active page gets a `.active`/`aria-current="page"` highlight in both the
+desktop nav and the phone menu (MAS-142).
+
+### Public content pages (MAS-142)
+
+How it works, What MaSign checks and Documentation moved off `StaticPage`'s
+single prose column onto a second shared layout, `PublicPage.tsx`
+(`.pubpage`): a hero (eyebrow, `<h1>`, subtitle, optional CTA) over one or
+more card-grid sections (`.pubpage-grid-3`, `.pubpage-card`,
+`.pubpage-icon`), reusing the home page's (MAS-133/134) visual language —
+line icons in a soft cyan tile, `.card` surfaces — without sharing its CSS
+classes, since the two pages are laid out differently. `About`, `Privacy`
+and the educational disclaimer stay on `StaticPage`: each is a single
+statement to read top to bottom, not a set of distinct facts to scan.
+
+- **How it works** collapses to the three steps the ticket names — Upload,
+  Review, Check sources — folding "ask a question" into "check sources"
+  rather than keeping it a fourth step, plus a callout repeating the
+  honest-unknowns behaviour ("Not found in contract.").
+- **What MaSign checks** renders all seven `RISK_CATEGORIES`
+  (`app/risk_analysis/rubric.py`) as cards, the nine `KEY_TERMS`
+  (`app/key_terms/terms.py`) as a plain list, and a four-item legend for
+  High / Medium / Low / Not checked (`.pubpage-legend`, reusing the
+  workspace's `.severity`/`.severity-high|medium|low` pill styling plus a
+  new neutral `.severity-none` for "Not checked" — colours are not
+  reinvented per page). Category and term names and wording are read
+  straight from those two modules' definitions, not restated from memory,
+  so the page cannot drift from what the model is actually asked to find.
+- **Documentation** keeps the real README/`docs/` GitHub links and adds two
+  in-app cross-links (How it works, What MaSign checks) as the third
+  "resource" alongside the technical docs.
+
 ### Public home and workspace (MAS-133)
 
 `/` is a small public home page: its purpose is to explain MaSign and lead a
@@ -203,6 +236,53 @@ make accuracy, speed, certification, customer-logo, pricing or
 cross-document-review claims. The secondary **Open workspace** CTA links to
 `/workspace`. The grid is four columns on desktop and one column at phone
 width.
+
+### Home page hero mockup and expanded sections (MAS-147)
+
+The hero became two columns (`.home-hero-row`, single column again under
+860px): an eyebrow badge, the headline, a primary **Open workspace** CTA
+plus a new secondary **See how it works** CTA (→ `/how-it-works`), a
+"Supports PDF, DOCX and TXT files" line, and a static product-screenshot
+mockup (`HeroMockup` in `HomePage.tsx`). The mockup is `aria-hidden` and
+built from the app's own classes (`.filetype`, `.risks`/`li.risk`,
+`.severity`, `.status`) with content grounded in real behaviour rather than
+invented: the coverage notice repeats `CoverageNotice.tsx`'s exact copy
+("AI instructions detected · 1 passage withheld"), the findings use real
+rubric categories and severity thresholds, and "Deviates" is
+`KeyTermsCard.tsx`'s real standard-comparison status. It is captioned
+"Illustrative example, not a real upload" — MaSign has no customer contract
+to screenshot, and MAS-134 already decided this page claims nothing it
+can't back up. `.home-cta` got real button styling to match the new
+secondary CTA sitting next to it (previously `.primary` only styled
+`<button>`, so the link-only "Open workspace" CTA looked unstyled next to a
+real button once the two sat side by side).
+
+"How MaSign works" replaced the old top-left number badge with a numbered
+circle icon per step and arrow connectors between cards (`.home-steps-row`,
+rotates 90° and stacks under 720px). The "Why MaSign" cards are now real
+links to `/how-it-works` or `/what-masign-checks` with a chevron affordance,
+instead of static `<article>`s. A new "Clear expectations" section
+(`.home-expectations`) states three things plainly: MaSign assists rather
+than replaces a lawyer (already stated on `/about`), AI findings need
+verifying against their source passage, and contract text relevant to a
+question or review is sent to the configured AI provider — the last one is
+the CLAUDE.md LLM-decision architecture, not a new promise; it does not
+claim anything about a provider's training/retention policy the codebase
+cannot verify.
+
+### Home page journey (MAS-158)
+
+The hero mockup already supplied the visual explanation of the product, so
+MAS-158 adds only the two missing transitions instead of repeating it. A
+three-item cyan `.home-trust-strip` sits below the hero: source-linked
+answers, customer-side risk review, and key terms together. It is a compact
+proof strip rather than another card grid, and each label describes a
+behaviour that the current product provides.
+
+The page ends, before the existing footer, with `.home-final-cta`: **Ready to
+review a contract?** and an **Open workspace** link. It contains no speed,
+accuracy, legal-advice, or security claim. Both sections stack vertically
+under 720px and make no request to the API or a model.
 
 ### Shared visual system (MAS-136)
 
@@ -236,10 +316,13 @@ screenshot, never a live URL.
 The engineering-grid background is gone and the blue tint behind the page is
 softer: the app should read as a legal workspace, not a developer tool.
 
-A selected contract has **one** primary button, *Ask MaSign about this
-contract*. Download Markdown, Download CSV and Print sit in an **Actions**
-menu (a `<details>`, so it opens by keyboard and closes on Escape without
-any focus-trap code). *Review again* deliberately stayed in the risk review
+A selected contract has **one** primary button, *Ask a question*. Its
+accessible name and tooltip say that it is about the selected contract.
+Its compact icon **Actions** trigger opens a vertical, labelled menu:
+**Export PDF**, **Export Markdown**, **Export CSV**, and **Print review**. Each
+row has a matching icon and separator, so the action remains clear without a
+large permanent control (a `<details>`, so it opens by keyboard and closes on
+Escape without any focus-trap code). *Review again* deliberately stayed in the risk review
 card: it belongs beside the review it re-runs, and moving it would mean
 lifting the review state into `App` — structural work that belongs to
 MAS-126. The third tab is **Sources** (the hash keeps the id `text`, so
@@ -333,9 +416,13 @@ review finishes"; a failed one the failure, verbatim. Dates use the same
 `KeyTermsCard` renders above the Risk review from the same `RiskReview`
 response (`key_terms`, `key_terms_complete`), so it shares the panel's load
 and polling. Since MAS-104 only stated terms get a tile: name in small
-caps, the value prominent, `passage n` link and the standard pill inline,
-the verbatim quote under it, and for `conflicting` an amber tag plus "Also
-stated in passage m" lines. The terms that are `not_stated` share one line
+caps, the value prominent, a `passage n` link and the standard pill inline.
+The selected contract is already named in the workspace header, so its tiles
+show only the passage. A linked-document source keeps its filename (clipped
+visually if needed, with the full name in its tooltip and accessible name),
+then its passage number. This preserves bundle provenance without overflowing
+the tile. The verbatim quote sits beneath it; `conflicting` terms add an amber
+tag plus "Also stated in passage m" lines. The terms that are `not_stated` share one line
 ("Not stated in the reviewed text: One-off fees, Price changes") — only sent
 when the pass completed — and `unchecked` terms another ("Not checked: …")
 with an amber notice that some passages could not be checked — never
@@ -346,7 +433,7 @@ or `Extracting…`.
 ### Download and print (MAS-97)
 
 The contract header has plain `<a download>` links to
-`/api/contracts/{id}/export.md` and `.csv` (the browser shows the download;
+`/api/contracts/{id}/export.pdf`, `.md` and `.csv` (the browser shows the download;
 no toast) and a Print button (`window.print()`). `@media print` in
 `index.css` hides the sidebar, tabs, composer, download links and action
 buttons, forces the Overview panels visible in black on white, keeps
@@ -433,15 +520,61 @@ removed document.
 
 `PassageReader` (a collapsible `.card.reader` below the review) loads
 `GET /api/contracts/{id}/passages` once per contract and renders every
-passage. App holds a `SourceRef {chunk_index, quote?}`; `RiskReviewPanel`
-and `KeyTermsCard` receive `onShowSource` and call it from the finding's
-"Show in contract" button and the key term's passage link (accessible
-names `Show <category> finding in contract`, `Show <term> in contract`). A
-new target opens the reader, scrolls the passage into view, focuses it
-(`tabIndex=-1`, `aria-current`) and wraps the quote in `<mark>` via
-`findQuote` in `src/quote.tsx` (exact match, then whitespace/quote-style
-tolerant). Selecting another contract clears the target. The answer view's
-`[n]` markers keep their own in-card highlighting.
+passage. App holds a `SourceRef {chunk_index, quote?}`; `RiskReviewPanel`,
+`KeyTermsCard`, `CoverageNote`, `Timeline` and `AnswerView` all receive
+`onShowSource` and call it from a "Show in contract" button (accessible
+names `Show <category> finding in contract`, `Show <term> in contract`,
+`Show citation <n> in contract`, and so on). A new target opens the reader,
+scrolls the passage into view, focuses it (`tabIndex=-1`, `aria-current`)
+and wraps the quote in `<mark>` via `findQuote` in `src/quote.tsx` (exact
+match, then whitespace/quote-style tolerant) — so two different citations
+onto different passages/quotes stay visually distinguishable, one at a
+time. Selecting another contract clears the target. The answer view's own
+`[n]` markers still jump within the Ask tab to the citation card first
+(MAS-83's original in-card highlighting); the citation card's own "Show in
+contract" button is what opens the actual contract text (MAS-109).
+
+Since MAS-109, App also remembers which tab (Overview or Ask MaSign) a
+source click came from (`returnTab`) and the Sources tab shows a "← Back
+to Overview"/"← Back to Ask MaSign" link above the reader so the click is
+not a one-way trip. Any tab change made directly — clicking a tab, the
+header's "Ask a question" CTA, selecting a different contract — retires
+that link; only a `showSource` call sets it, and only when the click did
+not originate from the Sources tab itself.
+
+## Compare two contracts (MAS-113)
+
+The sidebar's "Compare" button (shown once 2+ contracts exist) puts
+`ContractList` into a picking mode: a status bar reads "Select two contracts
+to compare · n of 2", each row becomes a checkbox-style toggle instead of a
+select action, and a second click on an already-picked row drops it and frees
+the slot. Picking a second contract closes picking mode automatically and
+replaces the main column with `CompareView`; "Cancel" (while picking) or
+"Exit comparison" (once shown) both return to normal browsing. Selecting a
+different contract elsewhere resets any in-progress or completed comparison.
+
+`CompareView` fetches each side's `GET /api/contracts/{id}/risks`
+independently (`useReview`, a small hook wrapping the same review states
+`RiskReviewPanel` uses) and renders two tables as CSS grid rows shared across
+a fixed 3-column layout (label, side A, side B): key terms (union of both
+sides' terms, side A's order first) and the seven rubric categories in rubric
+order. Every cell states what that side actually has and nothing else:
+**Not reviewed** (no review has ever run), **Not checked** (reviewed, this
+key term's extraction pass did not cover it), **Not stated** (reviewed, the
+term does not appear), or the quoted value with a "Show in contract" link —
+the same three-way distinction `KeyTermsCard` uses, never collapsed into a
+single blank state. A row is highlighted (amber) only when both sides have a
+found value and the values differ — never for a side that is merely missing
+data, since that is not a difference, it's an unknown. Findings from both
+reviews are listed underneath in two columns, reusing `AnswerView`'s risk-flag
+styling. A closing disclaimer states plainly that nothing here is scored,
+ranked, or inferred, and that the view does not say which contract is legally
+better.
+
+A "Show in contract" click here calls `onShowSource(contract, ref)`, which
+selects that contract (exiting the comparison) and then calls the normal
+`showSource` — landing on that contract's own Sources tab via the MAS-83/
+MAS-109 machinery unchanged, rather than a parallel in-place viewer.
 
 ## Risk review (MAS-81)
 
@@ -505,3 +638,14 @@ on `/passages`) — together with the quote mark when both apply.
 `contract_id` is optional in the request — default the UI to the selected
 contract, and offer "all contracts" explicitly. A 503 here carries the reason
 (no API key, provider down, rate limit) in `detail` — show it verbatim.
+
+### Related-document panel (MAS-153)
+
+When a review names a document that has not been uploaded, the related-document
+panel makes the next step clear without claiming a match. It shows the named
+document, then one primary row: choose an already uploaded document and select
+**Link document**. The alternate upload path is visually secondary and keeps
+its cost disclosure: uploading starts the document review (about two
+model calls for up to eight passages). The explicit confirmation dialog and
+unlink behaviour are unchanged. The panel uses Inter and the normal body/text
+scale, and stacks the selector and button at narrow widths.
