@@ -675,6 +675,9 @@ def link_contract(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A contract cannot be linked to itself.")
     if repository.get_contract(db, body.linked_contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The document to link was not found.")
+    current_review = repository.get_risk_review(db, contract_id)
+    if current_review is not None and current_review.status in ("pending", "running"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wait for the current review to finish before changing linked documents.")
 
     chunks = repository.list_chunks(db, contract_id)
     unresolved = {r.name for r in find_external_references([c.chunk_text for c in chunks])} - {

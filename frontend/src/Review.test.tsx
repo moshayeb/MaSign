@@ -209,8 +209,8 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(empty).getAllByText('Not reviewed')).toHaveLength(4)
   })
 
-  it('shows the failure reason verbatim and lets the user run the review again', async () => {
-    const failed = review({ status: 'failed', chunks_checked: 0, complete: false, error: 'Chat model is not configured: set ANTHROPIC_API_KEY' })
+  it('shows a linked-document change as needing a cost-confirmed review again', async () => {
+    const failed = review({ status: 'failed', chunks_checked: 0, complete: false, error: 'Linked documents changed. Run the review again.' })
     let started = false
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
       if (init?.method === 'POST') {
@@ -223,7 +223,7 @@ describe('whole-contract risk review (MAS-81)', () => {
     render(<RiskReviewPanel contract={northwind} pollMs={10} />)
 
     expect(await screen.findByText('Review failed', { selector: '.status' })).toBeInTheDocument()
-    expect(screen.getAllByText(/set ANTHROPIC_API_KEY/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Linked documents changed/).length).toBeGreaterThan(0)
 
     // Re-reviewing re-spends what the first run cost, so it is asked for twice (MAS-122).
     await userEvent.click(screen.getByRole('button', { name: 'Review again — ≈ 4 model calls' }))

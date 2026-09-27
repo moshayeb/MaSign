@@ -175,6 +175,7 @@ def create_link(
                 (primary_contract_id, linked_contract_id, reference_name),
             )
             row = cursor.fetchone()
+            _invalidate_bundle_review(cursor, primary_contract_id)
     return ContractLink(**row)
 
 
@@ -208,18 +209,34 @@ def delete_link(connection: psycopg.Connection, link_id: UUID) -> ContractLink |
             if row is None:
                 return None
             link = ContractLink(**row)
-            cursor.execute("SELECT 1 FROM risk_reviews WHERE contract_id = %s", (link.primary_contract_id,))
-            if cursor.fetchone() is not None:
-                cursor.execute(
-                    """
-                    UPDATE risk_reviews SET
-                        status = 'failed', complete = FALSE, key_terms_complete = FALSE,
-                        error = 'Linked documents changed. Run the review again.', updated_at = now()
-                    WHERE contract_id = %s
-                    """,
-                    (link.primary_contract_id,),
-                )
+            _invalidate_bundle_review(cursor, link.primary_contract_id)
     return link
+
+
+def _invalidate_bundle_review(cursor: psycopg.Cursor, primary_contract_id: UUID) -> None:
+    """Remove results derived from a bundle whose membership just changed."""
+    cursor.execute("DELETE FROM risk_findings WHERE contract_id = %s", (primary_contract_id,))
+    cursor.execute("DELETE FROM key_terms WHERE contract_id = %s", (primary_contract_id,))
+    cursor.execute(
+        """
+        UPDATE risk_reviews SET
+            status = 'failed',
+            chunks_total = (
+                SELECT COUNT(*) FROM chunks
+                WHERE contract_id = %s
+                   OR contract_id IN (
+                       SELECT linked_contract_id FROM contract_links WHERE primary_contract_id = %s
+                   )
+            ),
+            chunks_checked = 0, chunks_withheld = 0,
+            complete = FALSE, key_terms_complete = FALSE,
+            unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
+            redacted_chunks = '[]'::jsonb,
+            error = 'Linked documents changed. Run the review again.', updated_at = now()
+        WHERE contract_id = %s
+        """,
+        (primary_contract_id, primary_contract_id, primary_contract_id),
+    )
 
 
 def get_vector_index(connection: psycopg.Connection, collection: str) -> VectorIndex | None:

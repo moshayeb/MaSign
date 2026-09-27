@@ -40,6 +40,34 @@ def test_link_is_created_and_listed(db) -> None:
     assert len(listed) == 1 and listed[0]["id"] == body["id"]
 
 
+def test_link_invalidates_the_primarys_existing_review_and_clears_derived_rows(db) -> None:
+    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+    repository.start_risk_review(db, primary_id, status="done")
+    repository.update_risk_review(db, primary_id, status="done", chunks_total=1, chunks_checked=1, complete=True, key_terms_complete=True)
+    db.commit()
+
+    response = client.post(f"/api/contracts/{primary_id}/links", json={"linked_contract_id": str(linked_id), "reference_name": "Order Form"})
+
+    assert response.status_code == 201, response.text
+    review = repository.get_risk_review(db, primary_id)
+    assert review.status == "failed" and review.complete is False and review.key_terms_complete is False
+    assert (review.chunks_checked, review.chunks_total) == (0, 2)
+    assert "Run the review again" in review.error
+
+
+def test_link_refuses_to_change_a_running_review(db) -> None:
+    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+    repository.start_risk_review(db, primary_id, status="running")
+    db.commit()
+
+    response = client.post(f"/api/contracts/{primary_id}/links", json={"linked_contract_id": str(linked_id), "reference_name": "Order Form"})
+
+    assert response.status_code == 409
+    assert "current review" in response.json()["detail"]
+
+
 def test_link_rejects_a_reference_name_that_is_not_actually_unresolved(db) -> None:
     primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
     linked_id = _stored(db, "1. Some other document.", name="other.txt")
