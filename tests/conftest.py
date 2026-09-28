@@ -33,6 +33,7 @@ from app.database import repository
 from app.database.migrations import run_migrations
 from app.database.models import User, Workspace
 from app.database.session import get_connection, get_database_url
+from app.key_terms.standards import STANDARD_TERM_IDS
 from app.main import app
 from app.retrieval.vector_store import VectorStore
 
@@ -219,6 +220,11 @@ def db(database: str) -> Iterator[psycopg.Connection]:
     with get_connection(database) as connection:
         yield connection
         connection.execute("TRUNCATE contracts, vector_index CASCADE")
+        # `standards` (MAS-120) has no FK to contracts, so the statement
+        # above does not clear it; remove its rows one at a time (bounded
+        # per-row deletes) since there are only ever a handful.
+        for term_id in STANDARD_TERM_IDS:
+            repository.delete_standard(connection, term_id)
 
 
 # --- auth (MAS-143) -----------------------------------------------------------

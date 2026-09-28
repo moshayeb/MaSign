@@ -88,16 +88,17 @@ and no font is needed: every letter is an outline — the owner exported the
 wordmark from Illustrator in Anurati, and the one letter Illustrator left as
 live text (the S) was outlined with fontTools. `frontend/public/brand/` holds
 the font-free colour and white versions for documents.
-Two-column layout: a sticky sidebar and the main column, stacking under
-960 px. Since MAS-104 the sidebar is the upload card (the dashed drop zone —
-the owner kept it over a "+ New contract" button, 2026-09-21), a search box
-and a **Sort by** select (newest / highest risk / most deviations,
-client-side — the list is small) once there is more than one contract, and
-one line per contract: file-type tag, name, and the review state in words
-(Reviewed · High risk / Not reviewed / Reviewing… / Review failed,
-`reviewStatus.ts`) — size, passage count and date moved to the contract
-header. Since MAS-101 a reviewed contract with something to add gets a
-second, muted line under its name — recurring fee, initial term, High
+Two-column layout: a sticky sidebar and the main column, becoming a mobile
+drawer (MAS-126, see below) once a contract is selected and the layout is
+one column. Since MAS-104 the sidebar is the upload card (the dashed drop
+zone — the owner kept it over a "+ New contract" button, 2026-09-21), a
+search box and a **Sort by** select (newest / highest risk / most
+deviations, client-side — the list is small) once there is more than one
+contract, and one line per contract: file-type tag, name, and the review
+state in words (Reviewed · High risk / Not reviewed / Reviewing… / Review
+failed, `reviewStatus.ts`) — size, passage count and date moved to the
+contract header. Since MAS-101 a reviewed contract with something to add
+gets a second, muted line under its name — recurring fee, initial term, High
 findings and deviations from `GET /api/contracts` (`recurring_fee`,
 `initial_term`, `high_findings`, `deviations`, all read from stored rows,
 no model call), e.g. "EUR 18,500 per month · 36 months · 2 High ·
@@ -105,6 +106,23 @@ no model call), e.g. "EUR 18,500 per month · 36 months · 2 High ·
 duplicate "Reviewed" — when the review found nothing beyond what the status
 badge already says, or when there is no review yet (`ContractList.tsx`,
 `summaryLine`).
+
+**Fewer badges beside a name (MAS-126).** At most one small warning tag now,
+not up to two: a document-kind mismatch (*Not a contract?* / *Type
+uncertain*) wins over a readability note (*Partly readable*) when both would
+otherwise apply, since the rubric possibly not applying at all is the more
+consequential thing to flag (`ContractList.tsx`, `warningBadge`). Each row
+also gets its own compact kebab menu (`.row-actions-menu`, hidden while
+picking a compare pair) with **Export PDF/Markdown/CSV** and **Delete** —
+export or remove a contract without opening it first. Delete is irreversible
+(the contract's chunks, review, key terms, stored questions and links
+cascade, and its vectors are removed from Qdrant, `DELETE
+/api/contracts/{id}`), so it always confirms first (`.confirm-box`, the same
+dialog pattern `ContractLinks.tsx` uses for linking); a delete that fails
+leaves the dialog open with the API's `detail` in an error toast rather than
+silently closing. Deleting the currently-selected, asked-about or
+being-compared contract clears whichever of those pointed at it
+(`App.tsx`'s `deleted` handler) before the list itself reloads.
 
 ### Contract workspace tabs (MAS-95)
 
@@ -117,8 +135,10 @@ Download links) and a tab bar (`components/Tabs.tsx`,
 WAI-ARIA `tablist`/`tab`/`tabpanel`; arrow keys, Home and End move, only
 the active tab is in the tab order):
 
-- **Overview** — the summary strip, the coverage notice, the Key terms card
-  and the Risk review (default).
+- **Overview** — the summary strip, the coverage notice, the off-rubric
+  banner and "Before you sign" (default, all always visible), then "View
+  complete analysis" (MAS-126) folding the full Key terms card and Risk
+  review behind one click.
 - **Ask MaSign** — the composer, five suggested questions, and the answer
   with citations and per-question flags. Asking a question switches here.
   The suggestions (`src/suggestions.ts`, MAS-108) are a fixed Customer-side
@@ -150,20 +170,47 @@ Verified with headless-Edge screenshots at 1280 px and inside a 400 px
 iframe (headless Edge clamps its own viewport to 492 px, so narrow widths
 must be checked through an iframe).
 
-## Overview (MAS-104)
+## Overview (MAS-104, progressive disclosure MAS-126)
 
 `RiskReviewPanel` is the Overview: it loads and polls the stored review and
-renders, top to bottom, `SummaryStrip`, `CoverageNotice`, `BriefCard`,
-`KeyTermsCard` and the Risk review card. The strip is four tiles — Key terms `n of 10`,
-Deviations `n`, Risks `2 High · 1 Medium` (or `None` only when the review
-is complete), Coverage `n of m` passages read (+ withheld) — with "…" while
-the review runs and "—" / "Not reviewed" before one exists, so the strip
-never shows a zero that could read as "nothing wrong". Findings come first
-in the Risk review, worst first, and the categories without a finding are
-one muted line: "No issues found in the 5 other categories: …" when the
-review is complete, "5 other categories: unable to determine — the review
-did not cover every passage" when it is not, "… still being graded…" while
-it runs. There are no green "Nothing found" cards.
+renders `SummaryStrip`, the off-rubric banner, `CoverageNotice`, `ContractLinks`
+and `BriefCard` ("Before you sign") always visible, then a `<details
+className="overview-detail">` — **"View complete analysis"**, closed by
+default — holding the full `KeyTermsCard` and the complete Risk review
+(every finding, every category, however clean). The strip is four tiles —
+Key terms `n of 10`, Deviations `n`, Risks `2 High · 1 Medium` (or `None`
+only when the review is complete), Coverage `n of m` passages read (+
+withheld) — with "…" while the review runs and "—" / "Not reviewed" before
+one exists, so the strip never shows a zero that could read as "nothing
+wrong".
+
+**The hard constraint (stated in the MAS-126 ticket itself): progressive
+disclosure hides detail, never a reason to doubt the review.** Nothing that
+was already always-visible moved behind the fold — `BriefCard`'s checklist
+(`brief.ts`, MAS-105/106/111) already covered exactly this ground (High/Medium
+findings, standard deviations, missing important terms, the notice deadline,
+an incomplete review) before this ticket existed, so the fold only ever hides
+what BriefCard already doesn't need to repeat: Low-severity findings, the
+clean-categories line, and every extracted key term's full quote. Missing
+documents (MAS-123), incomplete coverage (MAS-84/87/94), withheld/redacted
+passages (MAS-90/99) and rubric limitations (MAS-107) all still render
+outside the fold exactly as before — `Review.test.tsx`'s "progressive
+disclosure never hides a reason to doubt the review" test asserts this
+directly (`toBeVisible()`/`not.toBeVisible()`, not just presence in the DOM,
+since jsdom does not hide a closed `<details>`'s content on its own the way a
+browser does — `@testing-library/jest-dom`'s `toBeVisible()` has its own
+`<details>`-awareness for exactly this reason).
+
+Inside the fold: findings come first, worst first, and the categories
+without a finding are one muted line: "No issues found in the 5 other
+categories: …" when the review is complete, "5 other categories: unable to
+determine — the review did not cover every passage" when it is not, "…
+still being graded…" while it runs. There are no green "Nothing found"
+cards. A `SummaryStrip` tile whose target lives behind the fold (`key-terms`,
+`review`) opens it before scrolling and focusing the target
+(`RiskReviewPanel.tsx`'s `jumpTo`); `coverage` still opens `CoverageNotice`'s
+own `<details>` directly, unaffected, since that was never behind the fold
+to begin with.
 
 ### The shell (MAS-125)
 
@@ -334,13 +381,19 @@ softer: the app should read as a legal workspace, not a developer tool.
 A selected contract has **one** primary button, *Ask a question*. Its
 accessible name and tooltip say that it is about the selected contract.
 Its compact icon **Actions** trigger opens a vertical, labelled menu:
-**Export PDF**, **Export Markdown**, **Export CSV**, and **Print review**. Each
-row has a matching icon and separator, so the action remains clear without a
-large permanent control (a `<details>`, so it opens by keyboard and closes on
-Escape without any focus-trap code). *Review again* deliberately stayed in the risk review
-card: it belongs beside the review it re-runs, and moving it would mean
-lifting the review state into `App` — structural work that belongs to
-MAS-126. The third tab is **Sources** (the hash keeps the id `text`, so
+**Review risks**/**Review again** (MAS-126, when it applies — see below),
+**Export PDF**, **Export Markdown**, **Export CSV**, and **Print review**.
+Each row has a matching icon and separator, so the action remains clear
+without a large permanent control (a `<details>`, so it opens by keyboard
+and closes on Escape without any focus-trap code). Review again finally
+moved here in MAS-126, once the review state it needs was already lifted
+into `App` (MAS-108, for the Ask-tab suggestions) — the remaining work was
+an imperative handle (`RiskReviewPanelHandle.reviewAgain`) so the menu can
+trigger it while `RiskReviewPanel` keeps owning the confirm-before-re-spend
+banner and the actual start/poll logic; the menu item itself is computed by
+the panel (`onReviewAction`) and hidden under exactly the same conditions
+the old inline button was (loading, unavailable, running, or already
+mid-confirm). The third tab is **Sources** (the hash keeps the id `text`, so
 older links still open it); the card inside it is still "Contract text".
 
 The upload card keeps its rectangle (owner decision, twice) with less
@@ -351,31 +404,57 @@ padding and a smaller icon, so it sits quietly above the contract list.
 Selecting a contract moves focus to the contract heading (`tabIndex={-1}`,
 no ring for mouse users, a ring under `:focus-visible`), so the keyboard
 follows the selection; when `matchMedia('(max-width: 960px)')` matches — the
-one-column layout, where the sidebar sits above the workspace — the heading
-is also scrolled into view. On a wide screen the page deliberately does not
-move: the workspace is already visible and a page that jumps under the mouse
-is worse than one that stays still.
+one-column layout, where the sidebar is now a drawer once a contract is
+selected (MAS-126, below) rather than stacking above the workspace — the
+heading is also scrolled into view. On a wide screen the page deliberately
+does not move: the workspace is already visible and a page that jumps under
+the mouse is worse than one that stays still.
 
 The heading spells the filename out over as many lines as it needs
 (`overflow-wrap: anywhere`); truncation belongs in the sidebar row, where the
 name is a label rather than the subject of the page.
 
 The four summary tiles are buttons once there is a review to jump into: Key
-terms and Deviations scroll to the key-terms card, Risks to the risk review,
-Coverage to the coverage notice (opening its details) or to the review when
-there is no notice. Each target card takes focus as well as the scroll. A
-tile with nothing behind it yet stays plain text — a dead button is worse
+terms and Deviations scroll to the key-terms card (opening "View complete
+analysis", MAS-126), Risks to the risk review (same fold), Coverage to the
+coverage notice (opening its own, separate `<details>`) or to the review
+when there is no notice. Each target card takes focus as well as the scroll.
+A tile with nothing behind it yet stays plain text — a dead button is worse
 than no button.
+
+### Mobile drawer (MAS-126)
+
+Under 960px, once a contract is selected, `.layout` carries `has-selection`
+and the sidebar (upload card + contract list) leaves the document flow
+entirely — `position: fixed`, translated off-canvas — instead of stacking
+above the workspace and pushing a full screen's height of contract-list
+scrolling between the reader and what they came here for. A **Contracts**
+toggle (`.drawer-toggle`, itself `display: none` outside this breakpoint)
+opens it; a close button inside the sidebar and a full-screen backdrop
+(`.drawer-backdrop`, click-to-close, `aria-hidden` — the dedicated close
+button is the keyboard path) both close it, and so does picking a different
+contract from inside it (`App.tsx`'s `select`). All of this is CSS-inert at
+desktop widths and before any contract is selected: `.layout` only ever
+carries `has-selection`/`drawer-open` once `App` has something to hand off
+to it, so nothing about the desktop two-column layout changed. Verified with
+a headless-Edge screenshot inside a 400px iframe: closed state shows the
+toggle above the workspace, open state shows the sidebar overlay with a
+backdrop and the workspace still visible (dimmed) behind it, no horizontal
+scrollbar either way. The MAS-104 heading-focus effect used to also
+`scrollIntoView` on a phone, from when the sidebar stacked above the
+workspace and was worth scrolling past; the drawer redesign left only the
+compact toggle there, so that scroll was removed — it was hiding the toggle
+off the top of the screen for nothing (`App.tsx`, the `focused` effect).
 
 ### What costs money (MAS-122)
 
 `src/cost.ts` holds the estimates — `2 * ceil(chunks / 8)` for a review (one
 call per batch of 8 for the risks, one for the key terms), 2 for a question —
 so no number is written twice. Every paid control names its cost before it is
-pressed: the review button reads "Review risks"/"Review again" with
-"≈ 4 model calls" beside it and in its accessible name, and the composer
-says "Each question uses about 2 model calls". **Review again** takes two
-clicks: the first opens an amber confirm ("Run the review again? It grades all
+pressed: the Actions menu's **Review risks**/**Review again** item (MAS-126)
+reads "≈ 4 model calls" beside it and in its accessible name, and the
+composer says "Each question uses about 2 model calls". **Review again**
+takes two clicks: the first opens an amber confirm ("Run the review again? It grades all
 12 passages from scratch and costs ≈ 4 model calls." / Yes, run it /
 Cancel), because a second review re-spends what the first one cost; a first
 review does not, since nothing has been paid for yet.
@@ -492,6 +571,25 @@ the quote, grey "Can't compare" when the value is text-only — from
 "· n deviate(s)" and turns amber when n > 0; the count is also the
 Deviations tile of the summary strip.
 
+### Editable standards (MAS-120)
+
+"Company standards" in the sidebar footer (`App.tsx`, below the contract
+list) opens `/standards` (`pages/Standards.tsx`, registered in `pages/index.ts`
+like the public static pages, but reached from the workspace rather than the
+footer). One `.card` per standard (`GET /api/standards`): the current text,
+a "MaSign default" / "Customised" pill, a small form matched to that term's
+shape (a days number for payment deadline/notice period, a percent for late
+payment, a mode selector plus the matching field for termination cost —
+no-fee / percent-of-remaining-fees / a fixed amount in USD, EUR or SEK), and
+a "Restore MaSign's default" link, disabled once the standard already is the
+default. Saving (`PUT`) or resetting (`DELETE`) replaces just that card's row
+in local state from the response — no full reload — and a save the API
+rejects (422) is never applied: the card keeps showing its last-saved value
+and the toast carries the API's `detail` verbatim, same as every other error
+toast. Saving takes effect immediately everywhere a standard verdict is
+shown (Overview, key terms, export) with no re-review, since the comparison
+is rule-based, not a model call.
+
 ## Coverage (MAS-84)
 
 `CoverageNotice` (MAS-104) renders `review.coverage` once for the whole
@@ -593,6 +691,31 @@ A "Show in contract" click here calls `onShowSource(contract, ref)`, which
 selects that contract (exiting the comparison) and then calls the normal
 `showSource` — landing on that contract's own Sources tab via the MAS-83/
 MAS-109 machinery unchanged, rather than a parallel in-place viewer.
+
+## Compare embedding models (MAS-62)
+
+A different comparison from MAS-113's above: one contract, one question,
+answered independently by both embedding profiles. `QuestionPanel` shows a
+second button, "Compare models (≈ 4 model calls)", next to "Ask" — but only
+when a single contract is the search scope *and* that contract's
+`indexed_profiles` already includes `"quality"` (`GET /api/contracts`'s own
+field, MAS-62); there is no button that would just 409. The cost is stated on
+the button itself before it is pressed (CLAUDE.md's UI budget rule, MAS-122):
+comparing is two full `/api/query` round trips, each with its own paid answer
++ risk call, so it costs twice a normal question, not the same.
+
+Clicking it fires `Promise.all([askQuestion(..., 'portable'), askQuestion(...,
+'quality')])` under one `toast.promise` (one loading/error message for the
+pair; a rejection from either side reports the API's `detail` and renders
+neither side, rather than showing a half comparison) and hands both responses
+to `ModelCompareView`, which replaces the normal `AnswerView` in the Ask tab
+until "Exit comparison". Each side is `AnswerView` itself, unmodified, in a
+two-column grid (one column under 640px) headed "Portable · ModernBERT" /
+"Quality · Qwen3-Embedding-4B" — citations, risk pills, click-to-source and
+the withheld/not-found states all render exactly as a single answer would,
+since nothing about rendering one side needed to change to show two.
+Both sides are still stored as ordinary questions (MAS-102): comparing
+appears twice in "Previous questions", once per profile.
 
 ## Risk review (MAS-81)
 

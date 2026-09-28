@@ -64,7 +64,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Select a contract to get started')
 
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
 
     const tabs = screen.getAllByRole('tab')
     expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Sources'])
@@ -76,7 +76,7 @@ describe('contract workspace tabs (MAS-95)', () => {
 
   it('"Show in contract" switches to the Sources tab at the passage', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await screen.findByText('Half the fees.')
 
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
@@ -91,7 +91,7 @@ describe('contract workspace tabs (MAS-95)', () => {
 
   it('offers a way back to where a source click came from (MAS-109)', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await screen.findByText('Half the fees.')
     expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
 
@@ -106,7 +106,7 @@ describe('contract workspace tabs (MAS-95)', () => {
 
   it('remembers Ask MaSign, not Overview, when a source is opened from a cited answer', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await userEvent.click(screen.getByRole('tab', { name: 'Overview' }))
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
@@ -120,7 +120,7 @@ describe('contract workspace tabs (MAS-95)', () => {
 
   it('moves between tabs with the keyboard and keeps the draft question', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await userEvent.type(screen.getByLabelText('Ask about the contract'), 'What is the fee?')
 
@@ -143,7 +143,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     render(<App />)
 
     expect(await screen.findByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('button', { name: /northwind\.txt/ })[0]).toHaveAttribute('aria-pressed', 'true')
 
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     expect(window.location.hash).toBe('#nw/ask')
@@ -152,13 +152,13 @@ describe('contract workspace tabs (MAS-95)', () => {
   it('ignores a hash that names an unknown contract', async () => {
     window.location.hash = '#gone/ask'
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
   it('shows labelled, row-based PDF and export controls behind one compact menu (MAS-154)', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
 
     const menuButton = document.querySelector<HTMLElement>('details.actions-menu > summary')!
     const menu = menuButton.closest('details')!
@@ -166,7 +166,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     await userEvent.click(menuButton)
     expect(menu).toHaveAttribute('open')
 
-    const nav = within(menu).getByRole('navigation', { name: 'Export and print options' })
+    const nav = within(menu).getByRole('navigation', { name: 'Actions' })
     expect(within(nav).getByRole('link', { name: 'Export PDF' })).toHaveAttribute('href', '/api/contracts/nw/export.pdf')
     expect(within(nav).getByRole('link', { name: 'Export Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
     expect(within(nav).getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
@@ -176,9 +176,47 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(print).toHaveBeenCalled()
   })
 
+  it('offers "Review again" in the Actions menu and starts it after confirming (MAS-126)', async () => {
+    let started = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/contracts') return json(200, [northwind])
+      if (url.endsWith('/passages')) return json(200, passages)
+      if (url.endsWith('/review') && init?.method === 'POST') {
+        started = true
+        return json(202, { ...review, status: 'pending', chunks_checked: 0, complete: false })
+      }
+      if (url.endsWith('/risks')) return json(200, started ? { ...review, status: 'running', chunks_checked: 1, complete: false } : review)
+      return json(404, { detail: `unexpected ${url}` })
+    })
+
+    render(<App />)
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
+    await screen.findByText('Reviewed · 2 passages', { selector: '.status' })
+
+    const menuButton = document.querySelector<HTMLElement>('details.actions-menu > summary')!
+    const menu = menuButton.closest('details')!
+    await userEvent.click(menuButton)
+    const reviewItem = within(menu).getByRole('button', { name: /Review again/ })
+    expect(reviewItem).toHaveTextContent('≈ 2 model calls')
+
+    await userEvent.click(reviewItem)
+
+    // Picking it closes the menu; the actual re-spend confirmation (MAS-122)
+    // shows inline in the Overview, next to the review it affects.
+    expect(menu).not.toHaveAttribute('open')
+    expect(started).toBe(false) // the first click only asks
+    expect(screen.getByText(/Run the review again\?/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, run it' }))
+
+    expect(started).toBe(true)
+    expect(await screen.findByText(/Reviewing…/)).toBeInTheDocument()
+  })
+
   it('shows the contract header with file facts and review state, and the CTA opens the composer (MAS-104)', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
 
     const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
     expect(within(head).getByRole('heading', { level: 1 })).toHaveTextContent('northwind.txt')
@@ -193,7 +231,7 @@ describe('contract workspace tabs (MAS-95)', () => {
 
   it('has no API docs link in the header any more', async () => {
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
     expect(screen.queryByRole('link', { name: 'API docs' })).not.toBeInTheDocument()
   })
 })

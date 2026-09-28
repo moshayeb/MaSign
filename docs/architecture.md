@@ -18,6 +18,12 @@ files under `app/database/migrations/`; `run_migrations()` applies any not
 yet recorded in `schema_migrations` and runs on API startup, so
 `docker compose up --build` always brings a fresh database to the current
 schema. `app/database/repository.py` is the only module that issues SQL.
+Every table with a contract's data (`chunks`, `risk_reviews`, `key_terms`,
+`questions`, `contract_links`) has cascaded from `contracts` since it was
+added, so `DELETE /api/contracts/{id}` (MAS-126, exposing what was
+previously only an internal failed-upload cleanup, `repository.delete_contract`)
+is a single Postgres delete plus a best-effort Qdrant cleanup — no per-table
+cleanup code to keep in sync.
 
 ## Embeddings and vector store
 
@@ -40,14 +46,55 @@ instruction, which it adds itself so no caller has to know. It also exposes
 are not a safe proxy (number-dense clauses reach ~0.45 tokens/char). An oversized
 text reaching `embed_documents` is a bug and raises rather than being truncated.
 An unreachable embedding service is a 503 (`EmbeddingServiceError`) during a
-request and fatal at startup.
+request and fatal at startup for the required `portable` profile.
 
-`app/retrieval/vector_store.py` keeps one Qdrant collection, `contract_chunks`,
-where each point's id **is** the chunk's Postgres UUID and the payload carries
-`contract_id`, `chunk_index` and `text`. On upload, `app/retrieval/indexing.py`
-embeds the stored chunks, upserts them and writes the point id back to
-`chunks.embedding_id`; if that fails the contract is removed from both stores
-again so nothing unsearchable lingers.
+`app/retrieval/vector_store.py` keeps one Qdrant collection per profile —
+`contract_chunks` for `portable` (the pre-MAS-62 name, unchanged so an
+existing deployment's collection is never silently orphaned) and
+`contract_chunks_quality` for `quality` by default — where each point's id
+**is** the chunk's Postgres UUID (the same id in both collections; only the
+vector differs) and the payload carries `contract_id`, `chunk_index` and
+`text`. On upload, `app/retrieval/indexing.py`'s `index_contract()` embeds
+the stored chunks, upserts them and writes the point id back to
+`chunks.embedding_id`; if the required `portable` call fails the contract is
+removed from both stores again so nothing unsearchable lingers.
+
+### Compare mode (MAS-62)
+
+`get_embedder(profile)` / `get_vector_store(profile)` are `lru_cache`d per
+profile (`"portable"` or `"quality"`), not the pre-MAS-62 bare singletons —
+both profiles can be live in the same process at once. `quality`'s settings
+are the same `EMBEDDING_*`/`QDRANT_COLLECTION` names with a `QUALITY_`
+prefix, entirely independent of `portable`'s (`embeddings.is_profile_configured
+("quality")` is false, and nothing else about the app changes, unless
+`QUALITY_EMBEDDING_API_URL` is set — MaSign never guesses an operator's GPU
+server address). `docker-compose.quality.yml` is unrelated and unchanged: it
+still *replaces* the plain `EMBEDDING_*` config for a quality-only
+deployment; the `QUALITY_*` variables are the additive surface for running
+both at once.
+
+Every upload indexes the required `portable` profile as before, then,
+best-effort, `quality` if configured — its failure is logged and reported on
+the upload response (`indexed_profiles`, and a `contracts.indexed_profiles`
+column, migration 014) but never fails the upload or rolls back the portable
+indexing already committed to Qdrant (caught inside the request handler, not
+allowed to propagate, since Postgres only commits the whole request's writes
+together — an uncaught exception there would have rolled back the successful
+`portable` write too, orphaning its already-upserted Qdrant vectors). Chunks
+are stored once and chunked to one token budget at upload time (`portable`'s,
+the required profile); Qwen3-Embedding-4B's much larger context means those
+same chunks are automatically valid for `quality` too, so this is a
+deliberate choice, not an oversight — a hypothetical `quality` profile with a
+*smaller* max_tokens than `portable` would simply fail indexing for that
+profile (`EmbeddingInputTooLong`, caught the same way).
+
+`POST /api/query`'s `profile` field (default `portable`) selects which
+collection `_retrieve()` searches; requesting `quality` when it is not
+configured, or for a specific contract never indexed into it, is a 409 —
+Qdrant's own point count for that contract is the source of truth
+(`store.count(contract_id=...)`), not a separate "was this indexed" flag that
+could drift from it. The response echoes back which profile actually
+answered so the UI never has to assume.
 
 `app/retrieval/retriever.py` answers `/api/query`: it embeds the question (query
 prefix applied by the embedder), searches the collection — filtered to one
@@ -213,6 +260,30 @@ the pass completed) or `unchecked`. `GET /api/contracts/{id}/passages`
 returns the stored chunks in order for the frontend's contract-text reader
 (MAS-83), so every finding, key term and citation is one click from the
 text it quotes.
+
+## Editable standards (MAS-120)
+
+`app/key_terms/standards.py` compares a verified typed key term against a
+rule, not a model call: `compare(term_id, typed, params)` returns `meets`,
+`deviates`, `unknown` (stated, but not in a shape this standard can judge —
+e.g. a percent-of-fees fee against an amount cap, or an amount in a currency
+the standard isn't set in — MaSign never converts currencies or guesses) or
+`none` (no standard for this term). `DEFAULT_PARAMS` is MaSign's built-in
+position for the four numeric terms (payment deadline, late-payment
+interest, notice period, termination cost); `describe(term_id, params)`
+computes the one-line text from those numbers so it can never drift from
+what is actually stored. Since MAS-120 a `standards` row (migration 014,
+`term_id` primary key, `params` JSONB) overrides a term's default; a term
+with no row uses the default, and resetting (`DELETE /api/standards/{id}`)
+removes the row rather than ever writing default values back — the default
+lives in exactly one place. There is one shared set, not per-contract or
+per-user (MAS-143's accounts/workspaces are not merged as of this ticket;
+scoping standards per workspace is a follow-up, not bundled in here).
+`app/api/routes.py` loads the saved standards once per request
+(`repository.get_standards`) and threads them into `ContractSummary`,
+`KeyTermValue` and `KeyTermsResponse`, so a saved standard changes every
+deviation shown — the Overview tab's count, the key-terms list, the export —
+immediately, with no re-review and no model call.
 
 ## Coverage (MAS-84)
 

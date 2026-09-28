@@ -178,6 +178,23 @@ def set_embedding_ids(
             )
 
 
+def add_indexed_profile(connection: psycopg.Connection, contract_id: UUID, profile: str) -> None:
+    """Record that `profile` has been successfully indexed for this contract (MAS-62).
+
+    Idempotent (array_append is skipped if already present); called after
+    indexing actually succeeds, never speculatively before it.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE contracts
+            SET indexed_profiles = array_append(indexed_profiles, %s)
+            WHERE id = %s AND NOT (%s = ANY(indexed_profiles))
+            """,
+            (profile, contract_id, profile),
+        )
+
+
 def delete_contract(connection: psycopg.Connection, contract_id: UUID) -> bool:
     """Remove a contract and, via the FK cascade, its chunks and contract_links rows."""
     with connection.transaction():
@@ -768,3 +785,31 @@ def list_audit_events(connection: psycopg.Connection, workspace_id: UUID, limit:
             (workspace_id, limit),
         )
         return [AuditEvent(**row) for row in cursor.fetchall()]
+
+
+def get_standards(connection: psycopg.Connection) -> dict[str, dict]:
+    """Stored overrides only (MAS-120) -- a term with no row here uses MaSign's
+    built-in default (`app.key_terms.standards.DEFAULT_PARAMS`), never a row
+    holding default values."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT term_id, params FROM standards")
+        return {row["term_id"]: row["params"] for row in cursor.fetchall()}
+
+
+def set_standard(connection: psycopg.Connection, term_id: str, params: dict) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO standards (term_id, params, updated_at)
+            VALUES (%s, %s, now())
+            ON CONFLICT (term_id) DO UPDATE SET params = EXCLUDED.params, updated_at = now()
+            """,
+            (term_id, Jsonb(params)),
+        )
+
+
+def delete_standard(connection: psycopg.Connection, term_id: str) -> bool:
+    """Reset one term to MaSign's default by removing its override row."""
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM standards WHERE term_id = %s", (term_id,))
+        return cursor.rowcount > 0

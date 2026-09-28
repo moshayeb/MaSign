@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
@@ -21,12 +22,16 @@ from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import find_external_references
 from app.key_terms.deadlines import compute_deadlines
-from app.key_terms.standards import STANDARDS
+from app.key_terms.standards import STANDARD_TERM_IDS, DEFAULT_PARAMS, describe as describe_standard
 from app.key_terms.standards import compare as compare_to_standard
+from app.key_terms.standards import effective_params as effective_standard_params
+from app.key_terms.standards import validate_params as validate_standard_params
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
-from app.retrieval.embeddings import Embedder
+from app.retrieval import embeddings as embeddings_module
+from app.retrieval import vector_store as vector_store_module
+from app.retrieval.embeddings import Embedder, ProfileNotConfigured
 from app.retrieval.indexing import index_contract
 from app.retrieval.retriever import DEFAULT_LIMIT, retrieve_contract_context
 from app.retrieval.vector_store import ChunkHit, VectorStore, VectorStoreError
@@ -50,6 +55,11 @@ class QueryRequest(BaseModel):
     # Restrict the search to one contract; omit to search every uploaded contract.
     contract_id: UUID | None = None
     limit: int = Field(DEFAULT_LIMIT, ge=1, le=20)
+    # Compare mode (MAS-62): which embedding index to search. "quality" is
+    # only usable when it is both configured and actually indexed for the
+    # contract(s) in scope -- otherwise the request is refused (409), never
+    # silently answered from "portable" under the "quality" label.
+    profile: str = embeddings_module.DEFAULT_PROFILE
 
     @field_validator("question", mode="before")
     @classmethod
@@ -57,6 +67,13 @@ class QueryRequest(BaseModel):
         # Trim before min_length applies, so "   " is rejected like "" and the
         # retriever never sees surrounding whitespace.
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        if value not in embeddings_module.PROFILES:
+            raise ValueError(f"profile must be one of {embeddings_module.PROFILES}.")
+        return value
 
 
 class RetrievedChunk(BaseModel):
@@ -119,12 +136,14 @@ class QueryResponse(BaseModel):
     blocked_passages: list[int] = []
     # Passages read minus their injected sentences (MAS-99): the model saw the rest.
     redacted_passages: list[int] = []
+    # Which embedding index answered (MAS-62 compare mode): "portable" or "quality".
+    profile: str = embeddings_module.DEFAULT_PROFILE
 
 
 # Terms the contract-list summary strip needs (MAS-101): the two shown as
 # text, plus every term with a standard, to count deviations without a
 # second pass over the full key-terms table.
-SUMMARY_TERM_IDS = ("recurring_fee", "initial_term", *STANDARDS.keys())
+SUMMARY_TERM_IDS = ("recurring_fee", "initial_term", *STANDARD_TERM_IDS)
 
 
 class ContractSummary(BaseModel):
@@ -158,12 +177,21 @@ class ContractSummary(BaseModel):
     deviations: int = 0
     # complete | partial | none — how much of the key-terms pass has run.
     key_terms_status: str = "none"
+    # Compare mode (MAS-62): which embedding profiles this contract can
+    # currently be searched/asked under. Always includes "portable"; "quality"
+    # only once its best-effort indexing has actually succeeded for it.
+    indexed_profiles: list[str] = ["portable"]
 
     @classmethod
     def from_model(
-        cls, contract: Contract, review: RiskSummary | None = None, key_terms: dict[str, KeyTermRow] | None = None
+        cls,
+        contract: Contract,
+        review: RiskSummary | None = None,
+        key_terms: dict[str, KeyTermRow] | None = None,
+        standards: dict[str, dict] | None = None,
     ) -> "ContractSummary":
         key_terms = key_terms or {}
+        standards = standards or {}
         if review and review.key_terms_complete:
             key_terms_status = "complete"
         elif review and review.chunks_checked > 0:
@@ -172,8 +200,9 @@ class ContractSummary(BaseModel):
             key_terms_status = "none"
         deviations = sum(
             1
-            for term_id in STANDARDS
-            if (row := key_terms.get(term_id)) is not None and compare_to_standard(term_id, row.typed).status == "deviates"
+            for term_id in STANDARD_TERM_IDS
+            if (row := key_terms.get(term_id)) is not None
+            and compare_to_standard(term_id, row.typed, standards.get(term_id)).status == "deviates"
         )
         return cls(
             contract_id=contract.id,
@@ -198,6 +227,7 @@ class ContractSummary(BaseModel):
             high_findings=review.high_findings if review else 0,
             deviations=deviations,
             key_terms_status=key_terms_status,
+            indexed_profiles=list(contract.indexed_profiles),
         )
 
 
@@ -261,7 +291,15 @@ class KeyTermValue(BaseModel):
     standard: StandardVerdict
 
     @classmethod
-    def from_rows(cls, term_id: str, rows: list[KeyTermRow], chunk_index: dict[UUID, int], *, checked: bool) -> "KeyTermValue":
+    def from_rows(
+        cls,
+        term_id: str,
+        rows: list[KeyTermRow],
+        chunk_index: dict[UUID, int],
+        *,
+        checked: bool,
+        standards: dict[str, dict] | None = None,
+    ) -> "KeyTermValue":
         term = TERM_BY_ID[term_id]
         sources = [
             KeyTermSource(
@@ -295,7 +333,7 @@ class KeyTermValue(BaseModel):
             value=first.value,
             source=first,
             others=others,
-            standard=StandardVerdict(**compare_to_standard(term.id, first.typed).__dict__),
+            standard=StandardVerdict(**compare_to_standard(term.id, first.typed, (standards or {}).get(term.id)).__dict__),
         )
 
 
@@ -433,13 +471,21 @@ class KeyTermsResponse(BaseModel):
 
     @classmethod
     def from_models(
-        cls, review: RiskReview, rows: list[KeyTermRow], chunk_index: dict[UUID, int], coverage: Coverage | None = None
+        cls,
+        review: RiskReview,
+        rows: list[KeyTermRow],
+        chunk_index: dict[UUID, int],
+        coverage: Coverage | None = None,
+        standards: dict[str, dict] | None = None,
     ) -> "KeyTermsResponse":
         checked = review.status == "done" and review.key_terms_complete
         by_term: dict[str, list[KeyTermRow]] = {term.id: [] for term in KEY_TERMS}
         for row in rows:
             by_term.setdefault(row.term, []).append(row)
-        terms = [KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked) for term in KEY_TERMS]
+        terms = [
+            KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked, standards=standards)
+            for term in KEY_TERMS
+        ]
         return cls(
             contract_id=review.contract_id,
             status=review.status,
@@ -486,6 +532,7 @@ class RiskReviewResponse(BaseModel):
         chunk_index: dict[UUID, int],
         terms: list[KeyTermRow] = (),
         coverage: Coverage | None = None,
+        standards: dict[str, dict] | None = None,
     ) -> "RiskReviewResponse":
         findings = [
             ReviewFinding(
@@ -519,7 +566,7 @@ class RiskReviewResponse(BaseModel):
             findings=findings,
             categories=categories,
             key_terms_complete=review.status == "done" and review.key_terms_complete,
-            key_terms=(key_terms := KeyTermsResponse.from_models(review, list(terms), chunk_index)).terms,
+            key_terms=(key_terms := KeyTermsResponse.from_models(review, list(terms), chunk_index, standards=standards)).terms,
             deadlines=key_terms.deadlines,
             coverage=coverage,
         )
@@ -572,6 +619,24 @@ async def upload_contract(
     except Exception:
         await run_in_threadpool(_discard_failed_upload, db, store, contract.id)
         raise
+
+    # Compare mode (MAS-62): quality indexing is optional and best-effort.
+    # Its failure must never fail the upload, or roll back the portable
+    # indexing already committed to Qdrant above -- caught here, never
+    # allowed to propagate out of the request (see MAS-62 spec comment on
+    # the ticket for why this would otherwise corrupt the transaction).
+    if embeddings_module.is_profile_configured("quality"):
+        try:
+            quality_embedder = embeddings_module.get_embedder("quality")
+            quality_store = vector_store_module.get_vector_store("quality")
+            await run_in_threadpool(index_contract, db, contract, quality_embedder, quality_store)
+            await run_in_threadpool(repository.add_indexed_profile, db, contract.id, "quality")
+            contract = dataclasses.replace(contract, indexed_profiles=[*contract.indexed_profiles, "quality"])
+        except Exception as error:
+            logger.warning(
+                "Compare mode: quality-profile indexing failed for contract %s (%s); portable remains available.",
+                contract.id, error,
+            )
 
     await run_in_threadpool(
         repository.create_audit_event,
@@ -632,8 +697,9 @@ def list_contracts(
     # either grows a workspace filter of its own later.
     reviews = repository.list_risk_summaries(db)
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS)
+    standards = repository.get_standards(db)
     return [
-        ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id))
+        ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id), standards)
         for c in repository.list_contracts(db, workspace.id)
     ]
 
@@ -648,7 +714,31 @@ def get_contract(
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
-    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms)
+    standards = repository.get_standards(db)
+    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms, standards)
+
+
+@router.delete("/contracts/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_contract(
+    contract_id: UUID,
+    db: psycopg.Connection = Depends(get_db),
+    store: VectorStore = Depends(get_vector_store),
+) -> Response:
+    """Permanently remove a contract (MAS-126): its chunks, review, key terms,
+    stored questions and links cascade in Postgres; its vectors are removed
+    from Qdrant too. Irreversible -- the frontend confirms before calling this.
+    """
+    if not repository.delete_contract(db, contract_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    try:
+        store.delete_contract(contract_id)
+    except VectorStoreError as error:
+        # Postgres is the source of truth for "does this contract exist"; a
+        # leftover Qdrant point for a deleted contract cannot be searched
+        # back into existence (MAS-60 already drops points whose contract no
+        # longer exists), so this is logged, not raised -- the delete itself succeeded.
+        logger.warning("Delete: could not remove vectors for contract %s: %s", contract_id, error)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 class LinkContractRequest(BaseModel):
@@ -896,7 +986,8 @@ def get_contract_key_terms(
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
     coverage = _coverage_for_review(db, review, contract, workspace.id)
-    return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage)
+    standards = repository.get_standards(db)
+    return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage, standards)
 
 
 @router.get("/contracts/{contract_id}/export.{fmt}")
@@ -920,7 +1011,10 @@ def export_contract_review(
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
-    terms_body = KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage)
+    standards = repository.get_standards(db)
+    terms_body = KeyTermsResponse.from_models(
+        review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage, standards
+    )
     documents = {
         item.id: item.filename
         for bundle_id in repository.bundle_contract_ids(db, contract_id)
@@ -973,7 +1067,10 @@ def _review_response(db: psycopg.Connection, review: RiskReview, workspace_id: U
     }
     contract = repository.get_contract(db, review.contract_id, workspace_id)
     coverage = _coverage_for_review(db, review, contract, workspace_id) if contract else None
-    return RiskReviewResponse.from_models(review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage)
+    standards = repository.get_standards(db)
+    return RiskReviewResponse.from_models(
+        review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage, standards
+    )
 
 
 def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: Contract, workspace_id: UUID) -> Coverage:
@@ -1023,6 +1120,18 @@ async def query_contract(
     # before either model call (MAS-90); the guardrail would catch it in the
     # answer call, but the risk call runs alongside and would still be spent.
     refuse_injected_question(request.question)
+    # Compare mode (MAS-62): the injected `embedder`/`store` above are always
+    # the "portable" profile (dependencies.py), which is also what test
+    # fixtures override via app.dependency_overrides -- untouched for the
+    # default case. A non-default profile is resolved directly here instead;
+    # "quality" not being configured at all is a 409, immediately, never a
+    # silent fallback to "portable" answered under the "quality" label.
+    if request.profile != embeddings_module.DEFAULT_PROFILE:
+        try:
+            embedder = embeddings_module.get_embedder(request.profile)
+            store = vector_store_module.get_vector_store(request.profile)
+        except ProfileNotConfigured as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     # Embedding the question is CPU work, the lookups are synchronous and the
     # model call blocks, so all of it runs off the event loop like the upload path.
     hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model, workspace.id)
@@ -1056,6 +1165,7 @@ async def query_contract(
         recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked, withheld=len(risks.blocked)),
         blocked_passages=sorted(set(answer.blocked) | set(risks.blocked)),
         redacted_passages=sorted(set(answer.redacted) | set(risks.redacted)),
+        profile=request.profile,
     )
 
     # Stored so a reviewer coming back does not repeat a call already paid
@@ -1112,6 +1222,20 @@ def _retrieve_and_answer(
 def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore, workspace_id: UUID) -> list[ChunkHit]:
     if request.contract_id is not None and repository.get_contract(db, request.contract_id, workspace_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    # Compare mode (MAS-62): a non-default profile may be configured server-wide
+    # yet never have indexed this particular contract (turned on after upload,
+    # or best-effort indexing failed for it) -- say so, rather than silently
+    # searching zero points and answering "Not found in contract." under the
+    # requested profile's name.
+    if (
+        request.contract_id is not None
+        and request.profile != embeddings_module.DEFAULT_PROFILE
+        and store.count(contract_id=request.contract_id) == 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This contract has not been indexed for the {request.profile!r} profile yet.",
+        )
     # A contract's bundle (MAS-137/138) is itself plus any linked documents;
     # a contract with no links is a bundle of one, same search as before.
     bundle_ids = repository.bundle_contract_ids(db, request.contract_id) if request.contract_id is not None else None
@@ -1124,3 +1248,57 @@ def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder,
         workspace_id=workspace_id,
         limit=request.limit,
     )
+
+
+# --- editable company standards (MAS-120) ---------------------------------------------------
+
+
+class StandardOut(BaseModel):
+    id: str
+    name: str
+    text: str
+    params: dict
+    # False once a value has been saved for this term; True while it is
+    # still MaSign's built-in default (no row in the `standards` table).
+    is_default: bool
+
+
+class StandardUpdateRequest(BaseModel):
+    params: dict
+
+
+@router.get("/standards", response_model=list[StandardOut])
+def list_standards(db: psycopg.Connection = Depends(get_db)) -> list[StandardOut]:
+    stored = repository.get_standards(db)
+    return [
+        StandardOut(
+            id=term_id,
+            name=TERM_BY_ID[term_id].name,
+            text=describe_standard(term_id, effective_standard_params(term_id, stored.get(term_id))),
+            params=effective_standard_params(term_id, stored.get(term_id)),
+            is_default=term_id not in stored,
+        )
+        for term_id in STANDARD_TERM_IDS
+    ]
+
+
+@router.put("/standards/{term_id}", response_model=StandardOut)
+def update_standard(term_id: str, body: StandardUpdateRequest, db: psycopg.Connection = Depends(get_db)) -> StandardOut:
+    if term_id not in STANDARD_TERM_IDS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
+    try:
+        params = validate_standard_params(term_id, body.params)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+    repository.set_standard(db, term_id, params)
+    return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=False)
+
+
+@router.delete("/standards/{term_id}", response_model=StandardOut)
+def reset_standard(term_id: str, db: psycopg.Connection = Depends(get_db)) -> StandardOut:
+    """Restore MaSign's built-in default for one standard."""
+    if term_id not in STANDARD_TERM_IDS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
+    repository.delete_standard(db, term_id)
+    params = DEFAULT_PARAMS[term_id]
+    return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=True)

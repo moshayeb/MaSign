@@ -20,6 +20,8 @@ from app.database import repository
 from app.database.migrations import run_migrations
 from app.database import repository
 from app.database.session import get_connection
+from app.retrieval import embeddings
+from app.retrieval import vector_store as vector_store_module
 from app.retrieval.embeddings import EmbeddingServiceError, get_embedder
 from app.retrieval.indexing import ensure_index_current
 from app.retrieval.vector_store import VectorStore, VectorStoreError, get_vector_store
@@ -58,19 +60,42 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # chunks if not — so the first upload or query doesn't pay for either.
         # An unreachable embedding service is fatal here: nothing can be
         # indexed or queried without it.
-        embedder = get_embedder()
+        embedder = get_embedder(embeddings.DEFAULT_PROFILE)
         try:
             embedder.warm_up()
         except EmbeddingServiceError as error:
             logger.error("Cannot start: %s", error)
             raise
         with get_connection() as db:
-            ensure_index_current(db, embedder, get_vector_store())
+            ensure_index_current(db, embedder, get_vector_store(vector_store_module.DEFAULT_PROFILE))
             # Rows from before MAS-107 get their document kind from the stored chunks: by rule, free.
             classified = repository.classify_unclassified_contracts(db)
             if classified:
                 logger.info("Document kind set for %d contract(s) uploaded before it existed", classified)
         logger.info("Embeddings ready: %s (%d dims)", embedder.model_name, embedder.dimension)
+
+        # Compare mode (MAS-62): the quality profile is entirely optional --
+        # unconfigured is the common case (no GPU host), so it is prepared
+        # best-effort and never blocks startup the way the required portable
+        # profile does above. A configured-but-unreachable quality server is
+        # logged loudly (an operator who set QUALITY_EMBEDDING_API_URL
+        # expects it to work) but the app still starts on portable alone.
+        if embeddings.is_profile_configured("quality"):
+            try:
+                quality_embedder = get_embedder("quality")
+                quality_embedder.warm_up()
+                with get_connection() as db:
+                    ensure_index_current(db, quality_embedder, get_vector_store("quality"))
+                logger.info(
+                    "Compare mode ready: quality profile is %s (%d dims)",
+                    quality_embedder.model_name, quality_embedder.dimension,
+                )
+            except (EmbeddingServiceError, VectorStoreError) as error:
+                logger.error(
+                    "Compare mode: quality profile is configured but not ready (%s); "
+                    "continuing on the portable profile alone.", error,
+                )
+
         # Only reads the configuration (and warns if no API key is set); the
         # first real call to the model happens on the first question.
         get_chat_model()
@@ -223,6 +248,7 @@ FRONTEND_PAGES = [
     "/how-it-works",
     "/what-masign-checks",
     "/educational-disclaimer",
+    "/standards",
 ]
 
 

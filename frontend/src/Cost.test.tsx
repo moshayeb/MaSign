@@ -1,9 +1,37 @@
+import { useRef, useState } from 'react'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import type { Contract, RiskReview } from './api'
-import { RiskReviewPanel } from './components/RiskReviewPanel'
+import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
 import { reviewCalls, reviewCostLabel } from './cost'
+
+// The "Review risks"/"Review again" trigger now lives in the workspace
+// header's Actions menu (MAS-126); this stand-in reproduces that, the same
+// way App does, without pulling in the whole App just to click one button.
+function PanelWithTrigger({ contract, ...props }: ComponentProps<typeof RiskReviewPanel>) {
+  const ref = useRef<RiskReviewPanelHandle>(null)
+  const [action, setAction] = useState<ReviewAction | null>(null)
+  return (
+    <>
+      {action && (
+        <>
+          <span className="muted small cost-hint">{action.cost}</span>
+          <button
+            type="button"
+            onClick={() => ref.current?.reviewAgain()}
+            disabled={action.disabled}
+            aria-label={`${action.label} — ${action.cost}`}
+          >
+            {action.label}
+          </button>
+        </>
+      )}
+      <RiskReviewPanel {...props} contract={contract} ref={ref} onReviewAction={setAction} />
+    </>
+  )
+}
 
 vi.mock('sonner', async () => {
   const actual = await vi.importActual<typeof import('sonner')>('sonner')
@@ -83,7 +111,7 @@ describe('recovering from a failed review read (MAS-122)', () => {
     let fail = true
     mockApi(() => (fail ? json(503, { detail: 'Service Unavailable' }) : json(200, review)))
 
-    render(<RiskReviewPanel contract={northwind} />)
+    render(<PanelWithTrigger contract={northwind} />)
 
     expect(await screen.findByText('Unavailable', { selector: '.status' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Review risks/ })).not.toBeInTheDocument()
@@ -100,7 +128,7 @@ describe('recovering from a failed review read (MAS-122)', () => {
   it('still offers the first review for a contract that was never reviewed (404), with its cost', async () => {
     mockApi(() => json(404, { detail: 'This contract has not been reviewed for risks yet.' }))
 
-    render(<RiskReviewPanel contract={{ ...northwind, risk_status: null }} />)
+    render(<PanelWithTrigger contract={{ ...northwind, risk_status: null }} />)
 
     const button = await screen.findByRole('button', { name: 'Review risks — ≈ 4 model calls' })
     expect(screen.getByText('≈ 4 model calls')).toBeInTheDocument()
@@ -114,7 +142,7 @@ describe('asking twice for a paid re-review (MAS-122)', () => {
   it('shows the cost, asks before spending it, and does nothing at all on Cancel', async () => {
     mockApi(() => json(200, review))
 
-    render(<RiskReviewPanel contract={northwind} />)
+    render(<PanelWithTrigger contract={northwind} />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Review again — ≈ 4 model calls' }))
     expect(posts).toEqual([]) // the first click only asks

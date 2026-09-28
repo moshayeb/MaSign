@@ -30,6 +30,9 @@ export interface Contract {
   high_findings?: number
   deviations?: number
   key_terms_status?: 'complete' | 'partial' | 'none'
+  // Compare mode (MAS-62): which embedding profiles this contract can
+  // currently be asked under. Always includes "portable".
+  indexed_profiles?: EmbeddingProfile[]
 }
 
 export type DocumentKind = 'contract' | 'uncertain' | 'not_contract'
@@ -87,6 +90,13 @@ export function listContracts(): Promise<Contract[]> {
   return request<Contract[]>('/api/contracts')
 }
 
+// Irreversible (MAS-126): its chunks, review, key terms, stored questions
+// and links cascade in Postgres, and its vectors are removed from Qdrant.
+// The UI confirms before calling this.
+export function deleteContract(contractId: string): Promise<void> {
+  return request<void>(`/api/contracts/${contractId}`, { method: 'DELETE' })
+}
+
 export interface RetrievedChunk {
   chunk_id: string
   contract_id: string
@@ -115,6 +125,12 @@ export interface RiskFlag {
 
 export type AnswerStatus = 'answered' | 'not_found' | 'withheld'
 
+// Compare mode (MAS-62): which embedding index a question was searched
+// against. "portable" (ModernBERT) is always available; "quality"
+// (Qwen3-Embedding-4B) only once it is both configured on the server and
+// actually indexed for the contract in question (see Contract.indexed_profiles).
+export type EmbeddingProfile = 'portable' | 'quality'
+
 export interface QueryResponse {
   answer: string
   // "withheld": every retrieved passage was withheld by the guardrail and the
@@ -133,13 +149,15 @@ export interface QueryResponse {
   blocked_passages: number[]
   // Passages the model read minus their injected sentences (MAS-99).
   redacted_passages?: number[]
+  // Which index answered (MAS-62).
+  profile: EmbeddingProfile
 }
 
-export function askQuestion(question: string, contractId: string | null, limit = 5): Promise<QueryResponse> {
+export function askQuestion(question: string, contractId: string | null, limit = 5, profile: EmbeddingProfile = 'portable'): Promise<QueryResponse> {
   return request<QueryResponse>('/api/query', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ question, contract_id: contractId, limit }),
+    body: JSON.stringify({ question, contract_id: contractId, limit, profile }),
   })
 }
 
@@ -375,4 +393,31 @@ export function logout(): Promise<void> {
 
 export function getCurrentUser(): Promise<CurrentUser> {
   return request<CurrentUser>('/api/auth/me')
+}
+
+// --- editable company standards (MAS-120) -----------------------------------
+
+export interface Standard {
+  id: string
+  name: string
+  // The one line shown next to a verdict, computed server-side from `params`.
+  text: string
+  params: Record<string, unknown>
+  // False once a value has been saved for this term.
+  is_default: boolean
+}
+
+export function listStandards(): Promise<Standard[]> {
+  return request<Standard[]>('/api/standards')
+}
+
+export function saveStandard(id: string, params: Record<string, unknown>): Promise<Standard> {
+  return request<Standard>(`/api/standards/${id}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ params }),
+  })
+}
+
+export function resetStandard(id: string): Promise<Standard> {
+  return request<Standard>(`/api/standards/${id}`, { method: 'DELETE' })
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { toast } from 'sonner'
 import { ApiError, getContractRisks, listContractLinks, reviewContract, type Contract, type ContractLink, type RiskReview } from '../api'
 import { ContractLinks } from './ContractLinks'
@@ -10,6 +10,24 @@ import { SummaryStrip, type SummaryTarget } from './SummaryStrip'
 import { rubricMayNotApply } from '../reviewStatus'
 import { reviewCostLabel } from '../cost'
 
+// The paid re-review trigger lives in the workspace header's Actions menu
+// (MAS-126), not this panel, but the confirm-before-re-spend step (MAS-122)
+// and the actual start/poll logic stay owned here. `ref` is how the Actions
+// menu reaches it.
+export interface RiskReviewPanelHandle {
+  reviewAgain: () => void
+}
+
+// What the Actions menu's item should show right now, or null while it
+// should not appear at all (loading, unavailable, or already mid-confirm --
+// the confirm banner itself is the action then, matching the pre-MAS-126
+// inline button's own visibility rule exactly).
+export interface ReviewAction {
+  label: 'Review risks' | 'Review again'
+  cost: string
+  disabled: boolean
+}
+
 interface Props {
   contract: Contract
   // How often to re-read the review while it is pending or running.
@@ -20,7 +38,11 @@ interface Props {
   onShowSource?: (source: SourceRef) => void
   // Every review this panel reads, so the Ask tab can rank its suggestions (MAS-108).
   onReview?: (review: RiskReview | null) => void
+  // The Actions menu's "Review risks"/"Review again" item, recomputed
+  // whenever it should change (MAS-126); null hides the item entirely.
+  onReviewAction?: (action: ReviewAction | null) => void
   contracts?: Contract[]
+  ref?: Ref<RiskReviewPanelHandle>
 }
 
 const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
@@ -33,7 +55,7 @@ const NO_CONTRACTS: Contract[] = []
 // summary strip, one coverage notice, the key terms and the risk findings.
 // A clean category reads as "reviewed, nothing found" only when every
 // passage was graded — never "not looked at".
-export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview, contracts = NO_CONTRACTS }: Props) {
+export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSource, onReview, onReviewAction, contracts = NO_CONTRACTS, ref }: Props) {
   const [review, setReview] = useState<RiskReview | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'never' | 'error' | 'retrying'>('loading')
   const [pollFailures, setPollFailures] = useState(0)
@@ -47,7 +69,9 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const coverageRef = useRef<HTMLDetailsElement>(null)
   // Where a summary tile jumps to (MAS-124).
   const keyTermsRef = useRef<HTMLElement>(null)
-  const reviewCardRef = useRef<HTMLElement>(null)
+  // The "View complete analysis" fold (MAS-126): wraps the full findings
+  // list, the clean-categories line and KeyTermsCard.
+  const detailRef = useRef<HTMLDetailsElement>(null)
   const [links, setLinks] = useState<ContractLink[]>([])
 
   const load = useCallback(async () => {
@@ -139,6 +163,13 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
     }
   }
 
+  // The Actions menu (MAS-126) triggers this instead of holding its own copy
+  // of the confirm-before-re-spend logic; a first-ever review skips straight
+  // to starting, same as the old inline button did.
+  useImperativeHandle(ref, () => ({
+    reviewAgain: () => (review ? setConfirming(true) : void start()),
+  }))
+
   // "Nothing found" is a claim about the whole contract; it is only true
   // when every passage was graded. Otherwise an empty category is
   // "unable to determine" (MAS-87).
@@ -152,11 +183,23 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   // What pressing the paid button would spend (MAS-122).
   const cost = reviewCostLabel(review?.chunks_total || contract.chunk_count)
 
-  // A tile's number is the way into the section that produced it.
+  // Tells the Actions menu (MAS-126) what to show, exactly matching the
+  // pre-MAS-126 inline button's own visibility rule: hidden while loading,
+  // unavailable, running, or already mid-confirm (the confirm banner is the
+  // action then).
+  useEffect(() => {
+    const show = !running && state !== 'loading' && state !== 'error' && !confirming
+    onReviewAction?.(show ? { label: review ? 'Review again' : 'Review risks', cost, disabled: starting } : null)
+  }, [running, state, confirming, review, cost, starting, onReviewAction])
+
+  // A tile's number is the way into the section that produced it. Key terms
+  // and the full risk review both live behind the "View complete analysis"
+  // fold (MAS-126) -- for 'review' the fold itself is the scroll target.
   function jumpTo(target: SummaryTarget) {
-    const element = target === 'key-terms' ? keyTermsRef.current : target === 'coverage' ? coverageRef.current : reviewCardRef.current
+    const element = target === 'key-terms' ? keyTermsRef.current : target === 'coverage' ? coverageRef.current : detailRef.current
     if (!element) return
     if (target === 'coverage') element.setAttribute('open', '')
+    if (target === 'key-terms' || target === 'review') detailRef.current?.setAttribute('open', '')
     element.scrollIntoView({ block: 'start', behavior: 'smooth' })
     element.focus?.({ preventScroll: true })
   }
@@ -187,53 +230,39 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           }}
         />
       )}
-      {/* The key terms come from the same review row, so the card shares this panel's load and polling (MAS-82). */}
-      {review && <KeyTermsCard review={review} contracts={contracts} onShowSource={onShowSource} ref={keyTermsRef} />}
-      <section className="card review" aria-live="polite" tabIndex={-1} ref={reviewCardRef}>
-        <div className="answer-header">
-          <h2>
-            Risk review
-            {state === 'loading' && <span className="status none">Loading…</span>}
-            {state === 'never' && <span className="status none">Not reviewed</span>}
-            {state === 'error' && <span className="status warn">Unavailable</span>}
-            {state === 'retrying' && <span className="status warn">Connection interrupted · retrying</span>}
-            {review && running && state !== 'retrying' && (
-              <span className="status running">
-                Reviewing… {review.chunks_checked}/{review.chunks_total || contract.chunk_count} passages
-              </span>
-            )}
-            {review && review.status === 'done' && review.complete && <span className="status ok">Reviewed · {review.chunks_total} passages</span>}
-            {review && review.status === 'done' && !review.complete && (
-              <span className="status warn">
-                Partly reviewed · {review.chunks_checked}/{review.chunks_total} passages
-                {review.chunks_withheld > 0 ? ` · ${review.chunks_withheld} withheld` : ''}
-              </span>
-            )}
-            {review && review.status === 'failed' && <span className="status warn">Review failed</span>}
-          </h2>
-          <div className="review-tools">
-            {/* The recovery from a failed read is a re-read, never a paid job (MAS-122). */}
-            {state === 'error' && (
-              <button type="button" className="ghost" onClick={() => void load()}>
-                Try again
-              </button>
-            )}
-            {!running && state !== 'loading' && state !== 'error' && !confirming && (
-              <>
-                <span className="muted small cost-hint">{cost}</span>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => (review ? setConfirming(true) : void start())}
-                  disabled={starting}
-                  aria-label={review ? `Review again — ${cost}` : `Review risks — ${cost}`}
-                >
-                  {review ? 'Review again' : 'Review risks'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+      {/* Always visible (MAS-126 hard constraint): status, and every doubt
+          signal -- failed/partial/retrying/withheld -- stay outside the
+          fold. A plain block, not a .card: no bordered box for status text
+          alone (fewer cards). The confirm-before-re-spend banner (MAS-122)
+          still lives here since it is an active interaction, even though its
+          trigger button now lives in the workspace header's Actions menu. */}
+      <div className="review-status" aria-live="polite">
+        <h2 className="review-status-heading">
+          Risk review
+          {state === 'loading' && <span className="status none">Loading…</span>}
+          {state === 'never' && <span className="status none">Not reviewed</span>}
+          {state === 'error' && <span className="status warn">Unavailable</span>}
+          {state === 'retrying' && <span className="status warn">Connection interrupted · retrying</span>}
+          {review && running && state !== 'retrying' && (
+            <span className="status running">
+              Reviewing… {review.chunks_checked}/{review.chunks_total || contract.chunk_count} passages
+            </span>
+          )}
+          {review && review.status === 'done' && review.complete && <span className="status ok">Reviewed · {review.chunks_total} passages</span>}
+          {review && review.status === 'done' && !review.complete && (
+            <span className="status warn">
+              Partly reviewed · {review.chunks_checked}/{review.chunks_total} passages
+              {review.chunks_withheld > 0 ? ` · ${review.chunks_withheld} withheld` : ''}
+            </span>
+          )}
+          {review && review.status === 'failed' && <span className="status warn">Review failed</span>}
+          {/* The recovery from a failed read is a re-read, never a paid job (MAS-122). */}
+          {state === 'error' && (
+            <button type="button" className="ghost" onClick={() => void load()}>
+              Try again
+            </button>
+          )}
+        </h2>
 
         {confirming && (
           <p className="badge unverified review-confirm" role="status">
@@ -285,61 +314,76 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
                 : 'Nothing was graded.'}
           </p>
         )}
+      </div>
 
-        {findings.length > 0 && (
-          <ul className="risks" aria-label="Findings">
-            {findings.map((finding) => (
-              <li key={`${finding.category}-${finding.chunk_id}`} className={`risk severity-${finding.severity.toLowerCase()}`}>
-                <div className="risk-head">
-                  <span className="severity">{finding.severity}</span>
-                  <strong>{finding.category_name}</strong>
-                  <span className="muted small">{sourceLabel(finding.contract_id, finding.chunk_index, contracts)}</span>
-                  {onShowSource && (
-                    <button
-                      type="button"
-                      className="link"
-                      onClick={() => onShowSource({ contract_id: finding.contract_id, chunk_index: finding.chunk_index, quote: finding.quote })}
-                      aria-label={`Show ${finding.category_name} finding in contract`}
-                    >
-                      Show in contract
-                    </button>
-                  )}
-                </div>
-                <p className="risk-reason">{finding.reason}</p>
-                <blockquote>“{finding.quote}”</blockquote>
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* Behind the fold (MAS-126): every High/Medium finding is already on
+          the "Before you sign" checklist above, so nothing here is the only
+          place a serious risk shows up -- this is the full detail, read by
+          choice, not by default. */}
+      {review && (
+        <details className="card overview-detail" tabIndex={-1} ref={detailRef}>
+          <summary className="overview-detail-summary">
+            <span>View complete analysis</span>
+            <span className="muted small">
+              {findings.length} finding{findings.length === 1 ? '' : 's'} across {review.categories.length} categories · every extracted key term
+            </span>
+          </summary>
 
-        {/* The categories without a finding, as one line: clean only when the review is complete (MAS-104). */}
-        {review && clean.length > 0 && (
-          <p className="categories-clean muted small" data-testid="categories-clean">
-            {running ? (
-              <>
-                {clean.length} {flagged > 0 ? 'other ' : ''}categor{clean.length === 1 ? 'y' : 'ies'} still being graded…
-              </>
-            ) : settledClean ? (
-              <>
-                <span className="categories-clean-lead">
-                  {findings.length === 0 ? `Every passage was read against the rubric and nothing was flagged in any of the ${clean.length} categories` : `No issues found in the ${clean.length} other categor${clean.length === 1 ? 'y' : 'ies'}`}
-                </span>
-                : {clean.map((c) => c.name).join(', ')}.{offRubric ? ' The rubric is written for contracts, so this says little about this file.' : ''}
-              </>
-            ) : (
-              <>
-                <span className="categories-clean-lead">
-                  {clean.length} {flagged > 0 ? 'other ' : ''}categor{clean.length === 1 ? 'y' : 'ies'}: unable to determine
-                </span>{' '}
-                — the review did not cover every passage ({clean.map((c) => c.name).join(', ')}).
-              </>
-            )}
-          </p>
-        )}
-        {review && (
+          <KeyTermsCard review={review} contracts={contracts} onShowSource={onShowSource} ref={keyTermsRef} />
+
+          {findings.length > 0 && (
+            <ul className="risks" aria-label="Findings">
+              {findings.map((finding) => (
+                <li key={`${finding.category}-${finding.chunk_id}`} className={`risk severity-${finding.severity.toLowerCase()}`}>
+                  <div className="risk-head">
+                    <span className="severity">{finding.severity}</span>
+                    <strong>{finding.category_name}</strong>
+                    <span className="muted small">{sourceLabel(finding.contract_id, finding.chunk_index, contracts)}</span>
+                    {onShowSource && (
+                      <button
+                        type="button"
+                        className="link"
+                        onClick={() => onShowSource({ contract_id: finding.contract_id, chunk_index: finding.chunk_index, quote: finding.quote })}
+                        aria-label={`Show ${finding.category_name} finding in contract`}
+                      >
+                        Show in contract
+                      </button>
+                    )}
+                  </div>
+                  <p className="risk-reason">{finding.reason}</p>
+                  <blockquote>“{finding.quote}”</blockquote>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* The categories without a finding, as one line: clean only when the review is complete (MAS-104). */}
+          {clean.length > 0 && (
+            <p className="categories-clean muted small" data-testid="categories-clean">
+              {running ? (
+                <>
+                  {clean.length} {flagged > 0 ? 'other ' : ''}categor{clean.length === 1 ? 'y' : 'ies'} still being graded…
+                </>
+              ) : settledClean ? (
+                <>
+                  <span className="categories-clean-lead">
+                    {findings.length === 0 ? `Every passage was read against the rubric and nothing was flagged in any of the ${clean.length} categories` : `No issues found in the ${clean.length} other categor${clean.length === 1 ? 'y' : 'ies'}`}
+                  </span>
+                  : {clean.map((c) => c.name).join(', ')}.{offRubric ? ' The rubric is written for contracts, so this says little about this file.' : ''}
+                </>
+              ) : (
+                <>
+                  <span className="categories-clean-lead">
+                    {clean.length} {flagged > 0 ? 'other ' : ''}categor{clean.length === 1 ? 'y' : 'ies'}: unable to determine
+                  </span>{' '}
+                  — the review did not cover every passage ({clean.map((c) => c.name).join(', ')}).
+                </>
+              )}
+            </p>
+          )}
           <p className="muted disclaimer">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
-        )}
-      </section>
+        </details>
+      )}
     </>
   )
 }
