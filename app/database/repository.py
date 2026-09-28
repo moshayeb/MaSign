@@ -195,11 +195,15 @@ def add_indexed_profile(connection: psycopg.Connection, contract_id: UUID, profi
         )
 
 
-def delete_contract(connection: psycopg.Connection, contract_id: UUID) -> bool:
-    """Remove a contract and, via the FK cascade, its chunks and contract_links rows."""
+def delete_contract(connection: psycopg.Connection, contract_id: UUID, workspace_id: UUID) -> bool:
+    """Remove a contract and, via the FK cascade, its chunks and contract_links rows.
+
+    Scoped by workspace_id in the same query as every other contract route
+    (MAS-33) -- unscoped until then, so any caller, even signed out, could
+    delete any workspace's contract by id alone."""
     with connection.transaction():
         with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM contracts WHERE id = %s", (contract_id,))
+            cursor.execute("DELETE FROM contracts WHERE id = %s AND workspace_id = %s", (contract_id, workspace_id))
             return cursor.rowcount > 0
 
 

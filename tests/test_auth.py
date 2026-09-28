@@ -135,6 +135,35 @@ def test_login_with_unknown_email_gives_the_same_message_as_a_wrong_password(db)
     assert response.json()["detail"] == "Invalid email or password."
 
 
+def test_login_hashes_even_for_an_unknown_email_so_it_cannot_be_timed_out(db, email: str, monkeypatch) -> None:
+    """The identical error message (above) is not enough on its own: `user is
+    None or not verify_password(...)` would short-circuit past the ~150-200ms
+    Argon2id verify for an unregistered email, returning in ~30ms instead --
+    a timing oracle an attacker uses to enumerate real accounts even though
+    every response body reads the same (found live, MAS-33)."""
+    calls: list[str | None] = []
+    from app.api import auth_routes
+
+    real_verify = auth_routes.verify_password
+
+    def counting_verify(password: str, password_hash: str) -> bool:
+        calls.append(password_hash)
+        return real_verify(password, password_hash)
+
+    monkeypatch.setattr(auth_routes, "verify_password", counting_verify)
+
+    setup = _unauthenticated_client()
+    setup.post("/api/auth/register", json={"email": email, "password": PASSWORD})
+
+    client = _unauthenticated_client()
+    client.post("/api/auth/login", json={"email": "nobody-else@example.com", "password": PASSWORD})
+    client.post("/api/auth/login", json={"email": email, "password": "wrong password entirely"})
+
+    assert len(calls) == 2  # a real Argon2id verify ran for the unknown email too, not skipped
+    assert calls[0] == auth_routes.DUMMY_PASSWORD_HASH  # unknown email: verified against the dummy hash
+    assert calls[1] != auth_routes.DUMMY_PASSWORD_HASH  # known email: verified against its real hash
+
+
 def test_me_without_a_session_is_401(db) -> None:
     client = _unauthenticated_client()
     assert client.get("/api/auth/me").status_code == 401

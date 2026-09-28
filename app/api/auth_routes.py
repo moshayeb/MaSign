@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.api.dependencies import get_current_user, get_db
 from app.auth.security import (
+    DUMMY_PASSWORD_HASH,
     SESSION_COOKIE_NAME,
     SESSION_TTL,
     cookie_is_secure,
@@ -100,7 +101,13 @@ def register(body: RegisterRequest, response: Response, db: psycopg.Connection =
 @router.post("/login", response_model=UserOut)
 def login(body: LoginRequest, response: Response, db: psycopg.Connection = Depends(get_db)) -> UserOut:
     user = repository.get_user_by_email(db, body.email)
-    if user is None or not verify_password(body.password, user.password_hash):
+    # Always hash, even for an email nobody registered: `or` short-circuiting
+    # around verify_password() here would make a nonexistent email return in
+    # ~30ms and a wrong password ~150-200ms (MAS-33) -- trivially
+    # distinguishable by timing alone, defeating the identical error message
+    # below. DUMMY_PASSWORD_HASH costs a real Argon2id verify either way.
+    password_ok = verify_password(body.password, user.password_hash if user else DUMMY_PASSWORD_HASH)
+    if user is None or not password_ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_BAD_CREDENTIALS)
 
     session_id = generate_session_id()
