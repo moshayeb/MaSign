@@ -624,3 +624,31 @@ def delete_question(connection: psycopg.Connection, question_id: UUID) -> bool:
     with connection.cursor() as cursor:
         cursor.execute("DELETE FROM questions WHERE id = %s", (question_id,))
         return cursor.rowcount > 0
+
+
+def get_standards(connection: psycopg.Connection) -> dict[str, dict]:
+    """Stored overrides only (MAS-120) -- a term with no row here uses MaSign's
+    built-in default (`app.key_terms.standards.DEFAULT_PARAMS`), never a row
+    holding default values."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT term_id, params FROM standards")
+        return {row["term_id"]: row["params"] for row in cursor.fetchall()}
+
+
+def set_standard(connection: psycopg.Connection, term_id: str, params: dict) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO standards (term_id, params, updated_at)
+            VALUES (%s, %s, now())
+            ON CONFLICT (term_id) DO UPDATE SET params = EXCLUDED.params, updated_at = now()
+            """,
+            (term_id, Jsonb(params)),
+        )
+
+
+def delete_standard(connection: psycopg.Connection, term_id: str) -> bool:
+    """Reset one term to MaSign's default by removing its override row."""
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM standards WHERE term_id = %s", (term_id,))
+        return cursor.rowcount > 0

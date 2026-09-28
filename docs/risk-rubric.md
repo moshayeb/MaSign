@@ -1,6 +1,8 @@
 <!-- The Customer-side standards for key terms (MAS-96, app/key_terms/standards.py)
-     are taken from the Low thresholds below: net 30 or longer, late interest at most
-     1% per month, notice at most 60 days, no early-termination fee. -->
+     start from the Low thresholds below: net 30 or longer, late interest at most
+     1% per month, notice at most 60 days, no early-termination fee. Since MAS-120
+     they are editable (PUT/DELETE /api/standards/{term_id}); a customised standard
+     may then disagree with this rubric's severity grading, which stays fixed. -->
 # Risk rubric (MAS-15)
 
 What MaSign flags and how it grades it. The rubric lives in
@@ -17,8 +19,10 @@ for that question; other parts of the contract are not checked, and the UI
 says so.
 
 #<!-- The Customer-side standards for key terms (MAS-96, app/key_terms/standards.py)
-     are taken from the Low thresholds below: net 30 or longer, late interest at most
-     1% per month, notice at most 60 days, no early-termination fee. -->
+     start from the Low thresholds below: net 30 or longer, late interest at most
+     1% per month, notice at most 60 days, no early-termination fee. Since MAS-120
+     they are editable (PUT/DELETE /api/standards/{term_id}); a customised standard
+     may then disagree with this rubric's severity grading, which stays fixed. -->
 # Categories
 
 - **Liability cap** (`liability`): Limits and exclusions of liability: caps, carve-outs, uncapped exposure, one-sidedness.
@@ -30,8 +34,10 @@ says so.
 - **IP assignment** (`ip_assignment`): Ownership of deliverables, data and improvements; licence scope and restrictions.
 
 #<!-- The Customer-side standards for key terms (MAS-96, app/key_terms/standards.py)
-     are taken from the Low thresholds below: net 30 or longer, late interest at most
-     1% per month, notice at most 60 days, no early-termination fee. -->
+     start from the Low thresholds below: net 30 or longer, late interest at most
+     1% per month, notice at most 60 days, no early-termination fee. Since MAS-120
+     they are editable (PUT/DELETE /api/standards/{term_id}); a customised standard
+     may then disagree with this rubric's severity grading, which stays fixed. -->
 # Severity
 
 | Category | High | Medium | Low |
@@ -45,8 +51,10 @@ says so.
 | `ip_assignment` — IP assignment | Customer assigns its own IP or data to Vendor, or Vendor owns deliverables Customer paid for with no licence back. | Customer gets only a narrow, non-transferable licence to deliverables, or feedback and improvements become Vendor's without limit. | Customer owns its data and deliverables (or has a perpetual licence) and Vendor keeps its pre-existing platform IP. |
 
 #<!-- The Customer-side standards for key terms (MAS-96, app/key_terms/standards.py)
-     are taken from the Low thresholds below: net 30 or longer, late interest at most
-     1% per month, notice at most 60 days, no early-termination fee. -->
+     start from the Low thresholds below: net 30 or longer, late interest at most
+     1% per month, notice at most 60 days, no early-termination fee. Since MAS-120
+     they are editable (PUT/DELETE /api/standards/{term_id}); a customised standard
+     may then disagree with this rubric's severity grading, which stays fixed. -->
 # Suggested next steps
 
 Derived deterministically from the findings (`app/actions/workflow.py`): any
@@ -59,8 +67,10 @@ list; when only some findings failed, the verified ones are returned with
 `risks_complete: false`. A failed risk call never discards a good answer.
 
 #<!-- The Customer-side standards for key terms (MAS-96, app/key_terms/standards.py)
-     are taken from the Low thresholds below: net 30 or longer, late interest at most
-     1% per month, notice at most 60 days, no early-termination fee. -->
+     start from the Low thresholds below: net 30 or longer, late interest at most
+     1% per month, notice at most 60 days, no early-termination fee. Since MAS-120
+     they are editable (PUT/DELETE /api/standards/{term_id}); a customised standard
+     may then disagree with this rubric's severity grading, which stays fixed. -->
 # Known limits
 
 - Two scopes (MAS-81): the **whole-contract review** runs after every upload
@@ -71,5 +81,10 @@ list; when only some findings failed, the verified ones are returned with
   failure makes it *failed* — never silently empty.
 - Thresholds (12 months of fees, 1.5 %/month, 90 days' notice, 50 % fee) are
   common SaaS/services norms, not legal advice; they are easy to change here.
+- The key-terms "standard" badges (MAS-96/120, `GET /api/standards`) start
+  from these same numbers but are saved separately and editable per
+  organisation; once customised they compare against the saved value, not
+  this rubric, so the two can show different verdicts for the same contract
+  on purpose.
 - MAS-32 measures precision on a labelled set; until then treat flags as a
   first read.

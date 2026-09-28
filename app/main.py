@@ -245,6 +245,7 @@ FRONTEND_PAGES = [
     "/how-it-works",
     "/what-masign-checks",
     "/educational-disclaimer",
+    "/standards",
 ]
 
 

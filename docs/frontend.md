@@ -568,6 +568,25 @@ the quote, grey "Can't compare" when the value is text-only — from
 "· n deviate(s)" and turns amber when n > 0; the count is also the
 Deviations tile of the summary strip.
 
+### Editable standards (MAS-120)
+
+"Company standards" in the sidebar footer (`App.tsx`, below the contract
+list) opens `/standards` (`pages/Standards.tsx`, registered in `pages/index.ts`
+like the public static pages, but reached from the workspace rather than the
+footer). One `.card` per standard (`GET /api/standards`): the current text,
+a "MaSign default" / "Customised" pill, a small form matched to that term's
+shape (a days number for payment deadline/notice period, a percent for late
+payment, a mode selector plus the matching field for termination cost —
+no-fee / percent-of-remaining-fees / a fixed amount in USD, EUR or SEK), and
+a "Restore MaSign's default" link, disabled once the standard already is the
+default. Saving (`PUT`) or resetting (`DELETE`) replaces just that card's row
+in local state from the response — no full reload — and a save the API
+rejects (422) is never applied: the card keeps showing its last-saved value
+and the toast carries the API's `detail` verbatim, same as every other error
+toast. Saving takes effect immediately everywhere a standard verdict is
+shown (Overview, key terms, export) with no re-review, since the comparison
+is rule-based, not a model call.
+
 ## Coverage (MAS-84)
 
 `CoverageNotice` (MAS-104) renders `review.coverage` once for the whole

@@ -329,6 +329,9 @@ export default function App() {
             onCancelCompare={closeCompare}
             onDeleted={deleted}
           />
+          <a className="link sidebar-standards-link" href="/standards">
+            Company standards
+          </a>
         </aside>
 
         <main className="content">
