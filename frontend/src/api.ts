@@ -59,6 +59,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new ApiError(await errorDetail(response), response.status)
   }
+  // A 204 (unlink, forget) has no body; calling .json() on it throws
+  // "Unexpected end of JSON input" and would turn a successful delete into a
+  // false error toast (found while adding MAS-102's Forget button, but it
+  // already affected the existing Unlink button the same way).
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
@@ -136,6 +141,28 @@ export function askQuestion(question: string, contractId: string | null, limit =
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ question, contract_id: contractId, limit }),
   })
+}
+
+// --- question history (MAS-102) --------------------------------------------
+
+export interface StoredQuestion {
+  id: string
+  contract_id: string | null
+  question: string
+  answer: string
+  answer_status: AnswerStatus
+  grounded: boolean
+  model: string | null
+  response: QueryResponse
+  created_at: string
+}
+
+export function listQuestions(contractId: string): Promise<StoredQuestion[]> {
+  return request<StoredQuestion[]>(`/api/contracts/${contractId}/questions`)
+}
+
+export function forgetQuestion(questionId: string): Promise<void> {
+  return request<void>(`/api/questions/${questionId}`, { method: 'DELETE' })
 }
 
 // --- whole-contract risk review (MAS-81) -----------------------------------

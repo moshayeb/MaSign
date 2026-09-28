@@ -6,7 +6,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import CoveragePassage, Chunk, Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
+from app.database.models import CoveragePassage, Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
 from app.ingestion.document_type import DocumentKind, classify_document
 
 
@@ -555,3 +555,55 @@ def list_key_terms_for(connection: psycopg.Connection, term_ids: Sequence[str]) 
             term_row = KeyTermRow(**row)
             result.setdefault(term_row.contract_id, {})[term_row.term] = term_row
         return result
+
+
+def create_question(
+    connection: psycopg.Connection,
+    *,
+    contract_id: UUID | None,
+    question: str,
+    answer: str,
+    answer_status: str,
+    grounded: bool,
+    model: str | None,
+    response: dict,
+) -> Question:
+    """Store a successful answer (MAS-102) -- never called for a refused one."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO questions (contract_id, question, answer, answer_status, grounded, model, response)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (contract_id, question, answer, answer_status, grounded, model, Jsonb(response)),
+        )
+        row = cursor.fetchone()
+    return Question(**row)
+
+
+def list_questions(connection: psycopg.Connection, contract_id: UUID) -> list[Question]:
+    """Questions stored for `contract_id`, plus any all-contracts question that cited it (MAS-102)."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT * FROM questions
+            WHERE contract_id = %s
+               OR (
+                    contract_id IS NULL
+                    AND EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(response -> 'citations') AS citation
+                        WHERE (citation ->> 'contract_id')::uuid = %s
+                    )
+               )
+            ORDER BY created_at DESC
+            """,
+            (contract_id, contract_id),
+        )
+        return [Question(**row) for row in cursor.fetchall()]
+
+
+def delete_question(connection: psycopg.Connection, question_id: UUID) -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM questions WHERE id = %s", (question_id,))
+        return cursor.rowcount > 0

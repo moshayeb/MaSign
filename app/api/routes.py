@@ -15,7 +15,7 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, RiskFindingRow, RiskReview, RiskSummary
+from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
@@ -704,6 +704,55 @@ def unlink_contract(contract_id: UUID, link_id: UUID, db: psycopg.Connection = D
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+class QuestionOut(BaseModel):
+    """A stored answer to a past question (MAS-102). `response` is the full
+    QueryResponse as it was sent, so the Ask tab can render a stored answer's
+    citations, flags and withheld notices without asking the model again."""
+
+    id: UUID
+    contract_id: UUID | None
+    question: str
+    answer: str
+    answer_status: str
+    grounded: bool
+    model: str | None
+    response: QueryResponse
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, row: Question) -> "QuestionOut":
+        return cls(
+            id=row.id,
+            contract_id=row.contract_id,
+            question=row.question,
+            answer=row.answer,
+            answer_status=row.answer_status,
+            grounded=row.grounded,
+            model=row.model,
+            response=QueryResponse(**row.response),
+            created_at=row.created_at,
+        )
+
+
+@router.get("/contracts/{contract_id}/questions", response_model=list[QuestionOut])
+def list_contract_questions(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> list[QuestionOut]:
+    """Previously answered questions for this contract, newest first (MAS-102).
+
+    Includes an "all contracts" question (no scope) if its answer actually
+    cited this contract, not merely retrieved it.
+    """
+    if repository.get_contract(db, contract_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    return [QuestionOut.from_model(row) for row in repository.list_questions(db, contract_id)]
+
+
+@router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+def forget_question(question_id: UUID, db: psycopg.Connection = Depends(get_db)) -> Response:
+    if not repository.delete_question(db, question_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 class Passage(BaseModel):
     chunk_id: UUID
     chunk_index: int
@@ -805,12 +854,13 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
         for bundle_id in repository.bundle_contract_ids(db, contract_id)
         if (item := repository.get_contract(db, bundle_id)) is not None
     }
+    questions = [QuestionOut.from_model(row) for row in repository.list_questions(db, contract_id)]
     if fmt == "md":
-        content, media = export.render_markdown(contract.filename, review_body, terms_body, documents), "text/markdown; charset=utf-8"
+        content, media = export.render_markdown(contract.filename, review_body, terms_body, documents, questions), "text/markdown; charset=utf-8"
     elif fmt == "csv":
         content, media = export.render_csv(review_body, terms_body, documents), "text/csv; charset=utf-8"
     else:
-        content, media = export.render_pdf(contract.filename, review_body, terms_body, documents), "application/pdf"
+        content, media = export.render_pdf(contract.filename, review_body, terms_body, documents, questions), "application/pdf"
     return Response(
         content=content,
         media_type=media,
@@ -899,7 +949,7 @@ async def query_contract(
     # model call blocks, so all of it runs off the event loop like the upload path.
     hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
 
-    return QueryResponse(
+    response = QueryResponse(
         answer=answer.text,
         answer_status=answer.status,
         grounded=answer.grounded,
@@ -929,6 +979,24 @@ async def query_contract(
         blocked_passages=sorted(set(answer.blocked) | set(risks.blocked)),
         redacted_passages=sorted(set(answer.redacted) | set(risks.redacted)),
     )
+
+    # Stored so a reviewer coming back does not repeat a call already paid
+    # for (MAS-102). Never for a refused question: "withheld" means every
+    # retrieved passage was withheld and the model was never asked, so there
+    # is no real answer to save.
+    if response.answer_status != "withheld":
+        repository.create_question(
+            db,
+            contract_id=request.contract_id,
+            question=request.question,
+            answer=response.answer,
+            answer_status=response.answer_status,
+            grounded=response.grounded,
+            model=response.answer_model,
+            response=response.model_dump(mode="json"),
+        )
+
+    return response
 
 
 def _retrieve_and_answer(

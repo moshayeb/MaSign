@@ -53,6 +53,18 @@ contract." distinctly with the considered passages still listed, offers Copy
 per citation ("Citation [n] copied"), and lists the risk flags (severity
 colour, category, reason, quoted clause, `[n]` link that also opens the
 collapsed passage list) and the suggested actions (MAS-15/16).
+
+A successful answer is stored server-side (MAS-102), never a refused
+(`withheld`) one. Under the composer, `PreviousQuestions` lists this
+contract's stored questions, newest first — each with when it was asked and
+a status pill (Grounded / Unverified / Not found / Withheld) — plus any
+no-scope ("all contracts") question whose answer actually cited this
+contract. Clicking one renders it through the same `AnswerView` a live
+answer uses, including citations and "Show in contract"; it never calls
+`/api/query` again, since the whole response was stored. A "Forget" link per
+entry deletes it. Asking a new question from the composer still calls the
+API as normal and refreshes this list once answered, so the just-asked
+question appears without a reload.
 Build output (`frontend/dist`) is served by FastAPI from `/` when present
 (`FRONTEND_DIST` overrides the path); without it `/` redirects to `/docs`.
 
@@ -437,7 +449,10 @@ The contract header has plain `<a download>` links to
 no toast) and a Print button (`window.print()`). `@media print` in
 `index.css` hides the sidebar, tabs, composer, download links and action
 buttons, forces the Overview panels visible in black on white, keeps
-passage numbers as plain text, and breaks the page between cards.
+passage numbers as plain text, and breaks the page between cards. The
+Markdown (and so also the PDF, which renders from it) export includes a
+"Questions asked" section listing this contract's stored question history
+(MAS-102), each with its answer; the CSV export does not.
 
 ### Timeline (MAS-100 dates, MAS-110 shape)
 
