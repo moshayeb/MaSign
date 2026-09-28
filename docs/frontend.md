@@ -329,19 +329,20 @@ the CLAUDE.md LLM-decision architecture, not a new promise; it does not
 claim anything about a provider's training/retention policy the codebase
 cannot verify.
 
-### Home page journey (MAS-158)
+### Home page hierarchy (MAS-171)
 
-The hero mockup already supplied the visual explanation of the product, so
-MAS-158 adds only the two missing transitions instead of repeating it. A
-three-item cyan `.home-trust-strip` sits below the hero: source-linked
-answers, customer-side risk review, and key terms together. It is a compact
-proof strip rather than another card grid, and each label describes a
-behaviour that the current product provides.
+The home page has one proof section: the four linked **Why MaSign** cards.
+The earlier three-item cyan trust strip repeated those same claims and was
+removed. The resulting sequence is hero and product illustration, three
+steps, Why MaSign, Clear expectations, then the final CTA. The linked proof
+cards have the restrained cyan border, shadow and lift treatment on pointer
+hover and keyboard focus; static informational cards remain still so they do
+not look clickable.
 
 The page ends, before the existing footer, with `.home-final-cta`: **Ready to
 review a contract?** and an **Open workspace** link. It contains no speed,
-accuracy, legal-advice, or security claim. Both sections stack vertically
-under 720px and make no request to the API or a model.
+accuracy, legal-advice, or security claim. The layout stacks without horizontal
+scrolling under 720px and makes no request to the API or a model.
 
 ### Shared visual system (MAS-136)
 
