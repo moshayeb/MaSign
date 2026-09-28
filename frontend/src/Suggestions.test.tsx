@@ -116,7 +116,7 @@ describe('Ask tab suggestions', () => {
 
   it('shows the review-ranked chips on the Ask tab and a click fills the composer without sending', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await screen.findByText('Risk review')
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
 

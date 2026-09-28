@@ -7,7 +7,7 @@ import { ContractList } from './components/ContractList'
 import { PageChrome } from './components/PageChrome'
 import { PreviousQuestions } from './components/PreviousQuestions'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
-import { RiskReviewPanel } from './components/RiskReviewPanel'
+import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
 import { PassageReader, type SourceRef } from './components/PassageReader'
 import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
@@ -26,7 +26,7 @@ function parseHash(): { contractId: string | null; tab: Tab } {
 
 const EXAMPLES = ['What is the termination fee?', 'Is there a cap on liability?', 'When are invoices due, and what happens if we pay late?']
 
-type ExportIconName = 'more' | 'pdf' | 'markdown' | 'csv' | 'print'
+type ExportIconName = 'more' | 'pdf' | 'markdown' | 'csv' | 'print' | 'review'
 
 function ExportIcon({ name }: { name: ExportIconName }) {
   const paths: Record<ExportIconName, ReactNode> = {
@@ -35,6 +35,7 @@ function ExportIcon({ name }: { name: ExportIconName }) {
     markdown: <><path d="M4 5h16v14H4z" /><path d="M7 15V9l3 3 3-3v6M15 12h2" /></>,
     csv: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>,
     print: <><path d="M7 8V3h10v5M6 18H4v-7h16v7h-2M7 15h10v6H7z" /><path d="M17 13h.01" /></>,
+    review: <><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 4v4h-4" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 20v-4h4" /></>,
   }
   return <svg className="export-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
 }
@@ -60,6 +61,12 @@ export default function App() {
   // one is selected does not clear that selection until the comparison closes.
   const [compareIds, setCompareIds] = useState<string[]>([])
   const [comparePicking, setComparePicking] = useState(false)
+  // Mobile drawer (MAS-126): under 960px, once a contract is selected the
+  // sidebar moves off-canvas behind this toggle instead of stacking above
+  // the workspace and pushing it down -- the workspace is what a reader who
+  // already picked a contract came for. Meaningless (and CSS-inert) at
+  // desktop widths and before any contract is selected.
+  const [drawerOpen, setDrawerOpen] = useState(false)
   // The passage a finding or key term was clicked on; the reader scrolls to it (MAS-83).
   const [source, setSource] = useState<SourceRef | null>(null)
   // Where a source click came from, so Sources can offer a way back to it (MAS-109).
@@ -68,6 +75,14 @@ export default function App() {
   const [draft, setDraft] = useState('')
   // The selected contract's stored review, as the Overview last read it (MAS-108).
   const [review, setReview] = useState<RiskReview | null>(null)
+  // What the Actions menu's "Review risks"/"Review again" item should show
+  // right now, or null to hide it entirely (MAS-126); the panel computes
+  // this itself (loading/unavailable/running all hide it) and this ref is
+  // how the menu reaches the panel's own confirm-before-re-spend logic.
+  const [reviewAction, setReviewAction] = useState<ReviewAction | null>(null)
+  const reviewPanelRef = useRef<RiskReviewPanelHandle>(null)
+  // Closed as soon as an action is picked, same as a native <select> would.
+  const actionsMenuRef = useRef<HTMLDetailsElement>(null)
   const [tab, setTabState] = useState<Tab>(() => parseHash().tab)
   const setTab = useCallback((next: Tab) => {
     setTabState(next)
@@ -155,6 +170,7 @@ export default function App() {
     setAskAllContracts(false)
     setCompareIds([])
     setComparePicking(false)
+    setDrawerOpen(false)
   }, [setTab])
 
   // A finding or key term was clicked: show the text at that passage (MAS-83/95),
@@ -195,16 +211,26 @@ export default function App() {
     setCompareIds([])
     setComparePicking(false)
   }, [])
+  // A row's own Delete succeeded (MAS-126): drop anything that pointed at
+  // it -- the list itself is refreshed by ContractList before this fires.
+  const deleted = useCallback((contractId: string) => {
+    setSelected((current) => (current?.contract_id === contractId ? null : current))
+    setAsked((current) => (current?.contract?.contract_id === contractId ? null : current))
+    setCompareIds((current) => current.filter((id) => id !== contractId))
+  }, [])
   // The header's CTA (MAS-104): open the Ask tab with the cursor in the composer.
   const askAbout = useCallback(() => {
     changeTab('ask')
     requestAnimationFrame(() => document.getElementById('question-text')?.focus())
   }, [changeTab])
   // After a selection the workspace must be where the reader is looking: the
-  // heading takes focus (so the keyboard follows the eye), and on a phone —
-  // where the sidebar sits above the workspace — it is scrolled into view.
-  // On a wide screen the workspace is already visible and the page stays put:
-  // a page that jumps under the mouse is worse than one that does not move.
+  // heading takes focus (so the keyboard follows the eye). Before MAS-126 the
+  // sidebar stacked above the workspace on a phone, so the heading was also
+  // scrolled into view there; the drawer redesign moved the sidebar off-canvas,
+  // leaving only the compact toggle button above the workspace, so scrolling
+  // now just pushes that button off the top of the screen for nothing. On a
+  // wide screen the workspace was already visible and the page stayed put; it
+  // does the same on a phone now.
   const headingRef = useRef<HTMLHeadingElement>(null)
   // Seeded with the contract the URL hash names, so a page opened on a link
   // does not start with a focus ring on its heading: focus follows a
@@ -216,9 +242,6 @@ export default function App() {
     const heading = headingRef.current
     if (!heading) return
     heading.focus({ preventScroll: true })
-    if (window.matchMedia?.('(max-width: 960px)')?.matches) {
-      heading.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
-    }
   }, [selected])
 
   // The list is what refreshes when a review settles; the selected object may be older.
@@ -249,8 +272,27 @@ export default function App() {
 
   return (
     <PageChrome>
-      <div className="layout">
+      <div className={`layout${selected ? ' has-selection' : ''}${drawerOpen ? ' drawer-open' : ''}`}>
+        {/* Mobile drawer (MAS-126): CSS-inert (display: none) except under
+            960px with a contract selected, where it becomes the way back to
+            the sidebar without leaving the workspace. */}
+        {selected && (
+          <button type="button" className="drawer-toggle" aria-label="Show contracts" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+            Contracts
+          </button>
+        )}
+        <div className="drawer-backdrop" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
         <aside className="sidebar">
+          {selected && (
+            <button type="button" className="drawer-close" aria-label="Close" onClick={() => setDrawerOpen(false)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          )}
           <UploadForm
             onUploaded={(contract) => {
               select(contract)
@@ -267,6 +309,7 @@ export default function App() {
             onToggleCompare={toggleCompare}
             onStartCompare={() => setComparePicking(true)}
             onCancelCompare={closeCompare}
+            onDeleted={deleted}
           />
         </aside>
 
@@ -334,10 +377,29 @@ export default function App() {
                       Ask a question
                     </button>
                     {/* One primary button per screen. The trigger stays compact;
-                        the open menu gives every export a clear icon and label. */}
-                    <details className="actions-menu">
-                      <summary aria-label="Export and print options" title="Export and print options"><ExportIcon name="more" /></summary>
-                      <nav className="actions-list" aria-label="Export and print options">
+                        the open menu gives every action a clear icon and label. */}
+                    <details className="actions-menu" ref={actionsMenuRef}>
+                      <summary aria-label="Actions" title="Actions"><ExportIcon name="more" /></summary>
+                      <nav className="actions-list" aria-label="Actions">
+                        {/* Review again (MAS-126): the trigger lives here; the
+                            confirm-before-re-spend step (MAS-122) still shows
+                            inline in the Overview, where the review itself is. */}
+                        {reviewAction && (
+                          <button
+                            type="button"
+                            className="export-action"
+                            disabled={reviewAction.disabled}
+                            onClick={() => {
+                              actionsMenuRef.current?.removeAttribute('open')
+                              reviewPanelRef.current?.reviewAgain()
+                            }}
+                          >
+                            <ExportIcon name="review" />
+                            <span>
+                              {reviewAction.label} <span className="muted small">({reviewAction.cost})</span>
+                            </span>
+                          </button>
+                        )}
                         <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.pdf`} download>
                           <ExportIcon name="pdf" />
                           <span>Export PDF</span>
@@ -370,7 +432,16 @@ export default function App() {
                 />
               </div>
               <TabPanel id="overview" active={tab}>
-                <RiskReviewPanel key={selected.contract_id} contract={selected} contracts={contracts ?? []} onSettled={reload} onShowSource={showSource} onReview={setReview} />
+                <RiskReviewPanel
+                  key={selected.contract_id}
+                  contract={selected}
+                  contracts={contracts ?? []}
+                  onSettled={reload}
+                  onShowSource={showSource}
+                  onReview={setReview}
+                  onReviewAction={setReviewAction}
+                  ref={reviewPanelRef}
+                />
               </TabPanel>
               <TabPanel id="ask" active={tab}>
                 <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />

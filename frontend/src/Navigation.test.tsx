@@ -77,7 +77,7 @@ afterEach(() => vi.restoreAllMocks())
 describe('reaching the selected contract (MAS-124)', () => {
   it('moves focus to the contract heading so the keyboard follows the selection', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))
+    await userEvent.click((await screen.findAllByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))[0])
 
     const heading = await screen.findByRole('heading', { level: 1 })
     await waitFor(() => expect(heading).toHaveFocus())
@@ -85,17 +85,19 @@ describe('reaching the selected contract (MAS-124)', () => {
     expect(scrolled).toEqual([]) // wide screen: the workspace is already visible, so the page stays put
   })
 
-  it('scrolls the workspace into view when the layout is one column', async () => {
+  it('does not scroll on a phone either -- MAS-126 moved the sidebar off-canvas, so only the compact toggle sits above the workspace, not worth scrolling past', async () => {
     narrow = true
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))
+    await userEvent.click((await screen.findAllByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))[0])
 
-    await waitFor(() => expect(scrolled).toContain('h1.workspace-title'))
+    const heading = await screen.findByRole('heading', { level: 1 })
+    await waitFor(() => expect(heading).toHaveFocus())
+    expect(scrolled).toEqual([])
   })
 
   it('carries the whole filename in the heading, not a shortened one', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))
+    await userEvent.click((await screen.findAllByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))[0])
 
     // Whether it wraps is a stylesheet question jsdom cannot answer (it loads no
     // CSS); that it is wrapped rather than cut short was checked in the browser
@@ -109,7 +111,7 @@ describe('reaching the selected contract (MAS-124)', () => {
 describe('the summary tiles lead to their section (MAS-124)', () => {
   it('makes each tile a button that scrolls to the card the number came from', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))
+    await userEvent.click((await screen.findAllByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) }))[0])
     await screen.findByText(/Reviewed · 12 passages/)
 
     const strip = screen.getByRole('list', { name: 'Review summary' })
@@ -121,8 +123,9 @@ describe('the summary tiles lead to their section (MAS-124)', () => {
     expect(scrolled.at(-1)).toBe('section.card')
     await waitFor(() => expect(document.querySelector('.card.key-terms')).toHaveFocus())
 
-    await userEvent.click(tiles[2]) // Risks → the review card
-    await waitFor(() => expect(document.querySelector('.card.review')).toHaveFocus())
+    await userEvent.click(tiles[2]) // Risks → opens "View complete analysis" (MAS-126)
+    await waitFor(() => expect(document.querySelector('.overview-detail')).toHaveFocus())
+    expect(document.querySelector('.overview-detail')).toHaveAttribute('open')
 
     await userEvent.click(tiles[3]) // Coverage → opens the details
     expect(document.querySelector('.coverage-notice')).toHaveAttribute('open')
@@ -130,10 +133,58 @@ describe('the summary tiles lead to their section (MAS-124)', () => {
 
   it('leaves the tiles as plain text when there is no review to jump into', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /harbor\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /harbor\.txt/ }))[0])
     await screen.findByText(/uploaded before whole-contract reviews existed/)
 
     const strip = screen.getByRole('list', { name: 'Review summary' })
     expect(within(strip).queryAllByRole('button')).toEqual([]) // no dead controls
+  })
+})
+
+// Mobile drawer (MAS-126): CSS (not asserted here, jsdom loads none) makes
+// the sidebar an off-canvas overlay under 960px once a contract is
+// selected; these tests cover the state machine the CSS reacts to.
+describe('the sidebar becomes a drawer once a contract is selected (MAS-126)', () => {
+  it('carries no drawer state at all before any contract is selected', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Select a contract to get started' })
+
+    expect(document.querySelector('.layout')).not.toHaveClass('has-selection')
+    expect(screen.queryByRole('button', { name: 'Show contracts' })).not.toBeInTheDocument()
+  })
+
+  it('opens and closes via the toggle, the close button, and the backdrop', async () => {
+    render(<App />)
+    await userEvent.click((await screen.findAllByRole('button', { name: /harbor\.txt/ }))[0])
+
+    const layout = document.querySelector('.layout')!
+    expect(layout).toHaveClass('has-selection')
+    expect(layout).not.toHaveClass('drawer-open')
+
+    const toggle = screen.getByRole('button', { name: 'Show contracts' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(toggle)
+    expect(layout).toHaveClass('drawer-open')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(layout).not.toHaveClass('drawer-open')
+
+    await userEvent.click(toggle)
+    expect(layout).toHaveClass('drawer-open')
+    await userEvent.click(document.querySelector<HTMLElement>('.drawer-backdrop')!)
+    expect(layout).not.toHaveClass('drawer-open')
+  })
+
+  it('closes automatically when a different contract is selected from inside it', async () => {
+    render(<App />)
+    await userEvent.click((await screen.findAllByRole('button', { name: /harbor\.txt/ }))[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Show contracts' }))
+    expect(document.querySelector('.layout')).toHaveClass('drawer-open')
+
+    await userEvent.click(screen.getAllByRole('button', { name: new RegExp(long.replace(/[.]/g, '\\.')) })[0])
+
+    expect(document.querySelector('.layout')).not.toHaveClass('drawer-open')
+    expect(document.querySelector('.layout')).toHaveClass('has-selection')
   })
 })

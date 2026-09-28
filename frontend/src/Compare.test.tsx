@@ -127,13 +127,13 @@ afterEach(() => vi.restoreAllMocks())
 describe('comparing two contracts (MAS-113)', () => {
   it('picks exactly two contracts and renders their key terms and risk categories side by side', async () => {
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
 
     await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
     expect(screen.getByText('Select two contracts to compare · 0 of 2')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('button', { name: /harbor\.docx/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /harbor\.docx/ })[0])
 
     const compare = await screen.findByRole('region', { name: 'Contract comparison' })
     expect(within(compare).getByText('Comparing two contracts')).toBeInTheDocument()
@@ -162,11 +162,11 @@ describe('comparing two contracts (MAS-113)', () => {
 
   it('shows missing values as missing, never inferred, for an unreviewed contract', async () => {
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
 
     await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('button', { name: /gamma\.txt/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /gamma\.txt/ })[0])
 
     expect(await screen.findByText('Comparing two contracts')).toBeInTheDocument()
     expect(screen.getByText(/gamma\.txt has not been reviewed yet/)).toBeInTheDocument()
@@ -179,10 +179,10 @@ describe('comparing two contracts (MAS-113)', () => {
 
   it('Cancel during picking exits without comparing, and Exit comparison returns to normal browsing', async () => {
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
 
     await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0])
     expect(screen.getByText('Select two contracts to compare · 1 of 2')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -191,8 +191,8 @@ describe('comparing two contracts (MAS-113)', () => {
 
     // A full pick still reaches the comparison, and Exit comparison returns cleanly.
     await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('button', { name: /harbor\.docx/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /harbor\.docx/ })[0])
     expect(await screen.findByText('Comparing two contracts')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Exit comparison' }))
@@ -202,22 +202,22 @@ describe('comparing two contracts (MAS-113)', () => {
 
   it('deselecting a pick during picking allows a different third contract to be chosen', async () => {
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
 
     await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('button', { name: /harbor\.docx/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /harbor\.docx/ })[0])
     // Auto-closed picking once two were chosen (no third click possible here);
     // exit and re-pick with a swap instead to prove a dropped pick frees a slot.
     await screen.findByText('Comparing two contracts')
     await userEvent.click(screen.getByRole('button', { name: 'Exit comparison' }))
 
     await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ })) // deselect
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0]) // deselect
     expect(screen.getByText('Select two contracts to compare · 0 of 2')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /gamma\.txt/ }))
-    await userEvent.click(screen.getByRole('button', { name: /harbor\.docx/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /gamma\.txt/ })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /harbor\.docx/ })[0])
 
     const compare = await screen.findByRole('region', { name: 'Contract comparison' })
     expect(within(compare).getByText('gamma.txt')).toBeInTheDocument()
@@ -226,11 +226,11 @@ describe('comparing two contracts (MAS-113)', () => {
 
   it('opening a source from the comparison selects that contract and shows the passage', async () => {
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
 
     await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ }))
-    await userEvent.click(screen.getByRole('button', { name: /harbor\.docx/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /harbor\.docx/ })[0])
     await screen.findByText('Comparing two contracts')
 
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in northwind.txt' }))

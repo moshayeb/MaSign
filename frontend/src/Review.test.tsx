@@ -1,8 +1,36 @@
+import { useRef, useState } from 'react'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import type { Contract, KeyTermValue, RiskReview } from './api'
-import { RiskReviewPanel } from './components/RiskReviewPanel'
+import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
+
+// The "Review risks"/"Review again" trigger now lives in the workspace
+// header's Actions menu (MAS-126), reaching this panel through the
+// imperative handle it exposes; `onReviewAction` tells the menu exactly what
+// to show (or that it should not appear at all right now) -- this stand-in
+// reproduces that, the same way App does, without pulling in the whole App
+// just to click one button.
+function PanelWithTrigger({ contract, ...props }: ComponentProps<typeof RiskReviewPanel>) {
+  const ref = useRef<RiskReviewPanelHandle>(null)
+  const [action, setAction] = useState<ReviewAction | null>(null)
+  return (
+    <>
+      {action && (
+        <button
+          type="button"
+          onClick={() => ref.current?.reviewAgain()}
+          disabled={action.disabled}
+          aria-label={`${action.label} — ${action.cost}`}
+        >
+          {action.label}
+        </button>
+      )}
+      <RiskReviewPanel {...props} contract={contract} ref={ref} onReviewAction={setAction} />
+    </>
+  )
+}
 
 vi.mock('sonner', async () => {
   const actual = await vi.importActual<typeof import('sonner')>('sonner')
@@ -220,13 +248,15 @@ describe('whole-contract risk review (MAS-81)', () => {
       return json(200, started ? review({ status: 'running', chunks_checked: 4, complete: false }) : failed)
     })
 
-    render(<RiskReviewPanel contract={northwind} pollMs={10} />)
+    render(<PanelWithTrigger contract={northwind} pollMs={10} />)
 
     expect(await screen.findByText('Review failed', { selector: '.status' })).toBeInTheDocument()
     expect(screen.getAllByText(/Linked documents changed/).length).toBeGreaterThan(0)
 
     // Re-reviewing re-spends what the first run cost, so it is asked for twice (MAS-122).
-    await userEvent.click(screen.getByRole('button', { name: 'Review again — ≈ 4 model calls' }))
+    // The button comes from onReviewAction (MAS-126), a render cycle behind
+    // the status text it reacts to -- findBy*, not a synchronous getBy*.
+    await userEvent.click(await screen.findByRole('button', { name: 'Review again — ≈ 4 model calls' }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes, run it' }))
 
     await waitFor(() => expect(shown).toEqual([['success', 'Risk review started — 12 passages to grade']]))
@@ -237,10 +267,12 @@ describe('whole-contract risk review (MAS-81)', () => {
   it('offers a review for a contract uploaded before reviews existed', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(404, { detail: 'This contract has not been reviewed for risks yet. Start a review to grade it.' }))
 
-    render(<RiskReviewPanel contract={{ ...northwind, risk_status: null }} />)
+    render(<PanelWithTrigger contract={{ ...northwind, risk_status: null }} />)
 
     expect(await screen.findByText('Not reviewed', { selector: '.status' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Review risks — ≈ 4 model calls' })).toBeInTheDocument()
+    // The button comes from onReviewAction (MAS-126), a render cycle behind
+    // the status text it reacts to -- findBy*, not a synchronous getBy*.
+    expect(await screen.findByRole('button', { name: 'Review risks — ≈ 4 model calls' })).toBeInTheDocument()
     expect(screen.getByText(/uploaded before whole-contract reviews existed/)).toBeInTheDocument()
   })
 
@@ -460,5 +492,102 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(await screen.findByText(/nothing was flagged in any of the 7 categories/)).toBeInTheDocument()
     expect(screen.getByTestId('categories-clean')).toHaveTextContent(/: Liability cap, Termination, .*IP assignment\.$/)
     expect(within(screen.getByRole('list', { name: 'Review summary' })).getAllByRole('listitem')[2]).toHaveTextContent('RisksNonefound in 7 categories')
+  })
+})
+
+// MAS-126 hard constraint, stated in the ticket itself: progressive
+// disclosure may fold away detail, but never a reason to doubt the review --
+// missing documents (MAS-123), incomplete coverage (MAS-84/87/94), withheld
+// passages (MAS-90/99), an incomplete/unavailable pass, and rubric
+// limitations (MAS-107) must all still read as facts with "View complete
+// analysis" closed, exactly as they did before the fold existed. This test
+// asserts that boundary directly, not just the layout around it.
+describe('progressive disclosure never hides a reason to doubt the review (MAS-126)', () => {
+  // jsdom has no scrollIntoView (see Navigation.test.tsx); the second test
+  // below jumps via a summary-strip tile, same as jumpTo() does for real.
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = function () {
+      /* no-op: jsdom does not implement layout */
+    }
+  })
+
+  const incomplete = review({
+    status: 'done',
+    complete: false, // MAS-84/87/94: not every passage was graded
+    key_terms_complete: false,
+    chunks_checked: 8,
+    chunks_total: 12,
+    chunks_withheld: 2, // MAS-90: AI-instruction passages withheld
+    findings: [
+      { category: 'liability', category_name: 'Liability cap', severity: 'High', reason: 'Uncapped liability for the Customer.', quote: 'liability shall be unlimited', chunk_id: 'c8', chunk_index: 8 },
+      // A Low finding: on the "View complete analysis" checklist below, but
+      // never on "Before you sign" (buildChecklist drops Low on purpose) and
+      // never rendered at all with the fold closed.
+      { category: 'confidentiality', category_name: 'Confidentiality', severity: 'Low', reason: 'No survival period stated.', quote: 'confidentiality obligations', chunk_id: 'c2', chunk_index: 2 },
+    ],
+    coverage: {
+      chunks_total: 12,
+      chunks_checked: 8,
+      unreadable_passages: [],
+      withheld_passages: [{ contract_id: 'nw', filename: 'northwind.txt', chunk_index: 5 }, { contract_id: 'nw', filename: 'northwind.txt', chunk_index: 6 }],
+      ingestion_notes: [],
+      // MAS-123: a document the text depends on that nobody uploaded.
+      external_references: [{ name: 'Order Form', passages: [{ contract_id: 'nw', filename: 'northwind.txt', chunk_index: 1 }] }],
+    },
+  })
+  // MAS-107: a document that may not even be a contract -- the rubric's
+  // silence would otherwise read as reassurance about the wrong thing.
+  const uncertainContract: Contract = { ...northwind, document_kind: 'uncertain', document_kind_reasons: ['no defined-term "Agreement"'] }
+
+  it('shows every doubt signal with the fold closed, and only the full detail behind it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, incomplete))
+
+    render(<RiskReviewPanel contract={uncertainContract} />)
+    await screen.findByText('Partly reviewed · 8/12 passages · 2 withheld', { selector: '.status' })
+
+    // The fold itself starts closed.
+    const fold = screen.getByText('View complete analysis').closest('details')!
+    expect(fold).not.toHaveAttribute('open')
+
+    // Rubric limitations (MAS-107): the off-rubric banner is not behind anything.
+    expect(screen.getByText(/It is not clear whether this file is a commercial contract/)).toBeVisible()
+
+    // Missing documents (MAS-123) and withheld passages (MAS-90), from the
+    // always-visible coverage notice.
+    expect(screen.getByText(/Order Form.*referenced but not uploaded/)).toBeVisible()
+    expect(screen.getByText(/2 passages withheld/)).toBeVisible()
+
+    // Incomplete coverage (MAS-84/87/94) and the High finding, both on the
+    // always-visible "Before you sign" checklist.
+    expect(screen.getByText(/4 passage.*not graded/)).toBeVisible()
+    expect(screen.getByText('Confirm Liability cap')).toBeVisible()
+
+    // The Low finding and the full findings list exist (nothing was thrown
+    // away) but are not visible while the fold is closed -- the whole point.
+    const lowFinding = screen.getByText('No survival period stated.')
+    expect(lowFinding).not.toBeVisible()
+    expect(screen.getByRole('list', { name: 'Findings' })).not.toBeVisible()
+
+    // Opening it reveals exactly that, and nothing about the always-visible
+    // signals changes or duplicates.
+    await userEvent.click(screen.getByText('View complete analysis'))
+    expect(fold).toHaveAttribute('open')
+    expect(lowFinding).toBeVisible()
+  })
+
+  it('a summary-strip jump opens the fold before scrolling into it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, incomplete))
+    render(<RiskReviewPanel contract={uncertainContract} />)
+    await screen.findByText('Partly reviewed · 8/12 passages · 2 withheld', { selector: '.status' })
+
+    const fold = screen.getByText('View complete analysis').closest('details')!
+    expect(fold).not.toHaveAttribute('open')
+
+    const strip = screen.getByRole('list', { name: 'Review summary' })
+    const risksTile = within(strip).getByRole('button', { name: /Risks:/ })
+    await userEvent.click(risksTile)
+
+    expect(fold).toHaveAttribute('open')
+    expect(screen.getByText('No survival period stated.')).toBeVisible()
   })
 })

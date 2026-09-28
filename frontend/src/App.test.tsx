@@ -78,8 +78,8 @@ describe('contract list', () => {
     expect(await screen.findByText('msa.txt')).toBeInTheDocument()
     expect(screen.getByText('nda.pdf')).toBeInTheDocument()
     await userEvent.click(screen.getByText('nda.pdf'))
-    expect(screen.getByRole('button', { name: /nda\.pdf/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /msa\.txt/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getAllByRole('button', { name: /nda\.pdf/ })[0]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('button', { name: /msa\.txt/ })[0]).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('badges a contract whose upload could not be read in full (MAS-84)', async () => {
@@ -104,15 +104,15 @@ describe('contract list', () => {
 
     render(<App />)
 
-    expect(await screen.findByRole('button', { name: /msa\.txt/ })).toHaveTextContent('Reviewed · High risk')
-    expect(screen.getByRole('button', { name: /nda\.pdf/ })).toHaveTextContent('Not reviewed')
-    expect(screen.getByRole('button', { name: /sow\.docx/ })).toHaveTextContent('Reviewing…')
-    expect(screen.getByRole('button', { name: /partial\.txt/ })).toHaveTextContent('Partly reviewed')
+    expect((await screen.findAllByRole('button', { name: /msa\.txt/ }))[0]).toHaveTextContent('Reviewed · High risk')
+    expect(screen.getAllByRole('button', { name: /nda\.pdf/ })[0]).toHaveTextContent('Not reviewed')
+    expect(screen.getAllByRole('button', { name: /sow\.docx/ })[0]).toHaveTextContent('Reviewing…')
+    expect(screen.getAllByRole('button', { name: /partial\.txt/ })[0]).toHaveTextContent('Partly reviewed')
     // Size, passage count and date left the row (they are in the contract header now).
-    expect(screen.getByRole('button', { name: /msa\.txt/ })).not.toHaveTextContent(/passages|kB|Sep/)
+    expect(screen.getAllByRole('button', { name: /msa\.txt/ })[0]).not.toHaveTextContent(/passages|kB|Sep/)
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search contracts' }), 'ND')
-    expect(screen.getByRole('button', { name: /nda\.pdf/ })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /nda\.pdf/ })[0]).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /msa\.txt/ })).not.toBeInTheDocument()
     expect(screen.getByText('Contracts')).toHaveTextContent('4') // the count is the whole list, not the matches
 
@@ -188,12 +188,12 @@ describe('refresh', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await userEvent.upload(screen.getByLabelText(/Contract file/), new File(['1. Fees'], 'northwind.txt', { type: 'text/plain' }))
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
-    expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toBeInTheDocument()
+    expect((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0]).toBeInTheDocument()
 
     releaseSlowRefresh(json(200, [])) // the stale list from before the upload arrives last
 
     await waitFor(() => expect(shown).toHaveLength(2)) // upload success + refresh success
-    expect(screen.getByRole('button', { name: /northwind\.txt/ })).toBeInTheDocument() // not hidden by the stale response
+    expect(screen.getAllByRole('button', { name: /northwind\.txt/ })[0]).toBeInTheDocument() // not hidden by the stale response
   })
 })
 
@@ -221,7 +221,7 @@ describe('upload', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
 
     await waitFor(() => expect(shown).toEqual([['success', 'northwind.txt uploaded — 12 chunks']]))
-    expect(await screen.findByRole('button', { name: /northwind\.txt/ })).toHaveAttribute('aria-pressed', 'true')
+    expect((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0]).toHaveAttribute('aria-pressed', 'true')
     const calls = fetchMock.mock.calls
       .map(([url]) => String(url))
       .filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages') && !url.endsWith('/questions'))

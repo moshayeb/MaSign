@@ -116,7 +116,7 @@ const queryCall = (fetchMock: ReturnType<typeof mockApi>) => fetchMock.mock.call
 async function renderWithContractAndAsk(question: string, ...responses: Response[]) {
   const fetchMock = mockApi(responses)
   render(<App />)
-  await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+  await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
   await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' })) // the composer lives on the Ask tab (MAS-95)
   await userEvent.type(screen.getByLabelText('Ask about the contract'), question)
   await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
@@ -214,7 +214,7 @@ describe('asking a question', () => {
   it('asks across all contracts when that scope is chosen', async () => {
     const fetchMock = mockApi([json(200, answered)])
     render(<App />)
-    await screen.findByRole('button', { name: /northwind\.txt/ })
+    await screen.findAllByRole('button', { name: /northwind\.txt/ })
     await userEvent.click(screen.getByLabelText('All contracts'))
     await userEvent.type(screen.getByLabelText('Ask about the contract'), 'liability cap?')
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
@@ -235,17 +235,17 @@ describe('asking a question', () => {
       return json(404, { detail: `unexpected ${url}` })
     })
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await userEvent.type(screen.getByLabelText('Ask about the contract'), 'fee?')
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
     await screen.findByText(/The monthly fee is EUR 18,500/)
 
-    await userEvent.click(screen.getByRole('button', { name: /northwind\.txt/ })) // same contract: answer stays
+    await userEvent.click(screen.getAllByRole('button', { name: /northwind\.txt/ })[0]) // same contract: answer stays
     expect(screen.getByText(/The monthly fee is EUR 18,500/)).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Ask/ })).toHaveAttribute('aria-selected', 'true')
 
-    await userEvent.click(screen.getByRole('button', { name: /nda\.pdf/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /nda\.pdf/ })[0])
     expect(screen.queryByText(/The monthly fee is EUR 18,500/)).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true') // back to the overview (MAS-95)
     expect(screen.getByLabelText('Ask about the contract')).toHaveValue('fee?')
@@ -345,7 +345,7 @@ describe('asking a question', () => {
         return json(404, { detail: `unexpected ${url}` })
       })
       render(<App />)
-      await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+      await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
       await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
       await userEvent.type(screen.getByLabelText('Ask about the contract'), 'fee?')
       await userEvent.click(screen.getByRole('button', { name: 'Ask' }))

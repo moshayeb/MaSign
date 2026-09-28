@@ -627,6 +627,29 @@ def get_contract(
     return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms)
 
 
+@router.delete("/contracts/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_contract(
+    contract_id: UUID,
+    db: psycopg.Connection = Depends(get_db),
+    store: VectorStore = Depends(get_vector_store),
+) -> Response:
+    """Permanently remove a contract (MAS-126): its chunks, review, key terms,
+    stored questions and links cascade in Postgres; its vectors are removed
+    from Qdrant too. Irreversible -- the frontend confirms before calling this.
+    """
+    if not repository.delete_contract(db, contract_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    try:
+        store.delete_contract(contract_id)
+    except VectorStoreError as error:
+        # Postgres is the source of truth for "does this contract exist"; a
+        # leftover Qdrant point for a deleted contract cannot be searched
+        # back into existence (MAS-60 already drops points whose contract no
+        # longer exists), so this is logged, not raised -- the delete itself succeeded.
+        logger.warning("Delete: could not remove vectors for contract %s: %s", contract_id, error)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 class LinkContractRequest(BaseModel):
     linked_contract_id: UUID
     # The exact external reference this link resolves (must match one of the
