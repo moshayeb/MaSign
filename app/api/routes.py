@@ -21,8 +21,10 @@ from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import find_external_references
 from app.key_terms.deadlines import compute_deadlines
-from app.key_terms.standards import STANDARDS
+from app.key_terms.standards import STANDARD_TERM_IDS, DEFAULT_PARAMS, describe as describe_standard
 from app.key_terms.standards import compare as compare_to_standard
+from app.key_terms.standards import effective_params as effective_standard_params
+from app.key_terms.standards import validate_params as validate_standard_params
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
@@ -124,7 +126,7 @@ class QueryResponse(BaseModel):
 # Terms the contract-list summary strip needs (MAS-101): the two shown as
 # text, plus every term with a standard, to count deviations without a
 # second pass over the full key-terms table.
-SUMMARY_TERM_IDS = ("recurring_fee", "initial_term", *STANDARDS.keys())
+SUMMARY_TERM_IDS = ("recurring_fee", "initial_term", *STANDARD_TERM_IDS)
 
 
 class ContractSummary(BaseModel):
@@ -161,9 +163,14 @@ class ContractSummary(BaseModel):
 
     @classmethod
     def from_model(
-        cls, contract: Contract, review: RiskSummary | None = None, key_terms: dict[str, KeyTermRow] | None = None
+        cls,
+        contract: Contract,
+        review: RiskSummary | None = None,
+        key_terms: dict[str, KeyTermRow] | None = None,
+        standards: dict[str, dict] | None = None,
     ) -> "ContractSummary":
         key_terms = key_terms or {}
+        standards = standards or {}
         if review and review.key_terms_complete:
             key_terms_status = "complete"
         elif review and review.chunks_checked > 0:
@@ -172,8 +179,9 @@ class ContractSummary(BaseModel):
             key_terms_status = "none"
         deviations = sum(
             1
-            for term_id in STANDARDS
-            if (row := key_terms.get(term_id)) is not None and compare_to_standard(term_id, row.typed).status == "deviates"
+            for term_id in STANDARD_TERM_IDS
+            if (row := key_terms.get(term_id)) is not None
+            and compare_to_standard(term_id, row.typed, standards.get(term_id)).status == "deviates"
         )
         return cls(
             contract_id=contract.id,
@@ -261,7 +269,15 @@ class KeyTermValue(BaseModel):
     standard: StandardVerdict
 
     @classmethod
-    def from_rows(cls, term_id: str, rows: list[KeyTermRow], chunk_index: dict[UUID, int], *, checked: bool) -> "KeyTermValue":
+    def from_rows(
+        cls,
+        term_id: str,
+        rows: list[KeyTermRow],
+        chunk_index: dict[UUID, int],
+        *,
+        checked: bool,
+        standards: dict[str, dict] | None = None,
+    ) -> "KeyTermValue":
         term = TERM_BY_ID[term_id]
         sources = [
             KeyTermSource(
@@ -295,7 +311,7 @@ class KeyTermValue(BaseModel):
             value=first.value,
             source=first,
             others=others,
-            standard=StandardVerdict(**compare_to_standard(term.id, first.typed).__dict__),
+            standard=StandardVerdict(**compare_to_standard(term.id, first.typed, (standards or {}).get(term.id)).__dict__),
         )
 
 
@@ -433,13 +449,21 @@ class KeyTermsResponse(BaseModel):
 
     @classmethod
     def from_models(
-        cls, review: RiskReview, rows: list[KeyTermRow], chunk_index: dict[UUID, int], coverage: Coverage | None = None
+        cls,
+        review: RiskReview,
+        rows: list[KeyTermRow],
+        chunk_index: dict[UUID, int],
+        coverage: Coverage | None = None,
+        standards: dict[str, dict] | None = None,
     ) -> "KeyTermsResponse":
         checked = review.status == "done" and review.key_terms_complete
         by_term: dict[str, list[KeyTermRow]] = {term.id: [] for term in KEY_TERMS}
         for row in rows:
             by_term.setdefault(row.term, []).append(row)
-        terms = [KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked) for term in KEY_TERMS]
+        terms = [
+            KeyTermValue.from_rows(term.id, by_term[term.id], chunk_index, checked=checked, standards=standards)
+            for term in KEY_TERMS
+        ]
         return cls(
             contract_id=review.contract_id,
             status=review.status,
@@ -486,6 +510,7 @@ class RiskReviewResponse(BaseModel):
         chunk_index: dict[UUID, int],
         terms: list[KeyTermRow] = (),
         coverage: Coverage | None = None,
+        standards: dict[str, dict] | None = None,
     ) -> "RiskReviewResponse":
         findings = [
             ReviewFinding(
@@ -519,7 +544,7 @@ class RiskReviewResponse(BaseModel):
             findings=findings,
             categories=categories,
             key_terms_complete=review.status == "done" and review.key_terms_complete,
-            key_terms=(key_terms := KeyTermsResponse.from_models(review, list(terms), chunk_index)).terms,
+            key_terms=(key_terms := KeyTermsResponse.from_models(review, list(terms), chunk_index, standards=standards)).terms,
             deadlines=key_terms.deadlines,
             coverage=coverage,
         )
@@ -612,7 +637,10 @@ def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_
 def list_contracts(db: psycopg.Connection = Depends(get_db)) -> list[ContractSummary]:
     reviews = repository.list_risk_summaries(db)
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS)
-    return [ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id)) for c in repository.list_contracts(db)]
+    standards = repository.get_standards(db)
+    return [
+        ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id), standards) for c in repository.list_contracts(db)
+    ]
 
 
 @router.get("/contracts/{contract_id}", response_model=ContractSummary)
@@ -624,7 +652,8 @@ def get_contract(
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
-    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms)
+    standards = repository.get_standards(db)
+    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms, standards)
 
 
 class LinkContractRequest(BaseModel):
@@ -826,7 +855,8 @@ def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(g
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
     coverage = _coverage_for_review(db, review, contract)
-    return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage)
+    standards = repository.get_standards(db)
+    return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage, standards)
 
 
 @router.get("/contracts/{contract_id}/export.{fmt}")
@@ -848,7 +878,10 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
-    terms_body = KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage)
+    standards = repository.get_standards(db)
+    terms_body = KeyTermsResponse.from_models(
+        review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage, standards
+    )
     documents = {
         item.id: item.filename
         for bundle_id in repository.bundle_contract_ids(db, contract_id)
@@ -896,7 +929,10 @@ def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewRe
     }
     contract = repository.get_contract(db, review.contract_id)
     coverage = _coverage_for_review(db, review, contract) if contract else None
-    return RiskReviewResponse.from_models(review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage)
+    standards = repository.get_standards(db)
+    return RiskReviewResponse.from_models(
+        review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage, standards
+    )
 
 
 def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: Contract) -> Coverage:
@@ -1043,3 +1079,57 @@ def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder,
         contract_ids=bundle_ids,
         limit=request.limit,
     )
+
+
+# --- editable company standards (MAS-120) ---------------------------------------------------
+
+
+class StandardOut(BaseModel):
+    id: str
+    name: str
+    text: str
+    params: dict
+    # False once a value has been saved for this term; True while it is
+    # still MaSign's built-in default (no row in the `standards` table).
+    is_default: bool
+
+
+class StandardUpdateRequest(BaseModel):
+    params: dict
+
+
+@router.get("/standards", response_model=list[StandardOut])
+def list_standards(db: psycopg.Connection = Depends(get_db)) -> list[StandardOut]:
+    stored = repository.get_standards(db)
+    return [
+        StandardOut(
+            id=term_id,
+            name=TERM_BY_ID[term_id].name,
+            text=describe_standard(term_id, effective_standard_params(term_id, stored.get(term_id))),
+            params=effective_standard_params(term_id, stored.get(term_id)),
+            is_default=term_id not in stored,
+        )
+        for term_id in STANDARD_TERM_IDS
+    ]
+
+
+@router.put("/standards/{term_id}", response_model=StandardOut)
+def update_standard(term_id: str, body: StandardUpdateRequest, db: psycopg.Connection = Depends(get_db)) -> StandardOut:
+    if term_id not in STANDARD_TERM_IDS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
+    try:
+        params = validate_standard_params(term_id, body.params)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+    repository.set_standard(db, term_id, params)
+    return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=False)
+
+
+@router.delete("/standards/{term_id}", response_model=StandardOut)
+def reset_standard(term_id: str, db: psycopg.Connection = Depends(get_db)) -> StandardOut:
+    """Restore MaSign's built-in default for one standard."""
+    if term_id not in STANDARD_TERM_IDS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
+    repository.delete_standard(db, term_id)
+    params = DEFAULT_PARAMS[term_id]
+    return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=True)

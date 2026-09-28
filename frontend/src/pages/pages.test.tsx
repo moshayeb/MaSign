@@ -6,6 +6,7 @@ import { EducationalDisclaimerPage } from './EducationalDisclaimer'
 import { HowItWorksPage } from './HowItWorks'
 import { PAGES } from './index'
 import { PrivacyPage } from './Privacy'
+import { StandardsPage } from './Standards'
 import { WhatMaSignChecksPage } from './WhatMaSignChecks'
 
 vi.mock('sonner', async () => {
@@ -37,10 +38,21 @@ describe.each([
   })
 })
 
-it('the pages map has exactly the six pages the footer links to, no more', () => {
+it('the pages map has exactly the six pages the footer links to, plus /standards (reached from the workspace sidebar, MAS-120)', () => {
   expect(Object.keys(PAGES).sort()).toEqual(
-    ['/about', '/documentation', '/educational-disclaimer', '/how-it-works', '/privacy', '/what-masign-checks'].sort(),
+    ['/about', '/documentation', '/educational-disclaimer', '/how-it-works', '/privacy', '/standards', '/what-masign-checks'].sort(),
   )
+})
+
+// MAS-120: reached from the workspace, not the footer, so it is not part of
+// the describe.each above -- but it still needs the shared chrome.
+it('the standards page renders its heading and the shared header/footer chrome', () => {
+  render(<StandardsPage />)
+
+  expect(screen.getByRole('heading', { level: 1, name: 'Company standards' })).toBeInTheDocument()
+  expect(screen.getByRole('banner')).toBeInTheDocument()
+  expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+  expect(PAGES['/standards']).toBe(StandardsPage)
 })
 
 // MAS-142: the three content-heavy public pages get the shared card-grid

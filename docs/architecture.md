@@ -214,6 +214,30 @@ returns the stored chunks in order for the frontend's contract-text reader
 (MAS-83), so every finding, key term and citation is one click from the
 text it quotes.
 
+## Editable standards (MAS-120)
+
+`app/key_terms/standards.py` compares a verified typed key term against a
+rule, not a model call: `compare(term_id, typed, params)` returns `meets`,
+`deviates`, `unknown` (stated, but not in a shape this standard can judge —
+e.g. a percent-of-fees fee against an amount cap, or an amount in a currency
+the standard isn't set in — MaSign never converts currencies or guesses) or
+`none` (no standard for this term). `DEFAULT_PARAMS` is MaSign's built-in
+position for the four numeric terms (payment deadline, late-payment
+interest, notice period, termination cost); `describe(term_id, params)`
+computes the one-line text from those numbers so it can never drift from
+what is actually stored. Since MAS-120 a `standards` row (migration 014,
+`term_id` primary key, `params` JSONB) overrides a term's default; a term
+with no row uses the default, and resetting (`DELETE /api/standards/{id}`)
+removes the row rather than ever writing default values back — the default
+lives in exactly one place. There is one shared set, not per-contract or
+per-user (MAS-143's accounts/workspaces are not merged as of this ticket;
+scoping standards per workspace is a follow-up, not bundled in here).
+`app/api/routes.py` loads the saved standards once per request
+(`repository.get_standards`) and threads them into `ContractSummary`,
+`KeyTermValue` and `KeyTermsResponse`, so a saved standard changes every
+deviation shown — the Overview tab's count, the key-terms list, the export —
+immediately, with no re-review and no model call.
+
 ## Coverage (MAS-84)
 
 `extract_document()` in `ingestion/parsing.py` returns the text plus

@@ -1595,6 +1595,14 @@ a.link {
   text-decoration: none;
 }
 
+.sidebar-standards-link {
+  align-self: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  width: 100%;
+  text-align: center;
+}
+
 a.link:hover {
   text-decoration: underline;
 }
@@ -2360,6 +2368,69 @@ button.chip.ranked {
   .staticpage {
     padding: 28px 16px 40px;
   }
+}
+
+/* Editable company standards (MAS-120): a settings screen, one card per
+   term, reusing the workspace's card/status/button language rather than the
+   marketing-page look of .pubpage. */
+.standards-page {
+  flex: 1 0 auto;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 40px 28px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.standards-intro h1 {
+  margin-bottom: 8px;
+}
+
+.standard-current {
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+
+.standard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.standard-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.standard-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.standard-input {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--text);
+  width: 140px;
+}
+
+select.standard-input {
+  width: auto;
+}
+
+.standard-currency {
+  width: 90px;
+}
+
+.standard-reset {
+  margin-top: 14px;
 }
 
 /* Public content pages (MAS-142): the shared layout for How it works, What

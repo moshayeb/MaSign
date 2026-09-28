@@ -268,6 +268,9 @@ export default function App() {
             onStartCompare={() => setComparePicking(true)}
             onCancelCompare={closeCompare}
           />
+          <a className="link sidebar-standards-link" href="/standards">
+            Company standards
+          </a>
         </aside>
 
         <main className="content">

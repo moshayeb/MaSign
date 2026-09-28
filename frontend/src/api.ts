@@ -345,3 +345,30 @@ export function getContractRisks(contractId: string): Promise<RiskReview> {
 export function reviewContract(contractId: string): Promise<RiskReview> {
   return request<RiskReview>(`/api/contracts/${contractId}/review`, { method: 'POST' })
 }
+
+// --- editable company standards (MAS-120) -----------------------------------
+
+export interface Standard {
+  id: string
+  name: string
+  // The one line shown next to a verdict, computed server-side from `params`.
+  text: string
+  params: Record<string, unknown>
+  // False once a value has been saved for this term.
+  is_default: boolean
+}
+
+export function listStandards(): Promise<Standard[]> {
+  return request<Standard[]>('/api/standards')
+}
+
+export function saveStandard(id: string, params: Record<string, unknown>): Promise<Standard> {
+  return request<Standard>(`/api/standards/${id}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ params }),
+  })
+}
+
+export function resetStandard(id: string): Promise<Standard> {
+  return request<Standard>(`/api/standards/${id}`, { method: 'DELETE' })
+}

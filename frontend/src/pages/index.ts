@@ -4,6 +4,7 @@ import { DocumentationPage } from './Documentation'
 import { EducationalDisclaimerPage } from './EducationalDisclaimer'
 import { HowItWorksPage } from './HowItWorks'
 import { PrivacyPage } from './Privacy'
+import { StandardsPage } from './Standards'
 import { WhatMaSignChecksPage } from './WhatMaSignChecks'
 
 // Pathname -> page component (MAS-132). No router dependency: the app has
@@ -19,4 +20,5 @@ export const PAGES: Record<string, ComponentType> = {
   '/how-it-works': HowItWorksPage,
   '/what-masign-checks': WhatMaSignChecksPage,
   '/educational-disclaimer': EducationalDisclaimerPage,
+  '/standards': StandardsPage,
 }
