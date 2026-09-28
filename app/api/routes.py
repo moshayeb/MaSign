@@ -617,7 +617,7 @@ async def upload_contract(
     try:
         await run_in_threadpool(index_contract, db, contract, embedder, store)
     except Exception:
-        await run_in_threadpool(_discard_failed_upload, db, store, contract.id)
+        await run_in_threadpool(_discard_failed_upload, db, store, contract.id, workspace.id)
         raise
 
     # Compare mode (MAS-62): quality indexing is optional and best-effort.
@@ -667,7 +667,7 @@ async def upload_contract(
     )
 
 
-def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_id: UUID) -> None:
+def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_id: UUID, workspace_id: UUID) -> None:
     """Remove what a failed upload left in Postgres and Qdrant. Runs off the loop.
 
     Indexing may have failed before or after Qdrant accepted the vectors, so
@@ -678,7 +678,7 @@ def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_
         # End the failed transaction first: otherwise the delete would nest
         # inside it and be rolled back along with it when the request exits.
         db.rollback()
-        repository.delete_contract(db, contract_id)
+        repository.delete_contract(db, contract_id, workspace_id)
     except Exception:
         logger.exception("Failed upload: could not delete contract %s from the database", contract_id)
     try:
@@ -723,12 +723,18 @@ def delete_contract(
     contract_id: UUID,
     db: psycopg.Connection = Depends(get_db),
     store: VectorStore = Depends(get_vector_store),
+    workspace: Workspace = Depends(get_current_workspace),
 ) -> Response:
     """Permanently remove a contract (MAS-126): its chunks, review, key terms,
     stored questions and links cascade in Postgres; its vectors are removed
     from Qdrant too. Irreversible -- the frontend confirms before calling this.
+
+    Scoped to the caller's own workspace (MAS-33): unscoped and unauthenticated
+    until then, so anyone, even signed out, could delete any workspace's
+    contract by id alone -- confirmed live, the same shape of gap
+    unlink_contract and forget_question already close a few lines below.
     """
-    if not repository.delete_contract(db, contract_id):
+    if not repository.delete_contract(db, contract_id, workspace.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     try:
         store.delete_contract(contract_id)

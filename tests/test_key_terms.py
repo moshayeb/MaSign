@@ -229,7 +229,7 @@ def test_deleting_a_contract_removes_its_key_terms(db, workspace_id, fake_chat_m
     review_contract(contract_id, fake_chat_model)
     assert len(repository.list_key_terms(db, contract_id)) == 1
 
-    assert repository.delete_contract(db, contract_id) is True
+    assert repository.delete_contract(db, contract_id, workspace_id) is True
     db.commit()
     assert repository.list_key_terms(db, contract_id) == []
 

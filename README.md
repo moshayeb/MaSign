@@ -378,13 +378,31 @@ clause never reaches the (fake) model.
 
 ## Security and secrets
 
-Checked on 2026-09-17 (MAS-33) and to be repeated before the v1.0.0 tag:
+Checked on 2026-09-17 (MAS-33), repeated 2026-09-28 (two real findings fixed,
+below) and to be repeated again before the v1.0.0 tag:
 
 - **No secrets in the repository or its history.** `git log --all -p` grepped
   for Anthropic / OpenAI / Atlassian / AWS / GitHub / Slack key shapes and
-  private-key headers: 0 hits over all 68 commits. `.env` has never been
-  committed; it is git-ignored together with `.claude/`, and `.env.example`
-  contains placeholders only (`ANTHROPIC_API_KEY=`, `OPENAI_API_KEY=`).
+  private-key headers: 0 hits, 68 commits on 2026-09-17, 272 on 2026-09-28.
+  `.env` has never been committed; it is git-ignored together with
+  `.claude/`, and `.env.example` contains placeholders only
+  (`ANTHROPIC_API_KEY=`, `OPENAI_API_KEY=`).
+- **`DELETE /api/contracts/{id}` had no auth check and no workspace scope at
+  all (2026-09-28), fixed.** Every other contract route requires a signed-in
+  session and filters by the caller's own workspace — this one required
+  neither: any caller, signed in or not, could delete any workspace's
+  contract by id alone. `app/database/repository.py`'s `delete_contract` now
+  takes and filters on `workspace_id` the same way `delete_question` already
+  did; the route now requires `get_current_workspace` like every route
+  beside it. `tests/test_database.py::test_deleting_a_contract_is_scoped_to_its_own_workspace`.
+- **Login timed out which accounts exist, despite an identical error message
+  (2026-09-28), fixed.** `user is None or not verify_password(...)` skipped
+  the ~150-200ms Argon2id verify entirely for an email nobody registered,
+  answering in ~30ms instead — measured live, a 4-7x, trivially distinguishable
+  timing oracle that let the *message* being generic not matter. Login now
+  always verifies against a real hash or a fixed dummy one (`app/auth/
+  security.py`'s `DUMMY_PASSWORD_HASH`), so both cases cost the same.
+  `tests/test_auth.py::test_login_hashes_even_for_an_unknown_email_so_it_cannot_be_timed_out`.
 - **Database credentials are dev-only.** `rag_user` / `rag_password` in
   `docker-compose.yml` exist for the local stack and CI; the API reads
   `DATABASE_URL`, so a deployment sets its own.

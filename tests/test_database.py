@@ -122,7 +122,22 @@ def test_set_embedding_ids_updates_only_given_chunks(db: psycopg.Connection, wor
 def test_deleting_contract_cascades_to_chunks(db: psycopg.Connection, workspace_id) -> None:
     contract = _store(db, workspace_id, ["a", "b"])
 
-    assert repository.delete_contract(db, contract.id) is True
+    assert repository.delete_contract(db, contract.id, workspace_id) is True
     assert repository.get_contract(db, contract.id, workspace_id) is None
     assert repository.list_chunks(db, contract.id) == []
-    assert repository.delete_contract(db, contract.id) is False
+    assert repository.delete_contract(db, contract.id, workspace_id) is False
+
+
+def test_deleting_a_contract_is_scoped_to_its_own_workspace(db: psycopg.Connection, workspace_id) -> None:
+    """Unscoped until MAS-33 (found in the security repeat, no route even
+    required being signed in): any caller could delete any workspace's
+    contract by id alone."""
+    contract = _store(db, workspace_id, ["a"])
+    other_user = repository.create_user(db, email="other-tenant@example.com", password_hash="unused-in-tests")
+    other_workspace = repository.create_personal_workspace(db, user_id=other_user.id, name="Other workspace")
+
+    assert repository.delete_contract(db, contract.id, other_workspace.id) is False
+    assert repository.get_contract(db, contract.id, workspace_id) is not None  # still there
+
+    assert repository.delete_contract(db, contract.id, workspace_id) is True
+    assert repository.get_contract(db, contract.id, workspace_id) is None

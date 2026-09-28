@@ -152,7 +152,7 @@ def test_deleting_the_primary_contract_cascades_the_link(db, workspace_id) -> No
     repository.create_link(db, primary_contract_id=primary_id, linked_contract_id=linked_id, reference_name="Order Form")
     db.commit()
 
-    repository.delete_contract(db, primary_id)
+    repository.delete_contract(db, primary_id, workspace_id)
     db.commit()
 
     # The linked contract itself is untouched.
@@ -168,7 +168,7 @@ def test_deleting_the_linked_contract_cascades_the_link(db, workspace_id) -> Non
     repository.create_link(db, primary_contract_id=primary_id, linked_contract_id=linked_id, reference_name="Order Form")
     db.commit()
 
-    repository.delete_contract(db, linked_id)
+    repository.delete_contract(db, linked_id, workspace_id)
     db.commit()
 
     # The primary contract itself is untouched.

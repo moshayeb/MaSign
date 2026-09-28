@@ -186,12 +186,12 @@ def test_rerunning_a_review_replaces_the_old_findings(db, fake_chat_model: FakeC
     assert review.status == "done" and repository.list_risk_findings(db, contract_id) == []
 
 
-def test_deleting_a_contract_removes_its_review(db, fake_chat_model: FakeChatModel) -> None:
+def test_deleting_a_contract_removes_its_review(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
     contract_id = _upload(UNLIMITED)
     fake_chat_model.risk_reply = json.dumps([_finding("liability", "High", 1, "shall be unlimited")])
     review_contract(contract_id, fake_chat_model)
 
-    assert repository.delete_contract(db, contract_id) is True
+    assert repository.delete_contract(db, contract_id, workspace_id) is True
     assert repository.get_risk_review(db, contract_id) is None
     assert repository.list_risk_findings(db, contract_id) == []
 
