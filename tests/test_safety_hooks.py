@@ -54,8 +54,8 @@ def run_hook(script: Path, payload: dict, log_path: Path, cwd: Path = ROOT, extr
     )
 
 
-def bash(command: str) -> dict:
-    return {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(ROOT)}
+def bash(command: str, cwd: Path | str = ROOT) -> dict:
+    return {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(cwd)}
 
 
 def write(path: str, content: str = "x") -> dict:
@@ -326,8 +326,29 @@ class TestBlockHistoryRewrite:
         # hook: on this Windows+Git-Bash setup, `cwd` can arrive as
         # "/c/...", which native subprocess.run() cannot open, which used to
         # make branch detection silently fail and every bare push get asked.
+        #
+        # MAS-166: this used to pass `cwd=ROOT` -- the actual MaSign
+        # checkout the test suite itself runs from -- to `_current_branch`.
+        # That happens to be a feature branch on a developer's worktree, but
+        # CI runs the suite from a checkout of `main` after every merge, so
+        # `_current_branch(ROOT)` genuinely returns "main" there and the hook
+        # correctly asks; the test's assumption, not the hook's
+        # classification, was wrong, which is why it failed on every CI run
+        # on `main` but never locally. Use a disposable repo actually
+        # checked out to a feature branch instead, so the assertion no
+        # longer depends on which branch the ambient checkout happens to be
+        # on.
+        repo = tmp_path / "feature-repo"
+        repo.mkdir()
+        git_env = dict(os.environ, GIT_AUTHOR_NAME="Test", GIT_AUTHOR_EMAIL="test@example.com", GIT_COMMITTER_NAME="Test", GIT_COMMITTER_EMAIL="test@example.com")
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, env=git_env, check=True)
+        (repo / "f.txt").write_text("x")
+        subprocess.run(["git", "add", "f.txt"], cwd=repo, env=git_env, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, env=git_env, check=True)
+        subprocess.run(["git", "checkout", "-q", "-b", "MAS-999-feature"], cwd=repo, env=git_env, check=True)
+
         log = tmp_path / "hooks.log"
-        assert_allow(run_hook(HISTORY, bash("git push"), log, cwd=ROOT))
+        assert_allow(run_hook(HISTORY, bash("git push", cwd=repo), log, cwd=repo))
 
     def test_fails_closed_on_unparseable_stdin(self, tmp_path):
         log = tmp_path / "hooks.log"
