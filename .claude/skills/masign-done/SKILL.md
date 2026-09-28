@@ -71,9 +71,24 @@ because the plain command omits `-f docker-compose.quality.yml`.
 - The live container is only rebuilt **after** a PR is merged to `main`, from
   the dedicated `main-live` worktree, by whoever owns that step, with both
   compose files and the shared project name so the profile survives:
-  `COMPOSE_PROJECT_NAME=masign docker compose -f docker-compose.yml -f docker-compose.quality.yml up -d --no-deps api`.
+  `COMPOSE_PROJECT_NAME=masign docker compose -f docker-compose.yml -f docker-compose.quality.yml up -d --no-deps --build api`.
   Check `docker logs masign-api` for the embedder line (`backend='openai-compatible'`,
-  not `'sentence-transformers'`) before calling it healthy.
+  not `'sentence-transformers'`) before calling it healthy — **but that alone
+  is not enough.** Done for real (MAS-168): a rebuild right after a fast
+  `git pull` reported success, built the correct new frontend assets, and
+  logged a perfectly healthy embedder/chat-model startup — while the
+  `COPY app ./app` layer silently served Docker's build cache with backend
+  code from *before* MAS-143 had ever merged (no auth, no workspace scoping).
+  Every route touching `Contract`/`workspace_id` 500'd for every real user
+  until this was caught. The embedder log line only proves the embedding
+  config changed; it says nothing about the rest of `app/`. Always also
+  confirm the running container's own code, not the worktree's, actually
+  changed: `MSYS_NO_PATHCONV=1 docker exec masign-api grep -n '<a line you
+  know just changed>' /app/app/api/routes.py` (or whichever file), and
+  compare it to the same grep against the worktree's on-disk file. If they
+  don't match, `docker compose build --no-cache --pull api` before
+  `up -d --no-deps --force-recreate api` — don't trust a second cached
+  `--build` to fix a caching bug.
 
 ## 6. Evidence comment on the ticket, then hand over
 
