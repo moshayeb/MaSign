@@ -25,9 +25,11 @@ client = TestClient(app)
 ROOT = Path(__file__).resolve().parent.parent
 QUESTIONS = ROOT / "docs" / "evaluation" / "questions.jsonl"
 CONTRACTS = ROOT / "data" / "sample_contracts"
+EVAL_CONTRACTS = ROOT / "data" / "eval_contracts"  # real CUAD text, MAS-32
 
 NW = "northwind_master_services_agreement.txt"
 HB = "harbor_software_subscription.txt"
+BNL = "bnl_vip_outsourcing_agreement.txt"  # real CUAD contract, MAS-32
 
 
 class FakeApi:
@@ -78,13 +80,14 @@ def _q(id: str, question: str, quote: str = "", *, contract: str = NW, not_found
 def test_the_committed_question_set_is_well_formed_and_every_quote_is_in_its_contract() -> None:
     questions = load_questions(QUESTIONS)
     assert len(questions) >= 28
-    assert {q.contract for q in questions} == {NW, HB}
+    assert {q.contract for q in questions} == {NW, HB, BNL}
     for q in questions:
         if q.expect_not_found:
             continue
-        text = (CONTRACTS / q.contract).read_text(encoding="utf-8")
+        folder = EVAL_CONTRACTS if q.contract == BNL else CONTRACTS
+        text = (folder / q.contract).read_text(encoding="utf-8")
         assert resolve_reference([{"chunk_index": 0, "text": text}], q.reference_quote) == 0, f"{q.id}: quote not in {q.contract}"
-    # one question per MAS-82 key term, across the two contracts
+    # one question per MAS-82 key term, across the fictional contracts
     terms = {q.term for q in questions if q.term}
     assert terms == {"effective_date", "recurring_fee", "one_off_fee", "payment_deadline", "late_payment", "termination_cost", "initial_term", "renewal", "notice_period", "price_changes"}
     assert sum(1 for q in questions if q.expect_not_found) >= 3

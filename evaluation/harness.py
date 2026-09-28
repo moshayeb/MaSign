@@ -159,6 +159,11 @@ def retrieval_metrics(results: list[RetrievalResult], *, k: int) -> RetrievalMet
 
 # --- the API client (the only HTTP in the harness) ------------------------------------------------
 
+# Must match app.auth.security.SESSION_COOKIE_NAME; duplicated rather than
+# imported so this harness stays free of the app package until it actually
+# has to hit the network (module docstring).
+SESSION_COOKIE_NAME = "masign_session"
+
 
 class ApiClient(Protocol):
     def contracts(self) -> list[dict[str, Any]]: ...
@@ -174,6 +179,29 @@ class MaSignClient:
         import httpx
 
         self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout)
+
+    def authenticate(self, email: str, password: str) -> None:
+        """Sign in as the given account (MAS-143 requires one for every route below);
+        registers it first if it does not exist yet.
+
+        The server sets the session cookie `Secure` by default (right, for
+        real deployments) -- which a browser drops silently over plain HTTP,
+        and which httpx refuses to send back on this harness's usual
+        `http://localhost:8000` target for the same reason. httpx would
+        otherwise store the cookie faithfully and then never send it, so the
+        very next request 401s. Re-set it by hand, without the flag, so this
+        client can drive an https-deployed instance too and doesn't need
+        MASIGN_COOKIE_SECURE=0 on the server just to be evaluated locally."""
+        login = self._http.post("/api/auth/login", json={"email": email, "password": password})
+        if login.status_code == 401:
+            login = self._http.post("/api/auth/register", json={"email": email, "password": password})
+            login.raise_for_status()
+        else:
+            login.raise_for_status()
+        session_id = login.cookies.get(SESSION_COOKIE_NAME)
+        if not session_id:
+            raise RuntimeError(f"{SESSION_COOKIE_NAME!r} cookie missing from the auth response; cannot proceed.")
+        self._http.cookies.set(SESSION_COOKIE_NAME, session_id)
 
     def contracts(self) -> list[dict[str, Any]]:
         return self._get("/api/contracts")

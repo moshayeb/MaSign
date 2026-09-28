@@ -91,9 +91,86 @@ count it spent; Ragas' telemetry is switched off.
 |---|---|---|---|---|---|---|---|
 | 2026-09-20 | quality (Qwen3-Embedding-4B) | Northwind | 16 | 0.94 | 1.00 | 0.96 | 0 |
 | 2026-09-20 | portable (ModernBERT) | Northwind | 16 | 0.88 | 1.00 | 0.94 | 0 |
+| 2026-09-28 | quality (see note below) | Northwind + Harbor | 29 | 0.86 | 1.00 | 0.91 | 0 |
+| 2026-09-28 | quality (see note below) | Northwind + Harbor + BNL/VIP (CUAD) | 35 | 0.80 | 1.00 | 0.88 | 0 |
 
 Both profiles put the right passage in the top 5 every time; Qwen3 misses
 top-1 once (nw-03, invoice due date ranked 3rd), ModernBERT twice (nw-03 and
 nw-06, the fee-increase clause ranked 2nd). Files:
 `results-2026-09-20-quality-northwind.md`, `results-2026-09-20-portable-northwind.md`.
-No judged run yet — it needs the owner's OK (api-spend-guard).
+
+Adding the CUAD contract still puts every reference passage in the top 5
+(`hit@5 1.00`, 35/35), and BNL's 3 misses (bnl-01, bnl-04, bnl-05) are the
+same pattern as the fictional ones: the right clause ranked 2nd or 3rd, in a
+real 16-page document with denser, less example-shaped prose than the
+fictional set — not a retrieval failure, a harder read.
+`results-2026-09-28-live-all-three.md`.
+
+**Only one profile could be exercised on 2026-09-28 (MAS-32), and it is
+mislabelled `portable` by the API** — a real deployment gap, not a harness
+limitation. `docker-compose.quality.yml` (as written) overwrites the
+unprefixed `EMBEDDING_*` variables, so the container's one and only active
+embedder *is* Qwen3-Embedding-4B, filed under the `portable` profile name
+because that is still `DEFAULT_PROFILE`. Compare mode's second profile is
+gated on the separate `QUALITY_EMBEDDING_API_URL` (`app/retrieval/
+embeddings.py`'s `is_profile_configured("quality")`), which nothing sets on
+this deployment — so `indexed_profiles` never gains `"quality"` and the
+"Compare models" button (MAS-62) cannot appear for any contract uploaded to
+it, no matter which one. This is the answer to the open "Compare models not
+visible" question from MAS-167: filed as its own ticket, MAS-169, since
+fixing it needs a second embedding endpoint running alongside the first, not
+a code change. Hit@1 dropping from 0.94 (Northwind alone, 2026-09-20 quality
+run) to 0.86 (both contracts) is Harbor's two extra misses (hb-11, hb-13),
+not a regression in Northwind's own numbers.
+
+### Judged run: CUAD contract (2026-09-28, owner-approved)
+
+The first judged run this harness has ever completed — `--judge` had never
+actually been exercised end to end before MAS-32 (the README's own note
+above said so). Getting there fixed a real bug in `evaluation/judge.py`,
+not just a MAS-32 wrinkle: `instructor.from_litellm()` and, independently,
+its own `patch_v2` dispatch underneath it, decide sync vs. async by
+`inspect.iscoroutinefunction()` on the completion callable passed in — which
+is always `False` for a callable class instance (`CallCounter`), even one
+whose `__call__` is `async def`, because `inspect` does not unwrap
+`__call__` for that check. Left as it was, this built a client that
+ragas's own `_check_client_async()` also read as synchronous, and ragas's
+sync `score()` entry point always calls its async `ascore()` internally
+regardless — so every judged call was guaranteed to fail with "Cannot use
+agenerate() with a synchronous client", the first time, every time. Fixed
+by passing the bound method (`counter.__call__`, which inspects correctly)
+and declaring `async_client=True` explicitly rather than trusting inference
+a second time. See `evaluation/judge.py`'s comments for the full chain.
+Filed as MAS-170 since it's a real defect independent of MAS-32's own scope.
+
+Scoped to the CUAD contract only (8 questions), per the ticket's own budget
+— not the fictional contracts too, which would have been a materially
+larger spend the ticket never priced in:
+
+| Judged | Faithfulness | Factual correctness | Not-found right | Answer calls | Judge calls |
+|---|---|---|---|---|---|
+| 6 | 0.88 | 0.59 | 2/2 | 16 | 36 |
+
+`results-2026-09-28-judged-cuad.md`. Both "not found" questions (warranty
+duration, prepayment discount) were correctly declined.
+
+**The 0.59 correctness figure understates the system, on manual review.**
+bnl-02 (payment deadline) scored correctness 0.00 despite the stored answer
+being exactly right and cited: "within ten (10) days after the date of the
+postmark for an invoice... late charges of 1-1/2% per month... become
+payable" — word-for-word the reference. The likely cause is Ragas'
+`FactualCorrectness(mode="f1")` penalizing the answer's second sentence (the
+late-fee detail, true and grounded, but outside what `reference_answer`
+covers) as an unmatched statement, rather than a real factual miss. Treated
+as a known limitation of the judge metric on questions with a narrow
+reference and a broader-but-still-correct answer, not a product defect —
+not chased further to avoid more judge spend confirming a hypothesis rather
+than fixing something broken.
+
+bnl-05 (early-termination fee) scored `grounded: false` despite the stored
+answer being complete and correctly citing the passage that contains the
+exact reference quote — worth a second look if the judged run is ever
+extended, but not investigated further here for the same reason.
+
+Extending the judged run to the fictional contracts (37 more questions, a
+materially larger spend) is left for a follow-up, not done here.
