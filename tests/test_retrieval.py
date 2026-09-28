@@ -140,20 +140,20 @@ def test_empty_index_returns_no_context_not_an_error() -> None:
     assert response.json()["grounded"] is False
 
 
-def test_points_of_a_deleted_contract_are_not_returned(db: psycopg.Connection, vector_store, fake_embedder) -> None:
+def test_points_of_a_deleted_contract_are_not_returned(db: psycopg.Connection, workspace_id, vector_store, fake_embedder) -> None:
     # MAS-50: a failed upload's cleanup is best effort, so the store may hold
     # vectors for a contract Postgres no longer knows. They must stay invisible.
     _upload("msa.txt", TERM)
     ghost = uuid4()
     vector_store.upsert([ChunkVector(uuid4(), ghost, 0, FEES, fake_embedder.embed_documents([FEES])[0])])
 
-    hits = retrieve_contract_context("late payment interest", db=db, embedder=fake_embedder, store=vector_store)
+    hits = retrieve_contract_context("late payment interest", db=db, embedder=fake_embedder, store=vector_store, workspace_id=workspace_id)
 
     assert hits and all(hit.contract_id != ghost for hit in hits)
     assert vector_store.count(contract_id=ghost) == 1  # the point is still there; it is just filtered
 
 
-def test_leftover_points_cannot_crowd_out_valid_results(db: psycopg.Connection, vector_store, fake_embedder) -> None:
+def test_leftover_points_cannot_crowd_out_valid_results(db: psycopg.Connection, workspace_id, vector_store, fake_embedder) -> None:
     # MAS-60: more leftover points than `limit`, every one of them a better
     # match than the real chunk. The real chunk must still be returned.
     _upload("msa.txt", FEES)
@@ -162,7 +162,7 @@ def test_leftover_points_cannot_crowd_out_valid_results(db: psycopg.Connection, 
         vector = fake_embedder.embed_documents([question])[0]  # identical words: a perfect score
         vector_store.upsert([ChunkVector(uuid4(), uuid4(), 0, question, vector)])
 
-    hits = retrieve_contract_context(question, db=db, embedder=fake_embedder, store=vector_store, limit=2)
+    hits = retrieve_contract_context(question, db=db, embedder=fake_embedder, store=vector_store, workspace_id=workspace_id, limit=2)
 
     assert len(hits) == 1 and "2. Fees" in hits[0].text
     response = _query(question, limit=2)

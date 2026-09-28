@@ -6,13 +6,18 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import CoveragePassage, Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, VectorIndex
+from app.database.models import AuditEvent, CoveragePassage, Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, VectorIndex, Workspace
 from app.ingestion.document_type import DocumentKind, classify_document
+
+# The single legacy workspace every contract that existed before MAS-143
+# backfills into (migration 014) -- fixed and deterministic, never inferred.
+LEGACY_WORKSPACE_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def create_contract(
     connection: psycopg.Connection,
     *,
+    workspace_id: UUID,
     filename: str,
     file_type: str,
     size_bytes: int,
@@ -26,12 +31,13 @@ def create_contract(
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO contracts (filename, file_type, size_bytes, character_count, chunk_count, ingestion_notes,
+                INSERT INTO contracts (workspace_id, filename, file_type, size_bytes, character_count, chunk_count, ingestion_notes,
                                        document_kind, document_looks_like, document_kind_reasons)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
+                    workspace_id,
                     filename,
                     file_type,
                     size_bytes,
@@ -74,20 +80,44 @@ def classify_unclassified_contracts(connection: psycopg.Connection) -> int:
     return len(ids)
 
 
-def get_contract(connection: psycopg.Connection, contract_id: UUID) -> Contract | None:
+def get_contract(connection: psycopg.Connection, contract_id: UUID, workspace_id: UUID) -> Contract | None:
+    """A contract in another workspace is indistinguishable from a missing
+    one (MAS-143): the caller gets None either way, never a 403 that would
+    confirm the id exists. Every HTTP route must use this, not
+    `get_contract_by_id` below."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM contracts WHERE id = %s AND workspace_id = %s", (contract_id, workspace_id))
+        row = cursor.fetchone()
+    return Contract(**row) if row else None
+
+
+def get_contract_by_id(connection: psycopg.Connection, contract_id: UUID) -> Contract | None:
+    """Unscoped lookup for trusted internal callers only (MAS-143) -- the
+    background review job, which already has a contract_id it validated when
+    the review was requested and has no request/workspace context of its own
+    to scope with. Never call this from an HTTP route."""
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM contracts WHERE id = %s", (contract_id,))
         row = cursor.fetchone()
     return Contract(**row) if row else None
 
 
-def list_contract_ids(connection: psycopg.Connection) -> list[UUID]:
+def list_contract_ids(connection: psycopg.Connection, workspace_id: UUID) -> list[UUID]:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT id FROM contracts")
+        cursor.execute("SELECT id FROM contracts WHERE workspace_id = %s", (workspace_id,))
         return [row["id"] for row in cursor.fetchall()]
 
 
-def list_contracts(connection: psycopg.Connection) -> list[Contract]:
+def list_contracts(connection: psycopg.Connection, workspace_id: UUID) -> list[Contract]:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM contracts WHERE workspace_id = %s ORDER BY created_at DESC, id", (workspace_id,))
+        return [Contract(**row) for row in cursor.fetchall()]
+
+
+def list_all_contracts(connection: psycopg.Connection) -> list[Contract]:
+    """Unscoped, for trusted internal callers only (MAS-143) -- the startup
+    vector-index rebuild, which by design covers every workspace at once.
+    Never call this from an HTTP route."""
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM contracts ORDER BY created_at DESC, id")
         return [Contract(**row) for row in cursor.fetchall()]
@@ -560,6 +590,7 @@ def list_key_terms_for(connection: psycopg.Connection, term_ids: Sequence[str]) 
 def create_question(
     connection: psycopg.Connection,
     *,
+    workspace_id: UUID,
     contract_id: UUID | None,
     question: str,
     answer: str,
@@ -572,38 +603,168 @@ def create_question(
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO questions (contract_id, question, answer, answer_status, grounded, model, response)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO questions (workspace_id, contract_id, question, answer, answer_status, grounded, model, response)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
             """,
-            (contract_id, question, answer, answer_status, grounded, model, Jsonb(response)),
+            (workspace_id, contract_id, question, answer, answer_status, grounded, model, Jsonb(response)),
         )
         row = cursor.fetchone()
     return Question(**row)
 
 
-def list_questions(connection: psycopg.Connection, contract_id: UUID) -> list[Question]:
-    """Questions stored for `contract_id`, plus any all-contracts question that cited it (MAS-102)."""
+def list_questions(connection: psycopg.Connection, contract_id: UUID, workspace_id: UUID) -> list[Question]:
+    """Questions stored for `contract_id`, plus any all-contracts question that cited it (MAS-102).
+
+    `workspace_id` scopes both halves of the OR (MAS-143): a no-scope
+    question asked in another workspace must never surface here even if it
+    happened to cite the same contract_id (which cannot exist cross-workspace
+    today, but the filter is explicit rather than relying on that)."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
             SELECT * FROM questions
-            WHERE contract_id = %s
-               OR (
+            WHERE workspace_id = %s
+              AND (
+                contract_id = %s
+                OR (
                     contract_id IS NULL
                     AND EXISTS (
                         SELECT 1 FROM jsonb_array_elements(response -> 'citations') AS citation
                         WHERE (citation ->> 'contract_id')::uuid = %s
                     )
-               )
+                )
+              )
             ORDER BY created_at DESC
             """,
-            (contract_id, contract_id),
+            (workspace_id, contract_id, contract_id),
         )
         return [Question(**row) for row in cursor.fetchall()]
 
 
-def delete_question(connection: psycopg.Connection, question_id: UUID) -> bool:
+def delete_question(connection: psycopg.Connection, question_id: UUID, workspace_id: UUID) -> bool:
     with connection.cursor() as cursor:
-        cursor.execute("DELETE FROM questions WHERE id = %s", (question_id,))
+        cursor.execute("DELETE FROM questions WHERE id = %s AND workspace_id = %s", (question_id, workspace_id))
         return cursor.rowcount > 0
+
+
+# --- users, workspaces, sessions, audit (MAS-143) ----------------------------
+
+
+def create_user(connection: psycopg.Connection, *, email: str, password_hash: str) -> User:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING *",
+            (email, password_hash),
+        )
+        return User(**cursor.fetchone())
+
+
+def get_user_by_email(connection: psycopg.Connection, email: str) -> User | None:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        row = cursor.fetchone()
+    return User(**row) if row else None
+
+
+def get_user_by_id(connection: psycopg.Connection, user_id: UUID) -> User | None:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+    return User(**row) if row else None
+
+
+def create_personal_workspace(connection: psycopg.Connection, *, user_id: UUID, name: str) -> Workspace:
+    """A new workspace with `user_id` as its sole `owner` member (MAS-143):
+    every account gets exactly one, created at registration."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute("INSERT INTO workspaces (name) VALUES (%s) RETURNING *", (name,))
+            workspace = Workspace(**cursor.fetchone())
+            cursor.execute(
+                "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (%s, %s, 'owner')",
+                (workspace.id, user_id),
+            )
+    return workspace
+
+
+def get_workspace_for_user(connection: psycopg.Connection, user_id: UUID) -> Workspace | None:
+    """The user's workspace. Picks one deterministically if a user ever
+    belongs to more than one in the future (`ORDER BY created_at`), since
+    Tier 3's personal-workspace model gives every user exactly one today."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT w.* FROM workspaces w
+            JOIN workspace_members m ON m.workspace_id = w.id
+            WHERE m.user_id = %s
+            ORDER BY w.created_at
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = cursor.fetchone()
+    return Workspace(**row) if row else None
+
+
+def create_session(connection: psycopg.Connection, *, session_id: str, user_id: UUID, expires_at) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO sessions (id, user_id, expires_at) VALUES (%s, %s, %s)",
+            (session_id, user_id, expires_at),
+        )
+
+
+def get_session_user(connection: psycopg.Connection, session_id: str) -> User | None:
+    """The session's user, or None if the session does not exist or has expired.
+
+    An expired session is never deleted here: a GET-triggered write inside a
+    read path is a surprise, and login/register naturally accumulate garbage
+    slowly enough that a school-project schema does not need a reaper job."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT u.* FROM users u
+            JOIN sessions s ON s.user_id = u.id
+            WHERE s.id = %s AND s.expires_at > now()
+            """,
+            (session_id,),
+        )
+        row = cursor.fetchone()
+    return User(**row) if row else None
+
+
+def delete_session(connection: psycopg.Connection, session_id: str) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM sessions WHERE id = %s", (session_id,))
+
+
+def create_audit_event(
+    connection: psycopg.Connection,
+    *,
+    workspace_id: UUID,
+    user_id: UUID | None,
+    event_type: str,
+    target_type: str,
+    target_id: UUID | None,
+    metadata: dict | None = None,
+) -> AuditEvent:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO audit_events (workspace_id, user_id, event_type, target_type, target_id, metadata)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (workspace_id, user_id, event_type, target_type, target_id, Jsonb(metadata or {})),
+        )
+        return AuditEvent(**cursor.fetchone())
+
+
+def list_audit_events(connection: psycopg.Connection, workspace_id: UUID, limit: int = 200) -> list[AuditEvent]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM audit_events WHERE workspace_id = %s ORDER BY created_at DESC LIMIT %s",
+            (workspace_id, limit),
+        )
+        return [AuditEvent(**row) for row in cursor.fetchall()]

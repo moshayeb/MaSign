@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.answering.llm import ChatModel, ChatModelError, UnconfiguredChatModel, get_chat_model
+from app.api.auth_routes import router as auth_router
 from app.api.routes import router as api_router
 from app.guardrails.prompt_injection import PromptInjectionError
 from app.api import dependencies
@@ -83,6 +84,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(auth_router)
 app.include_router(api_router)
 
 
@@ -214,6 +216,7 @@ FRONTEND_DIST = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent.
 # routes registered ahead of the mount win over it and answer 200.
 FRONTEND_PAGES = [
     "/workspace",
+    "/login",
     "/about",
     "/privacy",
     "/documentation",

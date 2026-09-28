@@ -13,9 +13,9 @@ from app.actions.workflow import build_follow_up_actions
 from app.api import export
 from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
-from app.api.dependencies import get_chat_model, get_db, get_embedder, get_vector_store
+from app.api.dependencies import get_chat_model, get_current_user, get_current_workspace, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary
+from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
@@ -538,6 +538,8 @@ async def upload_contract(
     embedder: Embedder = Depends(get_embedder),
     store: VectorStore = Depends(get_vector_store),
     chat_model: ChatModel = Depends(get_chat_model),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
 ) -> UploadContractResponse:
     upload = await validate_contract_upload(file)
 
@@ -551,6 +553,7 @@ async def upload_contract(
     contract = await run_in_threadpool(
         repository.create_contract,
         db,
+        workspace_id=workspace.id,
         filename=upload.filename,
         file_type=upload.file_type,
         size_bytes=upload.size_bytes,
@@ -569,6 +572,17 @@ async def upload_contract(
     except Exception:
         await run_in_threadpool(_discard_failed_upload, db, store, contract.id)
         raise
+
+    await run_in_threadpool(
+        repository.create_audit_event,
+        db,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        event_type="contract.uploaded",
+        target_type="contract",
+        target_id=contract.id,
+        metadata={"filename": contract.filename},
+    )
 
     # The whole-contract risk review (MAS-81) takes one model call per batch
     # of passages; it runs after the response, and the UI polls its status.
@@ -609,18 +623,28 @@ def _discard_failed_upload(db: psycopg.Connection, store: VectorStore, contract_
 
 
 @router.get("/contracts", response_model=list[ContractSummary])
-def list_contracts(db: psycopg.Connection = Depends(get_db)) -> list[ContractSummary]:
+def list_contracts(
+    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[ContractSummary]:
+    # list_risk_summaries/list_key_terms_for scan every stored review, not
+    # just this workspace's -- harmless (looked up by contract_id, which is
+    # already workspace-scoped by list_contracts below) but worth noting if
+    # either grows a workspace filter of its own later.
     reviews = repository.list_risk_summaries(db)
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS)
-    return [ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id)) for c in repository.list_contracts(db)]
+    return [
+        ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id))
+        for c in repository.list_contracts(db, workspace.id)
+    ]
 
 
 @router.get("/contracts/{contract_id}", response_model=ContractSummary)
 def get_contract(
     contract_id: UUID,
     db: psycopg.Connection = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
 ) -> ContractSummary:
-    contract = repository.get_contract(db, contract_id)
+    contract = repository.get_contract(db, contract_id, workspace.id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
@@ -653,27 +677,36 @@ class ContractLinkOut(BaseModel):
 
 
 @router.get("/contracts/{contract_id}/links", response_model=list[ContractLinkOut])
-def list_contract_links(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> list[ContractLinkOut]:
-    if repository.get_contract(db, contract_id) is None:
+def list_contract_links(
+    contract_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[ContractLinkOut]:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     return [ContractLinkOut.from_model(link) for link in repository.list_links(db, contract_id)]
 
 
 @router.post("/contracts/{contract_id}/links", response_model=ContractLinkOut, status_code=status.HTTP_201_CREATED)
 def link_contract(
-    contract_id: UUID, body: LinkContractRequest, db: psycopg.Connection = Depends(get_db)
+    contract_id: UUID,
+    body: LinkContractRequest,
+    db: psycopg.Connection = Depends(get_db),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
 ) -> ContractLinkOut:
     """Link an uploaded contract as the resolution of a named reference (MAS-137).
 
     Always an explicit, user-confirmed action: `reference_name` must match one
     of the primary's current, unresolved external references (MAS-84) -- this
-    never infers a match from filename or content.
+    never infers a match from filename or content. Both contracts must be in
+    the caller's own workspace (MAS-143): a cross-workspace linked_contract_id
+    404s exactly like a nonexistent one, so a bundle can never smuggle in a
+    document the caller cannot otherwise see.
     """
-    if repository.get_contract(db, contract_id) is None:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     if body.linked_contract_id == contract_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A contract cannot be linked to itself.")
-    if repository.get_contract(db, body.linked_contract_id) is None:
+    if repository.get_contract(db, body.linked_contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The document to link was not found.")
     current_review = repository.get_risk_review(db, contract_id)
     if current_review is not None and current_review.status in ("pending", "running"):
@@ -692,15 +725,41 @@ def link_contract(
     link = repository.create_link(
         db, primary_contract_id=contract_id, linked_contract_id=body.linked_contract_id, reference_name=body.reference_name
     )
+    repository.create_audit_event(
+        db,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        event_type="contract.linked",
+        target_type="contract_link",
+        target_id=link.id,
+        metadata={"primary_contract_id": str(contract_id), "linked_contract_id": str(body.linked_contract_id), "reference_name": body.reference_name},
+    )
     return ContractLinkOut.from_model(link)
 
 
 @router.delete("/contracts/{contract_id}/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
-def unlink_contract(contract_id: UUID, link_id: UUID, db: psycopg.Connection = Depends(get_db)) -> Response:
+def unlink_contract(
+    contract_id: UUID,
+    link_id: UUID,
+    db: psycopg.Connection = Depends(get_db),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+) -> Response:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     links = repository.list_links(db, contract_id)
     if not any(link.id == link_id for link in links):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found.")
     repository.delete_link(db, link_id)
+    repository.create_audit_event(
+        db,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        event_type="contract.unlinked",
+        target_type="contract_link",
+        target_id=link_id,
+        metadata={"primary_contract_id": str(contract_id)},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -735,20 +794,24 @@ class QuestionOut(BaseModel):
 
 
 @router.get("/contracts/{contract_id}/questions", response_model=list[QuestionOut])
-def list_contract_questions(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> list[QuestionOut]:
+def list_contract_questions(
+    contract_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[QuestionOut]:
     """Previously answered questions for this contract, newest first (MAS-102).
 
     Includes an "all contracts" question (no scope) if its answer actually
     cited this contract, not merely retrieved it.
     """
-    if repository.get_contract(db, contract_id) is None:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
-    return [QuestionOut.from_model(row) for row in repository.list_questions(db, contract_id)]
+    return [QuestionOut.from_model(row) for row in repository.list_questions(db, contract_id, workspace.id)]
 
 
 @router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
-def forget_question(question_id: UUID, db: psycopg.Connection = Depends(get_db)) -> Response:
-    if not repository.delete_question(db, question_id):
+def forget_question(
+    question_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> Response:
+    if not repository.delete_question(db, question_id, workspace.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -763,9 +826,11 @@ class Passage(BaseModel):
 
 
 @router.get("/contracts/{contract_id}/passages", response_model=list[Passage])
-def get_contract_passages(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> list[Passage]:
+def get_contract_passages(
+    contract_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[Passage]:
     """Every stored passage of the contract in order — the text behind each citation, finding and key term (MAS-83)."""
-    if repository.get_contract(db, contract_id) is None:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     passages = []
     for c in repository.list_chunks(db, contract_id):
@@ -783,9 +848,10 @@ def search_contract(
     db: psycopg.Connection = Depends(get_db),
     embedder: Embedder = Depends(get_embedder),
     store: VectorStore = Depends(get_vector_store),
+    workspace: Workspace = Depends(get_current_workspace),
 ) -> list[RetrievedChunk]:
     """Retrieval only — the passages a question would be answered from, best first. No model call (MAS-91)."""
-    if repository.get_contract(db, contract_id) is None:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     # Same bundle scope as /api/query's _retrieve (MAS-151): itself plus any
     # linked documents, so the two retrieval paths agree for the same contract.
@@ -795,9 +861,11 @@ def search_contract(
 
 
 @router.get("/contracts/{contract_id}/risks", response_model=RiskReviewResponse)
-def get_contract_risks(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> RiskReviewResponse:
+def get_contract_risks(
+    contract_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> RiskReviewResponse:
     """The whole-contract risk review: its status and the verified findings (MAS-81)."""
-    if repository.get_contract(db, contract_id) is None:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     review = repository.get_risk_review(db, contract_id)
     if review is None:
@@ -805,13 +873,15 @@ def get_contract_risks(contract_id: UUID, db: psycopg.Connection = Depends(get_d
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This contract has not been reviewed for risks yet. Start a review to grade it.",
         )
-    return _review_response(db, review)
+    return _review_response(db, review, workspace.id)
 
 
 @router.get("/contracts/{contract_id}/key-terms", response_model=KeyTermsResponse)
-def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(get_db)) -> KeyTermsResponse:
+def get_contract_key_terms(
+    contract_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> KeyTermsResponse:
     """The contract's financial key terms with their source passages (MAS-82)."""
-    contract = repository.get_contract(db, contract_id)
+    contract = repository.get_contract(db, contract_id, workspace.id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     review = repository.get_risk_review(db, contract_id)
@@ -825,16 +895,18 @@ def get_contract_key_terms(contract_id: UUID, db: psycopg.Connection = Depends(g
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
-    coverage = _coverage_for_review(db, review, contract)
+    coverage = _coverage_for_review(db, review, contract, workspace.id)
     return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage)
 
 
 @router.get("/contracts/{contract_id}/export.{fmt}")
-def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection = Depends(get_db)) -> Response:
+def export_contract_review(
+    contract_id: UUID, fmt: str, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> Response:
     """The review as Markdown, CSV, or PDF. Same data as /risks and /key-terms."""
     if fmt not in ("md", "csv", "pdf"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md, csv or pdf.")
-    contract = repository.get_contract(db, contract_id)
+    contract = repository.get_contract(db, contract_id, workspace.id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     review = repository.get_risk_review(db, contract_id)
@@ -843,7 +915,7 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This contract has not been reviewed yet. Start a review before exporting it.",
         )
-    review_body = _review_response(db, review)
+    review_body = _review_response(db, review, workspace.id)
     # See _review_response: resolve passage numbers over the whole bundle.
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
@@ -852,9 +924,9 @@ def export_contract_review(contract_id: UUID, fmt: str, db: psycopg.Connection =
     documents = {
         item.id: item.filename
         for bundle_id in repository.bundle_contract_ids(db, contract_id)
-        if (item := repository.get_contract(db, bundle_id)) is not None
+        if (item := repository.get_contract(db, bundle_id, workspace.id)) is not None
     }
-    questions = [QuestionOut.from_model(row) for row in repository.list_questions(db, contract_id)]
+    questions = [QuestionOut.from_model(row) for row in repository.list_questions(db, contract_id, workspace.id)]
     if fmt == "md":
         content, media = export.render_markdown(contract.filename, review_body, terms_body, documents, questions), "text/markdown; charset=utf-8"
     elif fmt == "csv":
@@ -874,19 +946,24 @@ def review_contract_risks(
     background_tasks: BackgroundTasks,
     db: psycopg.Connection = Depends(get_db),
     chat_model: ChatModel = Depends(get_chat_model),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
 ) -> RiskReviewResponse:
     """(Re)run the whole-contract risk review; poll GET .../risks for the result."""
-    if repository.get_contract(db, contract_id) is None:
+    if repository.get_contract(db, contract_id, workspace.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     review = repository.claim_risk_review(db, contract_id)
     if review is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A risk review of this contract is already running.")
+    repository.create_audit_event(
+        db, workspace_id=workspace.id, user_id=user.id, event_type="review.requested", target_type="contract", target_id=contract_id
+    )
     db.commit()  # the task's own connection must see the pending row
     background_tasks.add_task(run_review_in_background, contract_id, chat_model)
-    return _review_response(db, review)
+    return _review_response(db, review, workspace.id)
 
 
-def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewResponse:
+def _review_response(db: psycopg.Connection, review: RiskReview, workspace_id: UUID) -> RiskReviewResponse:
     rows = repository.list_risk_findings(db, review.contract_id)
     # A bundle review's findings/terms can point at a linked document's own
     # chunks (MAS-138); resolve passage numbers over the whole bundle so
@@ -894,15 +971,15 @@ def _review_response(db: psycopg.Connection, review: RiskReview) -> RiskReviewRe
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, review.contract_id) for c in repository.list_chunks(db, cid)
     }
-    contract = repository.get_contract(db, review.contract_id)
-    coverage = _coverage_for_review(db, review, contract) if contract else None
+    contract = repository.get_contract(db, review.contract_id, workspace_id)
+    coverage = _coverage_for_review(db, review, contract, workspace_id) if contract else None
     return RiskReviewResponse.from_models(review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage)
 
 
-def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: Contract) -> Coverage:
+def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: Contract, workspace_id: UUID) -> Coverage:
     """Build coverage from every document that the review actually read."""
     bundle_ids = repository.bundle_contract_ids(db, review.contract_id)
-    contracts = {contract_id: item for contract_id in bundle_ids if (item := repository.get_contract(db, contract_id)) is not None}
+    contracts = {contract_id: item for contract_id in bundle_ids if (item := repository.get_contract(db, contract_id, workspace_id)) is not None}
     chunks = [chunk for contract_id in bundle_ids for chunk in repository.list_chunks(db, contract_id)]
     return Coverage.build(review, contract, chunks, repository.list_links(db, review.contract_id), contracts)
 
@@ -940,6 +1017,7 @@ async def query_contract(
     embedder: Embedder = Depends(get_embedder),
     store: VectorStore = Depends(get_vector_store),
     chat_model: ChatModel = Depends(get_chat_model),
+    workspace: Workspace = Depends(get_current_workspace),
 ) -> QueryResponse:
     # A question that is itself an injection is refused before retrieval and
     # before either model call (MAS-90); the guardrail would catch it in the
@@ -947,7 +1025,7 @@ async def query_contract(
     refuse_injected_question(request.question)
     # Embedding the question is CPU work, the lookups are synchronous and the
     # model call blocks, so all of it runs off the event loop like the upload path.
-    hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
+    hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model, workspace.id)
 
     response = QueryResponse(
         answer=answer.text,
@@ -987,6 +1065,7 @@ async def query_contract(
     if response.answer_status != "withheld":
         repository.create_question(
             db,
+            workspace_id=workspace.id,
             contract_id=request.contract_id,
             question=request.question,
             answer=response.answer,
@@ -1005,11 +1084,12 @@ def _retrieve_and_answer(
     embedder: Embedder,
     store: VectorStore,
     chat_model: ChatModel,
+    workspace_id: UUID,
 ) -> tuple[list[ChunkHit], Answer, RiskReport]:
-    hits = _retrieve(request, db, embedder, store)
+    hits = _retrieve(request, db, embedder, store, workspace_id)
     filenames = {}
     for contract_id in {hit.contract_id for hit in hits}:
-        contract = repository.get_contract(db, contract_id)
+        contract = repository.get_contract(db, contract_id, workspace_id)
         if contract is not None:
             filenames[contract_id] = contract.filename
     # Two independent model calls over the same passages; run them side by
@@ -1029,8 +1109,8 @@ def _retrieve_and_answer(
         return hits, resolved, report
 
 
-def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore) -> list[ChunkHit]:
-    if request.contract_id is not None and repository.get_contract(db, request.contract_id) is None:
+def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore, workspace_id: UUID) -> list[ChunkHit]:
+    if request.contract_id is not None and repository.get_contract(db, request.contract_id, workspace_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     # A contract's bundle (MAS-137/138) is itself plus any linked documents;
     # a contract with no links is a bundle of one, same search as before.
@@ -1041,5 +1121,6 @@ def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder,
         embedder=embedder,
         store=store,
         contract_ids=bundle_ids,
+        workspace_id=workspace_id,
         limit=request.limit,
     )

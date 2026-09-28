@@ -90,11 +90,11 @@ def test_docx_upload_is_parsed_into_chunks(make_docx) -> None:
     assert response.json()["chunk_count"] >= 1
 
 
-def test_upload_stores_contract_and_chunks_in_database(db: psycopg.Connection) -> None:
+def test_upload_stores_contract_and_chunks_in_database(db: psycopg.Connection, workspace_id) -> None:
     body = _upload("acme.txt", SAMPLE_CONTRACT.read_bytes(), "text/plain").json()
     contract_id = UUID(body["contract_id"])
 
-    stored = repository.get_contract(db, contract_id)
+    stored = repository.get_contract(db, contract_id, workspace_id)
     assert stored is not None
     assert stored.filename == "acme.txt"
     assert stored.character_count == body["character_count"]
@@ -169,7 +169,7 @@ class _DownStore:
         raise VectorStoreError("still refused (simulated)")
 
 
-def test_vector_store_outage_fails_the_upload_cleanly(db: psycopg.Connection, caplog) -> None:
+def test_vector_store_outage_fails_the_upload_cleanly(db: psycopg.Connection, workspace_id, caplog) -> None:
     from app.api import dependencies
 
     app.dependency_overrides[dependencies.get_vector_store] = lambda: _DownStore()
@@ -179,7 +179,7 @@ def test_vector_store_outage_fails_the_upload_cleanly(db: psycopg.Connection, ca
 
     assert response.status_code == 503
     assert "Vector store unavailable" in response.json()["detail"]
-    assert repository.list_contracts(db) == []  # no half-processed contract left behind
+    assert repository.list_contracts(db, workspace_id) == []  # no half-processed contract left behind
     # MAS-50: the failed vector cleanup is logged, and the client still sees the
     # original outage rather than the cleanup's own failure.
     assert any("could not delete vectors" in r.message for r in caplog.records)
@@ -187,7 +187,7 @@ def test_vector_store_outage_fails_the_upload_cleanly(db: psycopg.Connection, ca
 
 
 def test_failure_after_vectors_were_stored_removes_them_again(
-    db: psycopg.Connection, vector_store, monkeypatch: pytest.MonkeyPatch
+    db: psycopg.Connection, workspace_id, vector_store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # MAS-50: Qdrant has accepted the points, then recording the embedding ids
     # fails. Neither store may keep anything of the contract.
@@ -199,15 +199,15 @@ def test_failure_after_vectors_were_stored_removes_them_again(
     response = _upload("acme.txt", SAMPLE_CONTRACT.read_bytes(), "text/plain")
 
     assert response.status_code == 503
-    assert repository.list_contracts(db) == []
+    assert repository.list_contracts(db, workspace_id) == []
     assert vector_store.count() == 0
 
 
-def test_failed_parse_stores_nothing(db: psycopg.Connection, make_scanned_pdf) -> None:
+def test_failed_parse_stores_nothing(db: psycopg.Connection, workspace_id, make_scanned_pdf) -> None:
     response = _upload("scan.pdf", make_scanned_pdf(), "application/pdf")
 
     assert response.status_code == 422
-    assert repository.list_contracts(db) == []
+    assert repository.list_contracts(db, workspace_id) == []
 
 
 def test_contracts_can_be_listed_newest_first() -> None:

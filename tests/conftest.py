@@ -8,6 +8,7 @@ need genuine documents rather than byte stubs.
 import os
 import re
 import uuid
+from uuid import UUID
 import zlib
 from collections.abc import Callable, Iterator
 from io import BytesIO
@@ -19,11 +20,18 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 # Keep app startup from running migrations under test; the `database` fixture
 # below manages the schema itself.
 os.environ.setdefault("APP_ENV", "test")
+# TestClient talks to the app over plain http://testserver; a `Secure`
+# session cookie (the correct default for a real deployment) would be set by
+# the server but never replayed by the client's cookie jar on the next
+# request, since it isn't https. Same flag a local HTTP dev server needs.
+os.environ.setdefault("MASIGN_COOKIE_SECURE", "0")
 from docx import Document
 from pypdf import PdfWriter
 
 from app.api import dependencies
+from app.database import repository
 from app.database.migrations import run_migrations
+from app.database.models import User, Workspace
 from app.database.session import get_connection, get_database_url
 from app.main import app
 from app.retrieval.vector_store import VectorStore
@@ -211,6 +219,44 @@ def db(database: str) -> Iterator[psycopg.Connection]:
     with get_connection(database) as connection:
         yield connection
         connection.execute("TRUNCATE contracts, vector_index CASCADE")
+
+
+# --- auth (MAS-143) -----------------------------------------------------------
+#
+# Every contract/question route now requires a signed-in user and their
+# workspace. Rather than touch the ~400 existing tests that call the
+# TestClient with no session, one real user+workspace is created once per
+# test session (the `db` fixture's per-test cleanup only cascades from
+# `contracts`, so these rows outlive it) and the auth dependencies are
+# overridden the same way get_embedder/get_vector_store/get_chat_model
+# already are. A test that specifically exercises auth (tests/test_auth.py)
+# pops these overrides and drives /api/auth/* directly.
+
+
+@pytest.fixture(scope="session")
+def _default_account(database: str) -> tuple[User, Workspace]:
+    with get_connection(database) as connection:
+        user = repository.create_user(connection, email="test-suite@example.com", password_hash="unused-in-tests")
+        workspace = repository.create_personal_workspace(connection, user_id=user.id, name="Test workspace")
+        connection.commit()
+    return user, workspace
+
+
+@pytest.fixture
+def workspace_id(_default_account: tuple[User, Workspace]) -> UUID:
+    """The default test account's workspace id, for tests that call
+    repository functions directly (bypassing the API and its auth override)."""
+    return _default_account[1].id
+
+
+@pytest.fixture(autouse=True)
+def _authenticated(_default_account: tuple[User, Workspace]) -> Iterator[None]:
+    user, workspace = _default_account
+    app.dependency_overrides[dependencies.get_current_user] = lambda: user
+    app.dependency_overrides[dependencies.get_current_workspace] = lambda: workspace
+    yield
+    app.dependency_overrides.pop(dependencies.get_current_user, None)
+    app.dependency_overrides.pop(dependencies.get_current_workspace, None)
 
 
 # --- documents --------------------------------------------------------------

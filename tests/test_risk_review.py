@@ -30,10 +30,10 @@ def _upload(text: str, name: str = "c.txt") -> str:
     return response.json()["contract_id"]
 
 
-def _stored(db, *passages: str) -> str:
+def _stored(db, workspace_id, *passages: str) -> str:
     """A contract with exactly these chunks (the chunker would pack short ones together)."""
     contract = repository.create_contract(
-        db, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=list(passages)
+        db, workspace_id=workspace_id, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=list(passages)
     )
     db.commit()
     return contract.id
@@ -59,8 +59,8 @@ def _passage_with(user_prompt: str, needle: str) -> int | None:
 # --- the runner (no HTTP) -----------------------------------------------------------
 
 
-def test_review_grades_every_passage_in_batches_and_stores_the_verified_findings(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, UNLIMITED, RENEWAL)
+def test_review_grades_every_passage_in_batches_and_stores_the_verified_findings(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, UNLIMITED, RENEWAL)
     chunks = repository.list_chunks(db, contract_id)
 
     # Batches of one passage: each call sees exactly one numbered passage.
@@ -87,8 +87,8 @@ def test_review_grades_every_passage_in_batches_and_stores_the_verified_findings
     assert {r.chunk_id for r in rows} == {chunks[1].id, chunks[2].id}
 
 
-def test_review_uses_the_batch_size_as_passages_per_call(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, *(f"{i}. Clause number {i} says something ordinary." for i in range(1, 21)))
+def test_review_uses_the_batch_size_as_passages_per_call(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, *(f"{i}. Clause number {i} says something ordinary." for i in range(1, 21)))
     fake_chat_model.calls.clear()
 
     review = review_contract(contract_id, fake_chat_model, batch_size=8)
@@ -98,8 +98,8 @@ def test_review_uses_the_batch_size_as_passages_per_call(db, fake_chat_model: Fa
     assert "[8]" in fake_chat_model.calls[0][1] and "[9]" not in fake_chat_model.calls[0][1]
 
 
-def test_a_model_failure_marks_the_review_failed_with_the_reason(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, UNLIMITED)
+def test_a_model_failure_marks_the_review_failed_with_the_reason(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, UNLIMITED)
     fake_chat_model.risk_error = ChatModelError("Anthropic API refused the request (HTTP 429): rate limited")
 
     review = review_contract(contract_id, fake_chat_model, batch_size=1)
@@ -109,12 +109,12 @@ def test_a_model_failure_marks_the_review_failed_with_the_reason(db, fake_chat_m
     assert review.complete is False
 
 
-def test_a_key_terms_only_failure_keeps_the_verified_risk_findings(db, fake_chat_model: FakeChatModel) -> None:
+def test_a_key_terms_only_failure_keeps_the_verified_risk_findings(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
     # MAS-129: risk grading succeeded for both passages; only the key-terms
     # call fails. The review must still reach "done" with both risk findings
     # kept — not "failed" with everything discarded, which is what a shared
     # try/except around both calls used to do.
-    contract_id = _stored(db, FEES, UNLIMITED)
+    contract_id = _stored(db, workspace_id, FEES, UNLIMITED)
     fake_chat_model.risk_reply = lambda user: json.dumps([_finding("liability", "High", 1, "shall be unlimited")]) if "unlimited" in user else "[]"
     fake_chat_model.key_terms_error = ChatModelError("Anthropic API refused the request (HTTP 429): rate limited")
 
@@ -128,8 +128,8 @@ def test_a_key_terms_only_failure_keeps_the_verified_risk_findings(db, fake_chat
     assert repository.list_key_terms(db, contract_id) == []  # nothing usable to store
 
 
-def test_an_unreadable_batch_makes_the_review_incomplete_not_empty(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, UNLIMITED)
+def test_an_unreadable_batch_makes_the_review_incomplete_not_empty(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, UNLIMITED)
     fake_chat_model.risk_reply = lambda user: "no json here" if "unlimited" in user else "[]"
 
     review = review_contract(contract_id, fake_chat_model, batch_size=1)
@@ -137,8 +137,8 @@ def test_an_unreadable_batch_makes_the_review_incomplete_not_empty(db, fake_chat
     assert (review.status, review.complete, review.chunks_checked, review.chunks_total) == ("done", False, 1, 2)
 
 
-def test_review_progress_is_visible_from_another_connection(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, UNLIMITED)
+def test_review_progress_is_visible_from_another_connection(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, UNLIMITED)
     observed: list[tuple[str, int, int]] = []
 
     def observe_progress(_: str) -> str:
@@ -157,9 +157,9 @@ def test_review_progress_is_visible_from_another_connection(db, fake_chat_model:
     assert observed[1] == ("running", 1, 2)
 
 
-def test_startup_recovery_makes_interrupted_reviews_retryable(db) -> None:
-    pending_id = _stored(db, FEES)
-    running_id = _stored(db, UNLIMITED)
+def test_startup_recovery_makes_interrupted_reviews_retryable(db, workspace_id) -> None:
+    pending_id = _stored(db, workspace_id, FEES)
+    running_id = _stored(db, workspace_id, UNLIMITED)
     repository.start_risk_review(db, pending_id)
     repository.start_risk_review(db, running_id, status="running")
     db.commit()
@@ -234,8 +234,8 @@ def test_upload_starts_a_review_and_the_result_is_readable(db, fake_chat_model: 
     )
 
 
-def test_contract_list_reports_an_incomplete_review(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, UNLIMITED)
+def test_contract_list_reports_an_incomplete_review(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, UNLIMITED)
     repository.start_risk_review(db, contract_id, status="running")
     repository.update_risk_review(db, contract_id, status="done", chunks_total=2, chunks_checked=1, complete=False)
     db.commit()
@@ -265,8 +265,8 @@ def test_review_can_be_rerun_for_a_contract_and_is_refused_while_running(db, fak
     assert "already running" in refused.json()["detail"]
 
 
-def test_concurrent_review_starts_schedule_only_one_job(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, UNLIMITED)
+def test_concurrent_review_starts_schedule_only_one_job(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, UNLIMITED)
     entered = Event()
     release = Event()
     risk_calls = 0

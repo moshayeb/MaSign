@@ -28,7 +28,7 @@ def anyio_backend() -> str:
 
 @pytest.fixture
 def slow_database(monkeypatch: pytest.MonkeyPatch):
-    def slow_create(db, *, filename, file_type, size_bytes, character_count, chunks, ingestion_notes=None, document_kind=None):
+    def slow_create(db, *, workspace_id, filename, file_type, size_bytes, character_count, chunks, ingestion_notes=None, document_kind=None):
         time.sleep(0.4)  # blocking, like a real synchronous insert
         return Contract(
             id=uuid4(),
@@ -39,6 +39,7 @@ def slow_database(monkeypatch: pytest.MonkeyPatch):
             chunk_count=len(chunks),
             status="processed",
             created_at=datetime.now(timezone.utc),
+            workspace_id=workspace_id,
         )
 
     class FakeConnection:
@@ -50,6 +51,9 @@ def slow_database(monkeypatch: pytest.MonkeyPatch):
     # The whole-contract review (MAS-81) is not what is measured here.
     monkeypatch.setattr(routes.repository, "start_risk_review", lambda *args, **kwargs: None)
     monkeypatch.setattr(routes, "run_review_in_background", lambda *args, **kwargs: None)
+    # The upload audit event (MAS-143) is not what is measured here either;
+    # FakeConnection has no real cursor for it to write through.
+    monkeypatch.setattr(routes.repository, "create_audit_event", lambda *args, **kwargs: None)
     app.dependency_overrides[get_db] = lambda: FakeConnection()  # no real connection needed
     yield
     app.dependency_overrides.pop(get_db, None)
@@ -64,7 +68,7 @@ def slow_cleanup(monkeypatch: pytest.MonkeyPatch):
         def rollback(self) -> None:
             pass
 
-    def fast_create(db, *, filename, file_type, size_bytes, character_count, chunks, ingestion_notes=None, document_kind=None):
+    def fast_create(db, *, workspace_id, filename, file_type, size_bytes, character_count, chunks, ingestion_notes=None, document_kind=None):
         return Contract(
             id=uuid4(),
             filename=filename,
@@ -74,6 +78,7 @@ def slow_cleanup(monkeypatch: pytest.MonkeyPatch):
             chunk_count=len(chunks),
             status="processed",
             created_at=datetime.now(timezone.utc),
+            workspace_id=workspace_id,
         )
 
     def failing_index(*args, **kwargs):

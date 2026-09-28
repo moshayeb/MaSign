@@ -26,7 +26,10 @@ def test_built_ui_is_served_from_the_root(tmp_path: Path, monkeypatch: pytest.Mo
     assert "<title>MaSign</title>" in client.get("/").text
     assert client.get("/assets/app.js").text == "console.log('ui')"
     assert client.get("/health").json() == {"status": "ok"}  # API routes still win
-    assert client.get("/api/contracts/not-a-uuid").status_code == 422
+    # 401, not the SPA's index.html fallback: an API route path still reaches
+    # the API (and now its auth check, MAS-143) rather than falling through
+    # to StaticFiles(html=True)'s catch-all.
+    assert client.get("/api/contracts/not-a-uuid").status_code == 401
 
 
 def test_known_client_side_pages_answer_200_not_404(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

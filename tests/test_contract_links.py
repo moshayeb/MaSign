@@ -13,8 +13,8 @@ from tests.conftest import FakeChatModel
 client = TestClient(app)
 
 
-def _stored(db, *passages: str, name: str = "c.txt") -> str:
-    contract = repository.create_contract(db, filename=name, file_type="txt", size_bytes=1, character_count=1, chunks=list(passages))
+def _stored(db, workspace_id, *passages: str, name: str = "c.txt") -> str:
+    contract = repository.create_contract(db, workspace_id=workspace_id, filename=name, file_type="txt", size_bytes=1, character_count=1, chunks=list(passages))
     db.commit()
     return contract.id
 
@@ -25,9 +25,9 @@ ORDER_FORM_CONTRACT = "2. Fees. The Fees are as set out in the Order Form and Sc
 # --- the API ------------------------------------------------------------------------------
 
 
-def test_link_is_created_and_listed(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_link_is_created_and_listed(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
 
     response = client.post(f"/api/contracts/{primary_id}/links", json={"linked_contract_id": str(linked_id), "reference_name": "Order Form"})
 
@@ -40,9 +40,9 @@ def test_link_is_created_and_listed(db) -> None:
     assert len(listed) == 1 and listed[0]["id"] == body["id"]
 
 
-def test_link_invalidates_the_primarys_existing_review_and_clears_derived_rows(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_link_invalidates_the_primarys_existing_review_and_clears_derived_rows(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
     repository.start_risk_review(db, primary_id, status="done")
     repository.update_risk_review(db, primary_id, status="done", chunks_total=1, chunks_checked=1, complete=True, key_terms_complete=True)
     db.commit()
@@ -56,9 +56,9 @@ def test_link_invalidates_the_primarys_existing_review_and_clears_derived_rows(d
     assert "Run the review again" in review.error
 
 
-def test_link_refuses_to_change_a_running_review(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_link_refuses_to_change_a_running_review(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
     repository.start_risk_review(db, primary_id, status="running")
     db.commit()
 
@@ -68,9 +68,9 @@ def test_link_refuses_to_change_a_running_review(db) -> None:
     assert "current review" in response.json()["detail"]
 
 
-def test_link_rejects_a_reference_name_that_is_not_actually_unresolved(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. Some other document.", name="other.txt")
+def test_link_rejects_a_reference_name_that_is_not_actually_unresolved(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. Some other document.", name="other.txt")
 
     not_a_reference = client.post(f"/api/contracts/{primary_id}/links", json={"linked_contract_id": str(linked_id), "reference_name": "Statement of Work"})
     assert not_a_reference.status_code == 400
@@ -84,8 +84,8 @@ def test_link_rejects_a_reference_name_that_is_not_actually_unresolved(db) -> No
     assert "not an unresolved reference" in again.json()["detail"]
 
 
-def test_link_rejects_a_contract_linking_itself(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
+def test_link_rejects_a_contract_linking_itself(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
 
     response = client.post(f"/api/contracts/{primary_id}/links", json={"linked_contract_id": str(primary_id), "reference_name": "Order Form"})
 
@@ -93,8 +93,8 @@ def test_link_rejects_a_contract_linking_itself(db) -> None:
     assert "cannot be linked to itself" in response.json()["detail"]
 
 
-def test_link_rejects_unknown_contracts(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
+def test_link_rejects_unknown_contracts(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
 
     unknown_primary = client.post(f"/api/contracts/{uuid4()}/links", json={"linked_contract_id": str(primary_id), "reference_name": "Order Form"})
     assert unknown_primary.status_code == 404
@@ -104,9 +104,9 @@ def test_link_rejects_unknown_contracts(db) -> None:
     assert "document to link was not found" in unknown_linked.json()["detail"]
 
 
-def test_unlink_removes_the_link(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_unlink_removes_the_link(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
     link_id = client.post(f"/api/contracts/{primary_id}/links", json={"linked_contract_id": str(linked_id), "reference_name": "Order Form"}).json()["id"]
 
     deleted = client.delete(f"/api/contracts/{primary_id}/links/{link_id}")
@@ -117,9 +117,9 @@ def test_unlink_removes_the_link(db) -> None:
     assert again.status_code == 404
 
 
-def test_unlink_invalidates_the_primarys_existing_review(db, fake_chat_model: FakeChatModel) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_unlink_invalidates_the_primarys_existing_review(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
     repository.start_risk_review(db, primary_id, status="done")
     repository.update_risk_review(db, primary_id, status="done", chunks_total=1, chunks_checked=1, complete=True, key_terms_complete=True)
     db.commit()
@@ -132,9 +132,9 @@ def test_unlink_invalidates_the_primarys_existing_review(db, fake_chat_model: Fa
     assert "Run the review again" in review.error
 
 
-def test_unlink_with_no_existing_review_does_not_error(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_unlink_with_no_existing_review_does_not_error(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
     link_id = client.post(f"/api/contracts/{primary_id}/links", json={"linked_contract_id": str(linked_id), "reference_name": "Order Form"}).json()["id"]
 
     response = client.delete(f"/api/contracts/{primary_id}/links/{link_id}")
@@ -146,9 +146,9 @@ def test_unlink_with_no_existing_review_does_not_error(db) -> None:
 # --- cascading deletes ----------------------------------------------------------------------
 
 
-def test_deleting_the_primary_contract_cascades_the_link(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_deleting_the_primary_contract_cascades_the_link(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
     repository.create_link(db, primary_contract_id=primary_id, linked_contract_id=linked_id, reference_name="Order Form")
     db.commit()
 
@@ -156,15 +156,15 @@ def test_deleting_the_primary_contract_cascades_the_link(db) -> None:
     db.commit()
 
     # The linked contract itself is untouched.
-    assert repository.get_contract(db, linked_id) is not None
+    assert repository.get_contract(db, linked_id, workspace_id) is not None
     with db.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) AS n FROM contract_links WHERE linked_contract_id = %s", (linked_id,))
         assert cursor.fetchone()["n"] == 0
 
 
-def test_deleting_the_linked_contract_cascades_the_link(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    linked_id = _stored(db, "1. This is the Order Form.", name="order-form.txt")
+def test_deleting_the_linked_contract_cascades_the_link(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    linked_id = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
     repository.create_link(db, primary_contract_id=primary_id, linked_contract_id=linked_id, reference_name="Order Form")
     db.commit()
 
@@ -172,17 +172,17 @@ def test_deleting_the_linked_contract_cascades_the_link(db) -> None:
     db.commit()
 
     # The primary contract itself is untouched.
-    assert repository.get_contract(db, primary_id) is not None
+    assert repository.get_contract(db, primary_id, workspace_id) is not None
     assert repository.list_links(db, primary_id) == []
 
 
 # --- repository -----------------------------------------------------------------------------
 
 
-def test_bundle_contract_ids_returns_the_primary_first_then_every_linked_contract(db) -> None:
-    primary_id = _stored(db, ORDER_FORM_CONTRACT, name="main.txt")
-    first_linked = _stored(db, "1. This is the Order Form.", name="order-form.txt")
-    second_linked = _stored(db, "1. This is Schedule 2.", name="schedule-2.txt")
+def test_bundle_contract_ids_returns_the_primary_first_then_every_linked_contract(db, workspace_id) -> None:
+    primary_id = _stored(db, workspace_id, ORDER_FORM_CONTRACT, name="main.txt")
+    first_linked = _stored(db, workspace_id, "1. This is the Order Form.", name="order-form.txt")
+    second_linked = _stored(db, workspace_id, "1. This is Schedule 2.", name="schedule-2.txt")
     repository.create_link(db, primary_contract_id=primary_id, linked_contract_id=first_linked, reference_name="Order Form")
     repository.create_link(db, primary_contract_id=primary_id, linked_contract_id=second_linked, reference_name="Schedule 2")
     db.commit()

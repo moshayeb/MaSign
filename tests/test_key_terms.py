@@ -115,14 +115,14 @@ def test_withheld_passages_are_not_read_for_terms() -> None:
 # --- the review job, storage and the API ----------------------------------------------------
 
 
-def _stored(db, *passages: str) -> str:
-    contract = repository.create_contract(db, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=list(passages))
+def _stored(db, workspace_id, *passages: str) -> str:
+    contract = repository.create_contract(db, workspace_id=workspace_id, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=list(passages))
     db.commit()
     return contract.id
 
 
-def test_review_stores_terms_with_sources_and_reports_not_stated_only_when_complete(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, LATE, TERM)
+def test_review_stores_terms_with_sources_and_reports_not_stated_only_when_complete(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, LATE, TERM)
 
     def extract(user: str) -> str:
         if "18,500" in user:
@@ -171,8 +171,8 @@ def test_review_stores_terms_with_sources_and_reports_not_stated_only_when_compl
     assert review_body["key_terms_complete"] is True and [t["id"] for t in review_body["key_terms"]] == list(TERM_IDS)
 
 
-def test_an_unreadable_key_terms_batch_makes_absence_unchecked_not_not_stated(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, TERM)
+def test_an_unreadable_key_terms_batch_makes_absence_unchecked_not_not_stated(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, TERM)
 
     def extract(user: str) -> str:
         if "18,500" in user:
@@ -191,8 +191,8 @@ def test_an_unreadable_key_terms_batch_makes_absence_unchecked_not_not_stated(db
     assert NOT_STATED not in [t["value"] for t in body["terms"]]
 
 
-def test_a_term_stated_twice_keeps_the_first_and_flags_conflicts(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES, "Schedule A. The monthly fee is EUR 19,000.", TERM)
+def test_a_term_stated_twice_keeps_the_first_and_flags_conflicts(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES, "Schedule A. The monthly fee is EUR 19,000.", TERM)
 
     def extract(user: str) -> str:
         if "18,500" in user:
@@ -216,15 +216,15 @@ def test_a_term_stated_twice_keeps_the_first_and_flags_conflicts(db, fake_chat_m
     assert terms["initial_term"]["status"] == "found" and terms["initial_term"]["others"] == []
 
 
-def test_key_terms_404_before_any_review(db) -> None:
-    contract_id = _stored(db, FEES)
+def test_key_terms_404_before_any_review(db, workspace_id) -> None:
+    contract_id = _stored(db, workspace_id, FEES)
     response = client.get(f"/api/contracts/{contract_id}/key-terms")
     assert response.status_code == 404 and "not been reviewed" in response.json()["detail"]
     assert client.get(f"/api/contracts/{uuid4()}/key-terms").status_code == 404
 
 
-def test_deleting_a_contract_removes_its_key_terms(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, FEES)
+def test_deleting_a_contract_removes_its_key_terms(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, FEES)
     fake_chat_model.key_terms_reply = json.dumps([_item("recurring_fee", "EUR 18,500 per month", 1, "pay EUR 18,500 per month")])
     review_contract(contract_id, fake_chat_model)
     assert len(repository.list_key_terms(db, contract_id)) == 1
@@ -237,8 +237,8 @@ def test_deleting_a_contract_removes_its_key_terms(db, fake_chat_model: FakeChat
 # --- the passage reader's source (MAS-83) ------------------------------------------------------
 
 
-def test_passages_endpoint_returns_every_chunk_in_order(db) -> None:
-    contract_id = _stored(db, FEES, LATE, TERM)
+def test_passages_endpoint_returns_every_chunk_in_order(db, workspace_id) -> None:
+    contract_id = _stored(db, workspace_id, FEES, LATE, TERM)
     body = client.get(f"/api/contracts/{contract_id}/passages").json()
     assert [p["chunk_index"] for p in body] == [0, 1, 2]
     assert body[1]["text"] == LATE and all(p["chunk_id"] for p in body)
@@ -248,7 +248,7 @@ def test_passages_endpoint_returns_every_chunk_in_order(db) -> None:
 # --- deviations from the Customer's standard (MAS-96) -------------------------------------------
 
 
-def test_standards_compare_typed_values_only_and_never_add_a_model_call(db, fake_chat_model: FakeChatModel) -> None:
+def test_standards_compare_typed_values_only_and_never_add_a_model_call(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
     from app.key_terms.standards import compare
 
     # Harbor's shape: net 45, 1%/month, 60 days, three months' fee (as a percent share it would deviate; as text it cannot be compared)
@@ -263,7 +263,7 @@ def test_standards_compare_typed_values_only_and_never_add_a_model_call(db, fake
     assert compare("termination_cost", None).status == "unknown"  # stated as text only
     assert compare("initial_term", {"months": 36}).status == "none"  # deal-specific: no standard
 
-    contract_id = _stored(db, FEES, "4.3 Early termination fee: fifty percent (50%) of the remaining Subscription Fees.", TERM)
+    contract_id = _stored(db, workspace_id, FEES, "4.3 Early termination fee: fifty percent (50%) of the remaining Subscription Fees.", TERM)
 
     def extract(user: str) -> str:
         if "18,500" in user:
@@ -289,9 +289,10 @@ def test_standards_compare_typed_values_only_and_never_add_a_model_call(db, fake
 # --- contract-list summary strip (MAS-101) -----------------------------------------------------
 
 
-def test_contract_list_summarises_fee_term_risk_and_deviations_without_a_model_call(db, fake_chat_model: FakeChatModel) -> None:
+def test_contract_list_summarises_fee_term_risk_and_deviations_without_a_model_call(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
     contract_id = _stored(
         db,
+        workspace_id,
         FEES,
         LATE,
         "3. Term. The Initial Term is thirty-six (36) months.",
@@ -326,8 +327,8 @@ def test_contract_list_summarises_fee_term_risk_and_deviations_without_a_model_c
     assert len(fake_chat_model.calls) == calls_after_review  # the list reads stored rows, no new call
 
 
-def test_contract_list_summarises_an_unreviewed_contract_as_not_reviewed(db) -> None:
-    contract_id = _stored(db, FEES)
+def test_contract_list_summarises_an_unreviewed_contract_as_not_reviewed(db, workspace_id) -> None:
+    contract_id = _stored(db, workspace_id, FEES)
 
     listed = {c["contract_id"]: c for c in client.get("/api/contracts").json()}[str(contract_id)]
 
@@ -341,11 +342,11 @@ def test_contract_list_summarises_an_unreviewed_contract_as_not_reviewed(db) -> 
 # --- export (MAS-97) --------------------------------------------------------------------------
 
 
-def test_export_markdown_and_csv_carry_every_finding_and_key_term_verbatim(db, fake_chat_model: FakeChatModel) -> None:
+def test_export_markdown_and_csv_carry_every_finding_and_key_term_verbatim(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
     import csv
     import io
 
-    contract_id = _stored(db, FEES, LATE, "4.3 Early termination fee: fifty percent (50%) of the remaining Subscription Fees.")
+    contract_id = _stored(db, workspace_id, FEES, LATE, "4.3 Early termination fee: fifty percent (50%) of the remaining Subscription Fees.")
 
     def grade(user: str) -> str:
         if "1.5%" in user:
@@ -394,8 +395,8 @@ def test_export_markdown_and_csv_carry_every_finding_and_key_term_verbatim(db, f
     assert pdf_response.content.startswith(b"%PDF-")
 
 
-def test_export_404s_before_a_review_and_for_unknown_contracts(db) -> None:
-    contract_id = _stored(db, FEES)
+def test_export_404s_before_a_review_and_for_unknown_contracts(db, workspace_id) -> None:
+    contract_id = _stored(db, workspace_id, FEES)
     response = client.get(f"/api/contracts/{contract_id}/export.md")
     assert response.status_code == 404 and "not been reviewed" in response.json()["detail"]
     assert client.get(f"/api/contracts/{uuid4()}/export.csv").status_code == 404
@@ -454,8 +455,8 @@ def test_deadline_arithmetic_ends_the_day_before_the_anniversary_and_clamps_mont
     assert text_only[0].reason == "initial term stated, but not as a number the text confirms"
 
 
-def test_deadlines_ride_on_the_key_terms_and_review_responses_and_the_export(db, fake_chat_model: FakeChatModel) -> None:
-    contract_id = _stored(db, "This Agreement is entered into as of 1 March 2026 (the \"Effective Date\").", TERM)
+def test_deadlines_ride_on_the_key_terms_and_review_responses_and_the_export(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract_id = _stored(db, workspace_id, "This Agreement is entered into as of 1 March 2026 (the \"Effective Date\").", TERM)
 
     def extract(user: str) -> str:
         if "Effective Date" in user:

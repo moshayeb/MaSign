@@ -99,10 +99,10 @@ def test_delete_contract_removes_only_its_vectors(vector_store: VectorStore, fak
 
 
 def test_index_contract_stores_one_vector_per_chunk_and_records_ids(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder
 ) -> None:
     contract = repository.create_contract(
-        db, filename="a.txt", file_type="txt", size_bytes=1, character_count=1,
+        db, workspace_id=workspace_id, filename="a.txt", file_type="txt", size_bytes=1, character_count=1,
         chunks=["1. Term. Three years.", "2. Fees. Paid monthly.", "3. Liability. Capped."],
     )
 
@@ -118,8 +118,8 @@ def test_index_contract_stores_one_vector_per_chunk_and_records_ids(
     assert hit.chunk_index == 1
 
 
-def test_index_contract_with_no_chunks_is_a_noop(db: psycopg.Connection, vector_store: VectorStore, fake_embedder) -> None:
-    contract = repository.create_contract(db, filename="e.txt", file_type="txt", size_bytes=1, character_count=1, chunks=[])
+def test_index_contract_with_no_chunks_is_a_noop(db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder) -> None:
+    contract = repository.create_contract(db, workspace_id=workspace_id, filename="e.txt", file_type="txt", size_bytes=1, character_count=1, chunks=[])
 
     assert index_contract(db, contract, fake_embedder, vector_store) == 0
     assert vector_store.count() == 0
@@ -128,17 +128,17 @@ def test_index_contract_with_no_chunks_is_a_noop(db: psycopg.Connection, vector_
 # --- index fingerprint (MAS-52) ---------------------------------------------------
 
 
-def _store_two_contracts(db: psycopg.Connection) -> list[UUID]:
+def _store_two_contracts(db: psycopg.Connection, workspace_id) -> list[UUID]:
     ids = []
     for name, chunks in (("a.txt", ["1. Term. Three years.", "2. Fees. Monthly."]), ("b.txt", ["Liability capped."])):
-        ids.append(repository.create_contract(db, filename=name, file_type="txt", size_bytes=1, character_count=1, chunks=chunks).id)
+        ids.append(repository.create_contract(db, workspace_id=workspace_id, filename=name, file_type="txt", size_bytes=1, character_count=1, chunks=chunks).id)
     return ids
 
 
 def test_first_start_indexes_stored_chunks_and_records_the_fingerprint(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder
 ) -> None:
-    _store_two_contracts(db)
+    _store_two_contracts(db, workspace_id)
 
     assert ensure_index_current(db, fake_embedder, vector_store) == 3
     assert vector_store.count() == 3
@@ -150,9 +150,9 @@ def test_first_start_indexes_stored_chunks_and_records_the_fingerprint(
 
 
 def test_same_dimension_model_change_rebuilds_the_index(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, caplog: pytest.LogCaptureFixture
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder, caplog: pytest.LogCaptureFixture
 ) -> None:
-    _store_two_contracts(db)
+    _store_two_contracts(db, workspace_id)
     ensure_index_current(db, fake_embedder, vector_store)
     # An orphan point that a rebuild must not keep.
     vector_store.upsert([ChunkVector(uuid4(), uuid4(), 0, "stale", fake_embedder.embed_query("stale"))])
@@ -169,14 +169,14 @@ def test_same_dimension_model_change_rebuilds_the_index(
 
 
 def test_rebuild_splits_stored_chunks_that_exceed_the_token_limit(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, caplog: pytest.LogCaptureFixture
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder, caplog: pytest.LogCaptureFixture
 ) -> None:
     # MAS-55: a chunk stored before the token budget existed (or under a larger
     # EMBEDDING_MAX_TOKENS) must not make the rebuild — and so startup — fail.
     fake_embedder.max_tokens = 40
     oversized = "1. Fees\n" + " ".join(f"term{i}" for i in range(100))  # 101 words
     contract = repository.create_contract(
-        db, filename="old.txt", file_type="txt", size_bytes=1, character_count=1, chunks=["0. Intro short.", oversized]
+        db, workspace_id=workspace_id, filename="old.txt", file_type="txt", size_bytes=1, character_count=1, chunks=["0. Intro short.", oversized]
     )
     old_chunks = repository.list_chunks(db, contract.id)
     repository.start_risk_review(db, contract.id, status="running")
@@ -199,7 +199,7 @@ def test_rebuild_splits_stored_chunks_that_exceed_the_token_limit(
     assert all(fake_embedder.count_tokens(c.chunk_text) <= 40 for c in chunks)
     assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
     assert " ".join(c.chunk_text for c in chunks).split() == ("0. Intro short. " + oversized).split()
-    assert repository.get_contract(db, contract.id).chunk_count == len(chunks)
+    assert repository.get_contract(db, contract.id, workspace_id).chunk_count == len(chunks)
     assert all(c.embedding_id == str(c.id) for c in chunks)
     assert vector_store.count(contract_id=contract.id) == len(chunks)
     assert "exceed" in caplog.text and "old.txt" in caplog.text
@@ -213,13 +213,13 @@ def test_rebuild_splits_stored_chunks_that_exceed_the_token_limit(
 
 
 def test_interrupted_rebuild_is_redone_on_the_next_start(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # MAS-56: a lost collection with a matching fingerprint; the rebuild dies
     # after the first contract. The next start must not believe the index is complete.
     from app.retrieval import indexing
 
-    _store_two_contracts(db)
+    _store_two_contracts(db, workspace_id)
     ensure_index_current(db, fake_embedder, vector_store)
     vector_store._client.delete_collection(vector_store.collection)
 
@@ -243,11 +243,11 @@ def test_interrupted_rebuild_is_redone_on_the_next_start(
 
 
 def test_crash_right_after_the_collection_is_recreated_is_redone_on_the_next_start(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # MAS-59: the fingerprint must be gone *before* Qdrant is touched, or a
     # crash right after the (empty) collection is created passes as complete.
-    _store_two_contracts(db)
+    _store_two_contracts(db, workspace_id)
     ensure_index_current(db, fake_embedder, vector_store)
     vector_store._client.delete_collection(vector_store.collection)  # lost volume, fingerprint still matches
 
@@ -269,9 +269,9 @@ def test_crash_right_after_the_collection_is_recreated_is_redone_on_the_next_sta
 
 
 def test_qdrant_is_not_touched_while_the_fingerprint_is_valid(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _store_two_contracts(db)
+    _store_two_contracts(db, workspace_id)
     ensure_index_current(db, fake_embedder, vector_store)
 
     def must_not_be_called(dimension: int) -> None:
@@ -282,9 +282,9 @@ def test_qdrant_is_not_touched_while_the_fingerprint_is_valid(
 
 
 def test_wiped_collection_is_rebuilt_even_when_the_fingerprint_matches(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder
 ) -> None:
-    _store_two_contracts(db)
+    _store_two_contracts(db, workspace_id)
     ensure_index_current(db, fake_embedder, vector_store)
     vector_store._client.delete_collection(vector_store.collection)  # a lost Qdrant volume
 
@@ -651,11 +651,11 @@ def test_backend_is_chosen_by_environment(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_switching_backends_for_the_same_model_rebuilds_the_index(
-    db: psycopg.Connection, vector_store: VectorStore, fake_embedder
+    db: psycopg.Connection, workspace_id, vector_store: VectorStore, fake_embedder
 ) -> None:
     # The GGUF served over HTTP and the sentence-transformers checkpoint are
     # not the same vectors even under the same model name.
-    _store_two_contracts(db)
+    _store_two_contracts(db, workspace_id)
     fake_embedder.backend = "sentence-transformers"
     ensure_index_current(db, fake_embedder, vector_store)
 

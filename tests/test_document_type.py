@@ -120,9 +120,9 @@ def test_upload_stores_the_kind_and_the_list_review_and_export_carry_it(db, fake
     assert contract["document_kind"] == "contract" and contract["document_looks_like"] is None
 
 
-def test_rows_from_before_the_kind_existed_are_classified_at_startup(db) -> None:
+def test_rows_from_before_the_kind_existed_are_classified_at_startup(db, workspace_id) -> None:
     contract = repository.create_contract(
-        db, filename="old.txt", file_type="txt", size_bytes=10, character_count=10, chunks=[INVOICE], ingestion_notes=[]
+        db, workspace_id=workspace_id, filename="old.txt", file_type="txt", size_bytes=10, character_count=10, chunks=[INVOICE], ingestion_notes=[]
     )
     assert contract.document_kind is None  # what an old row looks like
     db.commit()
@@ -130,7 +130,7 @@ def test_rows_from_before_the_kind_existed_are_classified_at_startup(db) -> None
     assert repository.classify_unclassified_contracts(db) == 1
     assert repository.classify_unclassified_contracts(db) == 0  # once
 
-    stored = repository.get_contract(db, contract.id)
+    stored = repository.get_contract(db, contract.id, workspace_id)
     assert stored is not None and (stored.document_kind, stored.document_looks_like) == ("not_contract", "invoice")
     assert stored.document_kind_reasons[0].startswith("Invoice markers")
     # Jsonb round-trips the list as given.

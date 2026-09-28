@@ -103,6 +103,7 @@ function mockApi(queryReplies: Response[], risks: Response = json(404, { detail:
   const replies = [...queryReplies]
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input)
+    if (url.endsWith('/auth/me')) return json(200, { id: 'test-user', email: 'test@example.com' })
     if (url.endsWith('/risks')) return risks.clone()
     if (url.endsWith('/passages')) return json(200, [])
     if (url === '/api/contracts') return json(200, [northwind])
@@ -229,6 +230,7 @@ describe('asking a question', () => {
     const replies = [json(200, answered)]
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input)
+      if (url.endsWith('/auth/me')) return json(200, { id: 'test-user', email: 'test@example.com' })
       if (url.endsWith('/risks')) return json(404, { detail: 'not reviewed' })
       if (url === '/api/contracts') return json(200, [northwind, other])
       if (url === '/api/query') return replies.shift() ?? json(500, { detail: 'no reply scripted' })
@@ -338,6 +340,7 @@ describe('asking a question', () => {
     async function renderAnsweredWithPassages() {
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
         const url = String(input)
+        if (url.endsWith('/auth/me')) return json(200, { id: 'test-user', email: 'test@example.com' })
         if (url.endsWith('/risks')) return json(404, { detail: 'This contract has not been reviewed for risks yet.' })
         if (url.endsWith('/passages')) return json(200, passages)
         if (url === '/api/contracts') return json(200, [northwind])

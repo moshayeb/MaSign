@@ -208,6 +208,22 @@ a {
   box-shadow: 0 6px 20px rgba(12, 173, 237, 0.35);
 }
 
+/* Replaces "Open workspace" in the header once signed in (MAS-143). */
+.topnav-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.topnav-account-email {
+  color: var(--text-2);
+  font-size: 0.9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
 .topnav-mobile {
   display: none;
 }
@@ -256,6 +272,16 @@ a {
 
   .topnav-mobile-list .topnav-cta {
     margin-top: 4px;
+  }
+
+  .topnav-mobile-list .topnav-account {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .topnav-mobile-list .topnav-account-email {
+    max-width: 100%;
   }
 
   .topnav-mobile-list .link.active {
@@ -3399,8 +3425,8 @@ button.chip.ranked {
   margin-top: 10px;
 }
 
-/* Future login page — design only, not routed (MAS-132). Reviewed via a
-   ui-preview screenshot; see pages/LoginPageDesign.tsx for why. */
+/* Login / registration page (MAS-132 design, wired to real accounts MAS-143):
+   see pages/LoginPage.tsx. */
 .login-design {
   display: flex;
   min-height: 100vh;

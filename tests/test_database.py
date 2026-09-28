@@ -65,9 +65,10 @@ def test_schema_has_expected_columns(db: psycopg.Connection) -> None:
         assert ("chunks", name) in columns
 
 
-def _store(db: psycopg.Connection, chunks: list[str]):
+def _store(db: psycopg.Connection, workspace_id, chunks: list[str]):
     return repository.create_contract(
         db,
+        workspace_id=workspace_id,
         filename="acme.txt",
         file_type="txt",
         size_bytes=123,
@@ -76,22 +77,22 @@ def _store(db: psycopg.Connection, chunks: list[str]):
     )
 
 
-def test_create_contract_stores_chunks_in_order(db: psycopg.Connection) -> None:
-    contract = _store(db, ["first clause", "second clause", "third clause"])
+def test_create_contract_stores_chunks_in_order(db: psycopg.Connection, workspace_id) -> None:
+    contract = _store(db, workspace_id, ["first clause", "second clause", "third clause"])
 
     assert contract.chunk_count == 3
     assert contract.status == "processed"
-    assert repository.get_contract(db, contract.id) == contract
+    assert repository.get_contract(db, contract.id, workspace_id) == contract
 
     chunks = repository.list_chunks(db, contract.id)
     assert [c.chunk_index for c in chunks] == [0, 1, 2]
     assert [c.chunk_text for c in chunks] == ["first clause", "second clause", "third clause"]
     assert all(c.embedding_id is None for c in chunks)
-    assert contract.id in {c.id for c in repository.list_contracts(db)}
+    assert contract.id in {c.id for c in repository.list_contracts(db, workspace_id)}
 
 
 def test_failed_chunk_insert_leaves_no_partial_contract(
-    db: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
+    db: psycopg.Connection, workspace_id, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The contract row is inserted first; if storing its chunks then fails,
     # the whole thing must roll back rather than leave a chunk-less contract.
@@ -101,14 +102,14 @@ def test_failed_chunk_insert_leaves_no_partial_contract(
     monkeypatch.setattr(psycopg.Cursor, "executemany", explode)
 
     with pytest.raises(RuntimeError, match="simulated failure"):
-        _store(db, ["a", "b"])
+        _store(db, workspace_id, ["a", "b"])
 
     monkeypatch.undo()
-    assert repository.list_contracts(db) == []
+    assert repository.list_contracts(db, workspace_id) == []
 
 
-def test_set_embedding_ids_updates_only_given_chunks(db: psycopg.Connection) -> None:
-    contract = _store(db, ["a", "b"])
+def test_set_embedding_ids_updates_only_given_chunks(db: psycopg.Connection, workspace_id) -> None:
+    contract = _store(db, workspace_id, ["a", "b"])
     first, _ = repository.list_chunks(db, contract.id)
 
     repository.set_embedding_ids(db, {first.id: "vec-1"})
@@ -118,10 +119,10 @@ def test_set_embedding_ids_updates_only_given_chunks(db: psycopg.Connection) -> 
     assert second.embedding_id is None
 
 
-def test_deleting_contract_cascades_to_chunks(db: psycopg.Connection) -> None:
-    contract = _store(db, ["a", "b"])
+def test_deleting_contract_cascades_to_chunks(db: psycopg.Connection, workspace_id) -> None:
+    contract = _store(db, workspace_id, ["a", "b"])
 
     assert repository.delete_contract(db, contract.id) is True
-    assert repository.get_contract(db, contract.id) is None
+    assert repository.get_contract(db, contract.id, workspace_id) is None
     assert repository.list_chunks(db, contract.id) == []
     assert repository.delete_contract(db, contract.id) is False

@@ -16,7 +16,7 @@ const NAV_LINKS = [
 // primary CTA; a phone collapses them into a <details> disclosure, the same
 // keyboard-accessible pattern the workspace's own Actions menu already uses,
 // so this needed no new interaction code.
-export function PageChrome({ children }: { children: ReactNode }) {
+export function PageChrome({ children, authControl }: { children: ReactNode; authControl?: ReactNode }) {
   const path = typeof window !== 'undefined' ? window.location.pathname : ''
 
   return (
@@ -38,9 +38,11 @@ export function PageChrome({ children }: { children: ReactNode }) {
                 {link.label}
               </a>
             ))}
-            <a className="topnav-cta" href="/workspace">
-              Open workspace
-            </a>
+            {authControl ?? (
+              <a className="topnav-cta" href="/workspace">
+                Open workspace
+              </a>
+            )}
           </nav>
           <details className="topnav-mobile">
             <summary aria-label="Menu">
@@ -59,9 +61,11 @@ export function PageChrome({ children }: { children: ReactNode }) {
                   {link.label}
                 </a>
               ))}
-              <a className="topnav-cta" href="/workspace">
-                Open workspace
-              </a>
+              {authControl ?? (
+                <a className="topnav-cta" href="/workspace">
+                  Open workspace
+                </a>
+              )}
             </nav>
           </details>
         </div>

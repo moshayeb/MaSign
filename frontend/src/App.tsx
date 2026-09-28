@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { listContracts, type Contract, type RiskReview } from './api'
+import { ApiError, getCurrentUser, listContracts, logout as apiLogout, type Contract, type CurrentUser, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
 import { CompareView } from './components/CompareView'
 import { ContractList } from './components/ContractList'
@@ -45,6 +45,37 @@ function formatUploaded(iso: string): string {
 }
 
 export default function App() {
+  // The signed-in user, once known (MAS-143). The shell renders immediately
+  // regardless -- same as before this ticket, when the contract list alone
+  // started empty and filled in once its own request settled -- rather than
+  // blocking the whole page on this one extra request. A confirmed 401
+  // redirects to /login as a side effect; any other failure (API
+  // unreachable, etc.) just leaves the header without an email/logout shown,
+  // and the normal contract-list load below reports its own error as usual.
+  const [user, setUser] = useState<CurrentUser | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    getCurrentUser()
+      .then((current) => {
+        if (!cancelled) setUser(current)
+      })
+      .catch((error) => {
+        if (!cancelled && error instanceof ApiError && error.status === 401) {
+          window.location.href = '/login'
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const logout = useCallback(async () => {
+    try {
+      await apiLogout()
+    } finally {
+      window.location.href = '/login'
+    }
+  }, [])
+
   const [contracts, setContracts] = useState<Contract[] | null>(null)
   const [selected, setSelected] = useState<Contract | null>(null)
   const [asked, setAsked] = useState<Asked | null>(null)
@@ -248,7 +279,16 @@ export default function App() {
   )
 
   return (
-    <PageChrome>
+    <PageChrome
+      authControl={
+        <span className="topnav-account">
+          {user && <span className="topnav-account-email">{user.email}</span>}
+          <button type="button" className="link" onClick={() => void logout()}>
+            Log out
+          </button>
+        </span>
+      }
+    >
       <div className="layout">
         <aside className="sidebar">
           <UploadForm
