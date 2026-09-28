@@ -123,4 +123,54 @@ a code change. Hit@1 dropping from 0.94 (Northwind alone, 2026-09-20 quality
 run) to 0.86 (both contracts) is Harbor's two extra misses (hb-11, hb-13),
 not a regression in Northwind's own numbers.
 
-No judged run yet — it needs the owner's OK (api-spend-guard).
+### Judged run: CUAD contract (2026-09-28, owner-approved)
+
+The first judged run this harness has ever completed — `--judge` had never
+actually been exercised end to end before MAS-32 (the README's own note
+above said so). Getting there fixed a real bug in `evaluation/judge.py`,
+not just a MAS-32 wrinkle: `instructor.from_litellm()` and, independently,
+its own `patch_v2` dispatch underneath it, decide sync vs. async by
+`inspect.iscoroutinefunction()` on the completion callable passed in — which
+is always `False` for a callable class instance (`CallCounter`), even one
+whose `__call__` is `async def`, because `inspect` does not unwrap
+`__call__` for that check. Left as it was, this built a client that
+ragas's own `_check_client_async()` also read as synchronous, and ragas's
+sync `score()` entry point always calls its async `ascore()` internally
+regardless — so every judged call was guaranteed to fail with "Cannot use
+agenerate() with a synchronous client", the first time, every time. Fixed
+by passing the bound method (`counter.__call__`, which inspects correctly)
+and declaring `async_client=True` explicitly rather than trusting inference
+a second time. See `evaluation/judge.py`'s comments for the full chain.
+Filed as MAS-170 since it's a real defect independent of MAS-32's own scope.
+
+Scoped to the CUAD contract only (8 questions), per the ticket's own budget
+— not the fictional contracts too, which would have been a materially
+larger spend the ticket never priced in:
+
+| Judged | Faithfulness | Factual correctness | Not-found right | Answer calls | Judge calls |
+|---|---|---|---|---|---|
+| 6 | 0.88 | 0.59 | 2/2 | 16 | 36 |
+
+`results-2026-09-28-judged-cuad.md`. Both "not found" questions (warranty
+duration, prepayment discount) were correctly declined.
+
+**The 0.59 correctness figure understates the system, on manual review.**
+bnl-02 (payment deadline) scored correctness 0.00 despite the stored answer
+being exactly right and cited: "within ten (10) days after the date of the
+postmark for an invoice... late charges of 1-1/2% per month... become
+payable" — word-for-word the reference. The likely cause is Ragas'
+`FactualCorrectness(mode="f1")` penalizing the answer's second sentence (the
+late-fee detail, true and grounded, but outside what `reference_answer`
+covers) as an unmatched statement, rather than a real factual miss. Treated
+as a known limitation of the judge metric on questions with a narrow
+reference and a broader-but-still-correct answer, not a product defect —
+not chased further to avoid more judge spend confirming a hypothesis rather
+than fixing something broken.
+
+bnl-05 (early-termination fee) scored `grounded: false` despite the stored
+answer being complete and correctly citing the passage that contains the
+exact reference quote — worth a second look if the judged run is ever
+extended, but not investigated further here for the same reason.
+
+Extending the judged run to the fictional contracts (37 more questions, a
+materially larger spend) is left for a follow-up, not done here.
