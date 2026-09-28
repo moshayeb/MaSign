@@ -74,6 +74,36 @@ compose on the P1000: 12-chunk Northwind upload 25 s (llama-server runs
 batches on parallel slots, so the benchmark's one-request-per-chunk 100 s was
 pessimistic), queries 160–240 ms end to end, 8/8 Northwind questions top-1.
 
+### Compare mode actually reachable on the live deployment (MAS-169, 2026-09-28)
+
+MAS-62's compare mode -- both profiles indexed, the reader picks per question
+-- was implemented but unreachable on `main-live`, and turned out to have two
+separate causes. First, `.env.example` never listed the `QUALITY_EMBEDDING_*`
+variables README.md's own "Compare mode" section already described, so no
+deployment's `.env` had ever set them. Second, once they are set, simply
+adding `docker-compose.quality.yml` for `llama-server` breaks compare mode
+outright rather than enabling it: that file's `environment:` values are
+literal YAML, which always wins over anything `.env` sets for the same
+unprefixed keys regardless of file order -- confirmed live, `docker exec
+masign-api env` showed `EMBEDDING_BACKEND=openai-compatible` with no
+`EMBEDDING_BACKEND` in `.env` at all, purely from `quality.yml` still being
+included. Every uploaded contract came back `indexed_profiles: ["portable"]`
+only either way, found running MAS-32's evaluation harness against
+`main-live`. Owner decision: fix it so compare mode genuinely works in the
+browser on the live deployment, not just document the gap further. Fixed by
+splitting `llama-server` out into its own `docker-compose.llama-server.yml`
+(used by both the quality-only row and compare mode), trimming
+`docker-compose.quality.yml` down to just the profile-swapping `environment:`
+block it should stay scoped to, documenting `QUALITY_EMBEDDING_*` in
+`.env.example`, and setting them for real in `main-live`'s own `.env`.
+Compare mode is now `docker compose -f docker-compose.yml -f
+docker-compose.llama-server.yml up` plus `.env` -- never combined with
+`docker-compose.quality.yml`, which stays the quality-*only* swap,
+unchanged. The two profiles never contend for the P1000's 4 GB either way:
+the api image ships CPU-only torch (see `docker-compose.yml`), so portable's
+ModernBERT never touches the GPU at all -- only `llama-server`, in its own
+container, does.
+
 ## LLM decision (MAS-13, 2026-09-16)
 
 Default `CHAT_PROVIDER=anthropic`, `CHAT_MODEL=claude-sonnet-5`; OpenAI
