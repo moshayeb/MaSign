@@ -175,6 +175,17 @@ class MaSignClient:
 
         self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout)
 
+    def authenticate(self, email: str, password: str) -> None:
+        """Sign in as the given account (MAS-143 requires one for every route below);
+        registers it first if it does not exist yet. httpx.Client keeps the session
+        cookie for every request made after this on the same client."""
+        login = self._http.post("/api/auth/login", json={"email": email, "password": password})
+        if login.status_code == 401:
+            register = self._http.post("/api/auth/register", json={"email": email, "password": password})
+            register.raise_for_status()
+        else:
+            login.raise_for_status()
+
     def contracts(self) -> list[dict[str, Any]]:
         return self._get("/api/contracts")
 

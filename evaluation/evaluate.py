@@ -8,6 +8,12 @@ phase POSTs every question to /api/query (2 provider calls each, paid by the
 API's own key) and then scores each answer with the judge model (about 2–4
 calls per question). It refuses to start without --yes, after printing the
 estimate, because the owner's budget rule is "ask before any paid call".
+
+Every route here needs a signed-in account since MAS-143; the harness signs
+in as --email/--password (env MASIGN_EVAL_EMAIL/MASIGN_EVAL_PASSWORD),
+registering it on first use. Contracts live in whichever workspace that
+account owns, so they must be uploaded under this same account -- a contract
+sitting in someone else's workspace is invisible to it, same as any user.
 """
 
 from __future__ import annotations
@@ -38,6 +44,8 @@ JUDGE_CALLS_PER_QUESTION = 3  # Faithfulness (statements + verdicts) + FactualCo
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--api", default=os.environ.get("MASIGN_API", "http://localhost:8000"))
+    parser.add_argument("--email", default=os.environ.get("MASIGN_EVAL_EMAIL", "evaluation@masign.local"), help="account the harness signs in as (MAS-143); registered on first use")
+    parser.add_argument("--password", default=os.environ.get("MASIGN_EVAL_PASSWORD", "evaluation harness account 2026"), help="password for --email")
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
     parser.add_argument("--profile", default=os.environ.get("MASIGN_PROFILE", "portable"), help="label for the results table")
     parser.add_argument("--k", type=int, default=5, help="passages retrieved per question")
@@ -64,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit:
         questions = questions[: args.limit]
     client = MaSignClient(args.api)
+    client.authenticate(args.email, args.password)
     needed = {q.contract for q in questions}
     ids = contract_ids_by_filename(client, needed)
     missing = sorted(needed - set(ids))
