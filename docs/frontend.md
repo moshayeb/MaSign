@@ -363,14 +363,17 @@ to `/workspace` while preserving their hash. If duplicate filenames appear
 in the contract library, each duplicate gets its UTC upload date in the
 stable `22 Sep` form; unique names stay compact.
 
-A **future login page** exists as a design only, `src/pages/LoginPageDesign.tsx`
-— two-column, a decorative illustration panel and a form panel, mobile shows
-the form first (`order` in the `@media (max-width: 760px)` block; each panel
-resets to `flex: none` there, not the desktop `flex: 1 1 50%`, or stacking
-leaves large empty gaps — caught in a real mobile screenshot before this
-shipped). It is deliberately **not** in `PAGES` and not imported by `App.tsx`
-or `main.tsx` — no route renders it. Review it via a temporary `ui-preview`
-screenshot, never a live URL.
+**`/login`** (`src/pages/LoginPage.tsx`, wired to real accounts MAS-143) is the
+MAS-132 design made real: two-column, a decorative illustration panel and a
+form panel, mobile shows the form first (`order` in the `@media (max-width:
+760px)` block; each panel resets to `flex: none` there, not the desktop
+`flex: 1 1 50%`, or stacking leaves large empty gaps — caught in a real
+mobile screenshot before this shipped). A link at the bottom toggles between
+sign-in and account creation in place, rather than a second page — there is
+no separate `/register` route. `/workspace` (`App.tsx`) checks `GET
+/api/auth/me` on mount and redirects here when it 401s; a signed-in visitor's
+email and a **Log out** control replace the header's "Open workspace" CTA
+(`PageChrome`'s `authControl` prop).
 
 The engineering-grid background is gone and the blue tint behind the page is
 softer: the app should read as a legal workspace, not a developer tool.

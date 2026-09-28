@@ -88,7 +88,7 @@ def ensure_index_current(db: psycopg.Connection, embedder: Embedder, store: Vect
     db.commit()
     store.reset_collection(wanted.dimension)
 
-    contracts = repository.list_contracts(db)
+    contracts = repository.list_all_contracts(db)
     logger.info("Re-indexing %d contract(s) with %s", len(contracts), embedder.model_name)
     indexed = 0
     for contract in contracts:

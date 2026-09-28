@@ -321,4 +321,67 @@ upload), on `Coverage` (review and key-terms responses) and into the
 Markdown export. Nothing branches on it server-side: it is information for
 the reader, never a gate.
 
+## Accounts, workspaces and the audit trail (MAS-143)
+
+Tier 3 of the ticket: internal accounts (email + Argon2id-hashed password,
+`app/auth/security.py`), personal workspaces, and an immutable audit log —
+pulled forward from the backlog by owner sign-off (2026-09-28), overriding
+the "do not start during Sprint 3" note it originally shipped with. Personal
+workspaces only: every account gets exactly one, created in the same
+transaction as the account (`repository.create_personal_workspace`), with no
+teams or sharing. `workspace_members` is still a real join table rather than
+a column on `users`, so a future team model needs only a relaxed uniqueness
+assumption, not a new table.
+
+**Sessions** (migration 014: `users`, `workspaces`, `workspace_members`,
+`sessions`, `audit_events`) are an opaque `secrets.token_urlsafe(32)` looked
+up in Postgres, not a signed JWT: `POST /api/auth/logout` deletes the row, a
+real revocation, rather than waiting out a token's own expiry. The cookie is
+`HttpOnly`, `SameSite=Lax`, and `Secure` unless `MASIGN_COOKIE_SECURE=0` —
+`Secure` is unusable over plain HTTP, so local dev (and the test suite, which
+talks to `TestClient`'s `http://testserver`) needs the flag off; a real
+deployment's default stays on.
+
+**Workspace scoping is enforced in `repository.py`'s SQL, not filtered after
+the fact in the route layer**: `get_contract`, `list_contracts`,
+`list_contract_ids`, `create_question` and `list_questions` all take a
+`workspace_id` and filter or stamp it directly. A contract (or question, or
+link target) in another workspace is *indistinguishable from one that does
+not exist* — every route returns 404, never a 403 that would confirm the id
+is valid but belongs to someone else. Two internal, unscoped functions exist
+for trusted callers that have no request/workspace context of their own —
+`get_contract_by_id` (the background review job, `risk_analysis/review.py`)
+and `list_all_contracts` (the startup vector-index rebuild,
+`retrieval/indexing.py`) — and neither is ever called from an HTTP route.
+Child tables reached through an already-validated `contract_id` within the
+same request (chunks, risk findings, key terms, links) are not re-scoped a
+second time; the ownership check happens once, at the route's own
+`get_contract`/`get_current_workspace` call, the same "validate at the
+boundary" pattern most request-scoped web frameworks use.
+
+`GET /api/query`'s no-scope ("all contracts") search is scoped through
+`retrieve_contract_context`'s `workspace_id` parameter, which resolves to
+`list_contract_ids(db, workspace_id)` — a question asked with no
+`contract_id` only ever searches the caller's own contracts. Because a
+no-scope question has no `contract_id` of its own to join through,
+`questions.workspace_id` is a real column (not derived), stamped at write
+time and filtered on every read.
+
+**Audit events** (`audit_events`, workspace_id + nullable user_id +
+event_type + target) are written for upload, link, unlink, review
+requested/completed/failed, matching the ticket's acceptance criteria that
+audit records distinguish a system outcome from a person's action:
+`user_id` is set for anything a signed-in caller triggered (upload, link,
+unlink, requesting a review) and left `NULL` for a background job's own
+outcome (a review's `review.completed`/`review.failed`, written from
+`risk_analysis/review.py` with no request context to attribute it to).
+
+**Known, accepted gaps for this course-quality tier** (all explicitly listed
+as out of scope by the ticket's own tier boundary, not oversights): no email
+verification on registration, no password reset, no login rate limiting, no
+teams/sharing. The two contracts already in the live demo database before
+this migration ran were backfilled into one fixed "Legacy demo workspace"
+(`00000000-0000-0000-0000-000000000001`) — never inferred per-row from a
+filename or a link.
+
 The current implementation is a scaffold. The module boundaries are intentionally narrow so each stage can be replaced with production infrastructure without reshaping the API surface.

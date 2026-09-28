@@ -19,6 +19,7 @@ def retrieve_contract_context(
     store: VectorStore,
     contract_id: UUID | None = None,
     contract_ids: list[UUID] | None = None,
+    workspace_id: UUID | None = None,
     limit: int = DEFAULT_LIMIT,
 ) -> list[ChunkHit]:
     """Embed the question and return the best-matching chunks, best first.
@@ -37,7 +38,10 @@ def retrieve_contract_context(
             return []
         return store.search(embedder.embed_query(question), contract_ids=contract_ids, limit=limit)
     if contract_id is None:
-        all_ids = repository.list_contract_ids(db)
+        # workspace_id is required for this branch (MAS-143): with no
+        # contract to scope by, this is the only thing keeping "every
+        # contract" from meaning every contract in every workspace.
+        all_ids = repository.list_contract_ids(db, workspace_id)
         if not all_ids:
             return []
         return store.search(embedder.embed_query(question), contract_ids=all_ids, limit=limit)

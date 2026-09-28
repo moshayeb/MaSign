@@ -24,8 +24,10 @@ def _item(term: str, value: str, passage: int, quote: str, typed: dict | None = 
     return {"term": term, "value": value, "passage": passage, "quote": quote, "typed": typed}
 
 
-def _stored(db, *passages: str) -> str:
-    contract = repository.create_contract(db, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=list(passages))
+def _stored(db, workspace_id, *passages: str) -> str:
+    contract = repository.create_contract(
+        db, workspace_id=workspace_id, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=list(passages)
+    )
     db.commit()
     return contract.id
 
@@ -97,10 +99,10 @@ def test_termination_cost_preference_validates_its_mode_and_paired_fields(db) ->
     assert ok.json()["text"] == "at most USD 5,000"
 
 
-def test_saved_standard_changes_the_key_terms_verdict_and_deviation_count(db, fake_chat_model: FakeChatModel) -> None:
+def test_saved_standard_changes_the_key_terms_verdict_and_deviation_count(db, fake_chat_model: FakeChatModel, workspace_id) -> None:
     """A contract that met the default standard can start deviating from a
     stricter one the reviewer saved -- with no re-review, no model call."""
-    contract_id = _stored(db, FEES)
+    contract_id = _stored(db, workspace_id, FEES)
 
     def extract(user: str) -> str:
         return json.dumps([_item("payment_deadline", "30 days", 1, "due thirty (30) days after the invoice date", {"net_days": 30})])
@@ -132,10 +134,10 @@ def test_saved_standard_changes_the_key_terms_verdict_and_deviation_count(db, fa
     client.delete("/api/standards/payment_deadline")
 
 
-def test_termination_cost_amount_cap_is_unknown_against_a_mismatched_currency(db, fake_chat_model: FakeChatModel) -> None:
+def test_termination_cost_amount_cap_is_unknown_against_a_mismatched_currency(db, fake_chat_model: FakeChatModel, workspace_id) -> None:
     """No FX conversion: an amount standard in one currency cannot judge a
     fee stated in another -- the honest answer is unknown, not a guess."""
-    contract_id = _stored(db, EARLY_TERM)
+    contract_id = _stored(db, workspace_id, EARLY_TERM)
 
     def extract(user: str) -> str:
         return json.dumps([_item("termination_cost", "50% of remaining fees", 1, "fifty percent (50%) of the remaining Subscription Fees", {"percent": 50})])

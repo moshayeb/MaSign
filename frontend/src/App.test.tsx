@@ -71,7 +71,17 @@ afterEach(() => {
 
 describe('contract list', () => {
   it('lists contracts and marks the chosen one as selected', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, [contract(), contract({ contract_id: 'c2', filename: 'nda.pdf' })]))
+    // URL-routed rather than one blanket response: selecting a contract also
+    // fetches its review (RiskReviewPanel) and passages, which must not get
+    // the contract list's own array back.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/auth/me')) return json(200, { id: 'test-user', email: 'test@example.com' })
+      if (url.endsWith('/risks')) return json(404, { detail: 'This contract has not been reviewed for risks yet.' })
+      if (url.endsWith('/passages')) return json(200, [])
+      if (url === '/api/contracts') return json(200, [contract(), contract({ contract_id: 'c2', filename: 'nda.pdf' })])
+      return json(404, { detail: `unexpected ${url}` })
+    })
 
     render(<App />)
 
@@ -84,7 +94,7 @@ describe('contract list', () => {
 
   it('badges a contract whose upload could not be read in full (MAS-84)', async () => {
     const note = 'Page 3 of 14 has no text layer (scanned or image-only) and could not be read.'
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, [contract({ contract_id: 'c3', filename: 'scan-mix.pdf', ingestion_notes: [note] })]))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(200, [contract({ contract_id: 'c3', filename: 'scan-mix.pdf', ingestion_notes: [note] })]))
 
     render(<App />)
 
@@ -93,7 +103,7 @@ describe('contract list', () => {
   })
 
   it("filters the sidebar by filename and shows each row's review state in words (MAS-104)", async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       json(200, [
         contract({ contract_id: 'c1', filename: 'msa.txt', risk_status: 'done', risk_worst_severity: 'High', risk_complete: true }),
         contract({ contract_id: 'c2', filename: 'nda.pdf', file_type: 'pdf', risk_status: null }),
@@ -122,14 +132,14 @@ describe('contract list', () => {
   })
 
   it('hides the search box while there is only one contract (MAS-104)', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, [contract()]))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(200, [contract()]))
     render(<App />)
     await screen.findByText('msa.txt')
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
   })
 
   it('shows the API detail in an error toast when loading fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       json(503, { detail: 'Database unavailable. Check that Postgres is running and DATABASE_URL is correct.' }),
     )
 
@@ -147,6 +157,7 @@ describe('contract list', () => {
 describe('refresh', () => {
   it('reports the refresh through a toast (MAS-68)', async () => {
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(200, { id: 'test-user', email: 'test@example.com' }))
       .mockResolvedValueOnce(json(200, []))
       .mockResolvedValueOnce(json(200, [contract(), contract({ contract_id: 'c2', filename: 'nda.pdf' })]))
 
@@ -160,6 +171,7 @@ describe('refresh', () => {
 
   it('shows the API detail when the refresh fails and keeps the list', async () => {
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(200, { id: 'test-user', email: 'test@example.com' }))
       .mockResolvedValueOnce(json(200, [contract()]))
       .mockResolvedValueOnce(json(503, { detail: 'Database unavailable. Check that Postgres is running and DATABASE_URL is correct.' }))
 
@@ -178,6 +190,7 @@ describe('refresh', () => {
     let releaseSlowRefresh: (value: Response) => void = () => {}
     const slowRefresh = new Promise<Response>((resolve) => (releaseSlowRefresh = resolve))
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(200, { id: 'test-user', email: 'test@example.com' }))
       .mockResolvedValueOnce(json(200, []))
       .mockReturnValueOnce(slowRefresh)
       .mockResolvedValueOnce(json(200, contract({ contract_id: 'new', filename: 'northwind.txt', chunk_count: 12 })))
@@ -203,6 +216,7 @@ describe('upload', () => {
     let listed: unknown[] = []
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input)
+      if (url.endsWith('/auth/me')) return json(200, { id: 'test-user', email: 'test@example.com' })
       if (url === '/api/contracts/upload') {
         listed = [uploaded]
         return json(200, uploaded)
@@ -224,12 +238,13 @@ describe('upload', () => {
     expect((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0]).toHaveAttribute('aria-pressed', 'true')
     const calls = fetchMock.mock.calls
       .map(([url]) => String(url))
-      .filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages') && !url.endsWith('/questions'))
+      .filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages') && !url.endsWith('/questions') && !url.endsWith('/auth/me'))
     expect(calls).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
   })
 
   it('shows the API detail verbatim when the upload is rejected', async () => {
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(200, { id: 'test-user', email: 'test@example.com' }))
       .mockResolvedValueOnce(json(200, []))
       .mockResolvedValueOnce(json(422, { detail: 'No readable text found in scan.pdf. Scanned documents need OCR first.' }))
 

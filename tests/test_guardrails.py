@@ -329,11 +329,11 @@ def test_the_e_contract_is_answered_with_only_its_injected_sentences_cut(db, fak
     assert len(spans) == 2 and all("AI" in text[a:b] or "instructions" in text[a:b].lower() for a, b in spans)
 
 
-def test_query_says_withheld_not_not_found_when_the_only_passage_is_injected(db, fake_chat_model: FakeChatModel, fake_embedder, vector_store) -> None:
+def test_query_says_withheld_not_not_found_when_the_only_passage_is_injected(db, workspace_id, fake_chat_model: FakeChatModel, fake_embedder, vector_store) -> None:
     """MAS-93/94: a passage that is nothing but an injection is withheld whole, and no call is spent."""
     from app.retrieval.indexing import index_contract
 
-    contract = repository.create_contract(db, filename="E-Contract.txt", file_type="txt", size_bytes=1, character_count=1, chunks=[PURE_INJECTION])
+    contract = repository.create_contract(db, workspace_id=workspace_id, filename="E-Contract.txt", file_type="txt", size_bytes=1, character_count=1, chunks=[PURE_INJECTION])
     index_contract(db, contract, fake_embedder, vector_store)
     db.commit()
     review_contract(contract.id, GuardedChatModel(fake_chat_model))
@@ -386,8 +386,8 @@ def test_the_whole_contract_review_withholds_injected_passages_too(db, fake_chat
     assert len(review["coverage"]["redacted_passages"]) == 1
 
 
-def test_the_whole_contract_review_still_withholds_a_pure_injection_passage(db, fake_chat_model: FakeChatModel) -> None:
-    contract = repository.create_contract(db, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=[FEES, PURE_INJECTION])
+def test_the_whole_contract_review_still_withholds_a_pure_injection_passage(db, workspace_id, fake_chat_model: FakeChatModel) -> None:
+    contract = repository.create_contract(db, workspace_id=workspace_id, filename="c.txt", file_type="txt", size_bytes=1, character_count=1, chunks=[FEES, PURE_INJECTION])
     db.commit()
     fake_chat_model.calls.clear()
 

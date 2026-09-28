@@ -180,9 +180,9 @@ def test_the_markdown_table_names_profile_models_and_every_question() -> None:
 # --- the retrieval-only endpoint the harness relies on -------------------------------------------
 
 
-def test_search_endpoint_returns_passages_without_any_model_call(db, fake_chat_model, fake_embedder, vector_store) -> None:
+def test_search_endpoint_returns_passages_without_any_model_call(db, workspace_id, fake_chat_model, fake_embedder, vector_store) -> None:
     contract = repository.create_contract(
-        db, filename="c.txt", file_type="txt", size_bytes=1, character_count=1,
+        db, workspace_id=workspace_id, filename="c.txt", file_type="txt", size_bytes=1, character_count=1,
         chunks=["1. Parties. Northwind and Acme.", "2. Fees. EUR 18,500 per month.", "3. Term. Thirty-six months."],
     )
     db.commit()

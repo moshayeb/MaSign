@@ -15,6 +15,7 @@ class Contract:
     chunk_count: int
     status: str
     created_at: datetime
+    workspace_id: UUID
     # What ingestion could not read, as sentences for the user (MAS-84).
     ingestion_notes: list[str] = field(default_factory=list)
     # contract | uncertain | not_contract, by rule (MAS-107); None until classified.
@@ -159,6 +160,43 @@ class ContractLink:
 
 
 @dataclass(frozen=True)
+class User:
+    id: UUID
+    email: str
+    password_hash: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class Workspace:
+    """A user's personal workspace (MAS-143). Every contract, question and
+    audit event belongs to exactly one; teams/sharing are future work, kept
+    open by `workspace_members` being a real join table rather than a column
+    on `users`."""
+
+    id: UUID
+    name: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class AuditEvent:
+    """An immutable record of who did what (MAS-143). `user_id` is None for a
+    system-completed event (a background review finishing on its own) --
+    never for one a person requested; that distinction is the point of this
+    table."""
+
+    id: UUID
+    workspace_id: UUID
+    user_id: UUID | None
+    event_type: str
+    target_type: str
+    target_id: UUID | None
+    metadata: dict
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class Question:
     """A stored answer to a past question (MAS-102), so a reviewer returning
     to a contract does not repeat a call it already paid for. `contract_id`
@@ -176,3 +214,4 @@ class Question:
     model: str | None
     response: dict
     created_at: datetime
+    workspace_id: UUID

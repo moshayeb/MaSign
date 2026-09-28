@@ -364,6 +364,37 @@ export function reviewContract(contractId: string): Promise<RiskReview> {
   return request<RiskReview>(`/api/contracts/${contractId}/review`, { method: 'POST' })
 }
 
+// --- accounts (MAS-143) ------------------------------------------------------
+
+export interface CurrentUser {
+  id: string
+  email: string
+}
+
+export function registerAccount(email: string, password: string): Promise<CurrentUser> {
+  return request<CurrentUser>('/api/auth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+}
+
+export function login(email: string, password: string): Promise<CurrentUser> {
+  return request<CurrentUser>('/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+}
+
+export function logout(): Promise<void> {
+  return request<void>('/api/auth/logout', { method: 'POST' })
+}
+
+export function getCurrentUser(): Promise<CurrentUser> {
+  return request<CurrentUser>('/api/auth/me')
+}
+
 // --- editable company standards (MAS-120) -----------------------------------
 
 export interface Standard {

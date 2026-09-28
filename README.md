@@ -137,8 +137,18 @@ contract was uploaded) is a 409, not a silent answer from the wrong index.
 
 Interactive docs at `http://localhost:8000/docs`.
 
+Every `/api/contracts/*` and `/api/questions/*` route (and `/api/query`) requires
+a signed-in session and is scoped to the caller's own workspace (MAS-143): a
+contract, link or question belonging to another workspace is 404, identical to
+one that does not exist, never a 403 that would confirm it exists. `/api/auth/*`
+is the exception and needs no session (register/login themselves cannot).
+
 | Method | Path | Purpose |
 |--------|------|---------|
+| `POST` | `/api/auth/register` | `{"email", "password"}` → create an account and its personal workspace (MAS-143), sign in, and set the session cookie. 409 (a generic message, never confirming the email is taken) if it already exists; 422 for an invalid email or a password under 8 characters. |
+| `POST` | `/api/auth/login` | `{"email", "password"}` → sign in and set the session cookie. 401 with the same generic message for either a wrong password or an unknown email. |
+| `POST` | `/api/auth/logout` | Delete the session server-side (a real revocation, not just clearing the cookie) and clear it. 204. |
+| `GET`  | `/api/auth/me` | The signed-in user's `id`/`email`. 401 if there is no valid session. |
 | `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. Indexes into the required `portable` embedding profile and, best-effort, into the optional `quality` profile if configured (MAS-62 compare mode) — a `quality` indexing failure never fails the upload; `indexed_profiles` on the response says which actually succeeded. |
 | `GET`  | `/api/contracts` | List stored contracts, newest first, with review status, worst severity, completeness, checked/total passage counts, `ingestion_notes`, the MAS-107 `document_kind` evidence, `indexed_profiles` (MAS-62), and the MAS-101 summary strip: `recurring_fee`, `initial_term` (text, from stored key terms), `high_findings` (High-severity risk count), `deviations` (MAS-96), `key_terms_status` (`complete` \| `partial` \| `none`) — all read from stored rows, no model call. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
@@ -389,6 +399,13 @@ Checked on 2026-09-17 (MAS-33) and to be repeated before the v1.0.0 tag:
 - **Model calls carry only contract text and the question.** No user
   identity or filename beyond what is needed for the citation label is sent
   to the provider; keys are read from the environment at startup.
+- **Passwords are Argon2id-hashed** (MAS-143, `app/auth/security.py`), never
+  stored or logged in plain text. Sessions are an opaque token looked up in
+  Postgres, not a signed token, so `/api/auth/logout` is a real, immediate
+  revocation. Login and registration return the same generic message for a
+  wrong password, a wrong email, or an email already in use, so neither can
+  be used to enumerate accounts. Known, accepted gaps for this course-quality
+  tier: no email verification, no password reset, no login rate limiting.
 
 To repeat the history scan:
 

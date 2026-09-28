@@ -54,11 +54,11 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
     response, when the request's connection is already closed.
     """
     with get_connection() as db:
-        contract = repository.get_contract(db, contract_id)
+        contract = repository.get_contract_by_id(db, contract_id)
         if contract is None:
             raise LookupError(f"Contract {contract_id} not found")
         bundle_ids = repository.bundle_contract_ids(db, contract_id)
-        filenames = {cid: c.filename for cid in bundle_ids if (c := repository.get_contract(db, cid)) is not None}
+        filenames = {cid: c.filename for cid in bundle_ids if (c := repository.get_contract_by_id(db, cid)) is not None}
         chunks = [chunk for cid in bundle_ids for chunk in repository.list_chunks(db, cid)]
         repository.start_risk_review(db, contract_id, status="running")
         repository.update_risk_review(
@@ -96,7 +96,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 logger.warning("Risk review of %s failed at passage %d: %s", contract.filename, start + 1, error)
                 repository.replace_risk_findings(db, contract_id, findings)
                 repository.replace_key_terms(db, contract_id, terms)
-                return repository.update_risk_review(
+                result = repository.update_risk_review(
                     db,
                     contract_id,
                     status="failed",
@@ -107,6 +107,13 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                     complete=False,
                     error=str(error),
                 )
+                # user_id=None: a system outcome, not something a person did
+                # (MAS-143 acceptance criteria distinguishes the two).
+                repository.create_audit_event(
+                    db, workspace_id=contract.workspace_id, user_id=None, event_type="review.failed",
+                    target_type="contract", target_id=contract_id, metadata={"error": str(error)},
+                )
+                return result
             # Passages the guardrail withheld were never graded: they are
             # neither checked nor clean, and the review says so (MAS-94).
             withheld += len(report.blocked)
@@ -178,6 +185,11 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             complete=complete and checked == len(chunks),
             key_terms_complete=terms_complete and withheld == 0,
         )
+        repository.create_audit_event(
+            db, workspace_id=contract.workspace_id, user_id=None, event_type="review.completed",
+            target_type="contract", target_id=contract_id,
+            metadata={"findings": len(findings), "key_terms": len(terms), "complete": review.complete},
+        )
         logger.info(
             "Risk review of %s%s: %d finding(s), %d key term(s) over %d/%d passages%s%s%s",
             contract.filename,
@@ -202,5 +214,11 @@ def run_review_in_background(contract_id: UUID, model: ChatModel) -> None:
         try:
             with get_connection() as db:
                 repository.update_risk_review(db, contract_id, status="failed", error=f"Review crashed: {error}")
+                contract = repository.get_contract_by_id(db, contract_id)
+                if contract is not None:
+                    repository.create_audit_event(
+                        db, workspace_id=contract.workspace_id, user_id=None, event_type="review.failed",
+                        target_type="contract", target_id=contract_id, metadata={"error": f"Review crashed: {error}"},
+                    )
         except Exception:  # noqa: BLE001
             logger.exception("Could not record the failed review of contract %s", contract_id)
