@@ -69,9 +69,19 @@ because the plain command omits `-f docker-compose.quality.yml`.
   round-trip, hit the *existing* running container's endpoint with curl —
   do not rebuild it.
 - The live container is only rebuilt **after** a PR is merged to `main`, from
-  the dedicated `main-live` worktree, by whoever owns that step, with both
+  the dedicated `main-live` worktree, by whoever owns that step, with the
   compose files and the shared project name so the profile survives:
-  `COMPOSE_PROJECT_NAME=masign docker compose -f docker-compose.yml -f docker-compose.quality.yml up -d --no-deps --build api`.
+  `COMPOSE_PROJECT_NAME=masign docker compose -f docker-compose.yml -f docker-compose.llama-server.yml up -d --no-deps --build api`.
+  **Not `-f docker-compose.quality.yml`** — since MAS-169, `main-live` runs
+  compare mode (both `portable` and `quality`, `QUALITY_EMBEDDING_*` set in
+  its own `.env`), and `quality.yml` is the quality-*only* swap: its
+  `environment:` values are literal YAML that always wins over `.env`
+  regardless of file order, so including it would silently collapse both
+  profiles back onto Qwen3 under both labels — the exact live regression
+  MAS-169 fixed, ready to happen again from this one command. If a rebuild
+  ever needs to check which mode `main-live` is actually running:
+  `docker exec masign-api env | grep EMBEDDING_BACKEND` should show
+  `sentence-transformers` for the unprefixed one, not `openai-compatible`.
   Check `docker logs masign-api` for the embedder line (`backend='openai-compatible'`,
   not `'sentence-transformers'`) before calling it healthy — **but that alone
   is not enough.** Done for real (MAS-168): a rebuild right after a fast

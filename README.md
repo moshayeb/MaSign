@@ -102,7 +102,13 @@ automatically from the stored chunk text — nothing has to be re-uploaded.
 | Profile | Command | Model | Needs | ≈ 30-page contract |
 |---|---|---|---|---|
 | `portable` (default) | `docker compose up` | ModernBERT (legal fine-tune), in-process | any laptop; first start downloads ~600 MB into `hf_cache` | ~30 s on CPU, ~5 s on a GPU |
-| `quality` | `docker compose -f docker-compose.yml -f docker-compose.quality.yml up` | Qwen3-Embedding-4B Q4_K_M via `llama-server` | NVIDIA GPU with ≥3 GB free VRAM, CUDA 12.x driver, Docker GPU access; first start downloads a 2.5 GB GGUF into `llama_models` | ~25 s on a 4 GB Quadro P1000 (3.7 GB VRAM in use) |
+| `quality` (replaces `portable`) | `docker compose -f docker-compose.yml -f docker-compose.llama-server.yml -f docker-compose.quality.yml up` | Qwen3-Embedding-4B Q4_K_M via `llama-server` | NVIDIA GPU with ≥3 GB free VRAM, CUDA 12.x driver, Docker GPU access; first start downloads a 2.5 GB GGUF into `llama_models` | ~25 s on a 4 GB Quadro P1000 (3.7 GB VRAM in use) |
+
+`docker-compose.llama-server.yml` (MAS-169) is the GPU inference server on
+its own, shared by the row above and by compare mode below — `quality`'s
+`environment:` values are literal, so they always win over `.env` regardless
+of file order, which is exactly why compare mode below never includes
+`docker-compose.quality.yml`.
 
 The `api` container ships CPU-only torch, so the `portable` profile runs on
 the CPU there; running the API natively with a CUDA torch build and
@@ -116,22 +122,38 @@ the same API, so nothing else changes there.
 
 #### Compare mode (MAS-62)
 
-`docker-compose.quality.yml` still *replaces* the single legacy config for a
-quality-only deployment, unchanged. To run **both** profiles side by side in
-the same process — so a reviewer can ask one question against each model and
-see the two answers together — set the same settings again with a
-`QUALITY_` prefix (`QUALITY_EMBEDDING_BACKEND`, `QUALITY_EMBEDDING_MODEL`,
-`QUALITY_EMBEDDING_API_URL`, ...); the plain `EMBEDDING_*` variables keep
-meaning the `portable` profile, unchanged, and are never read as a fallback
-for `quality`. This is a separate, additive configuration surface, not a
-third file to run — leaving `QUALITY_EMBEDDING_API_URL` unset simply means
-compare mode is off: every upload indexes `portable` only and `/api/query`'s
-`profile` field only ever accepts `"portable"`. When it is set, every upload
-also indexes, best-effort, into a second Qdrant collection
+To run **both** profiles side by side in the same process — so a reviewer
+can ask one question against each model and see the two answers together —
+start `llama-server` *without* `docker-compose.quality.yml`:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.llama-server.yml up --build
+```
+
+and set the same settings again with a `QUALITY_` prefix in `.env`
+(`QUALITY_EMBEDDING_BACKEND`, `QUALITY_EMBEDDING_MODEL`,
+`QUALITY_EMBEDDING_API_URL`, ... — `.env.example` has the full template);
+the plain `EMBEDDING_*` variables keep meaning the `portable` profile,
+unchanged, and are never read as a fallback for `quality`. This is a
+separate, additive configuration surface — leaving `QUALITY_EMBEDDING_API_URL`
+unset simply means compare mode is off: every upload indexes `portable` only
+and `/api/query`'s `profile` field only ever accepts `"portable"`. When it is
+set, every upload also indexes, best-effort, into a second Qdrant collection
 (`{QDRANT_COLLECTION}_quality` by default) and `/api/query` accepts
 `profile: "portable" | "quality"`. Requesting `"quality"` for a contract that
 was never indexed into it (not configured at all, or configured after that
 contract was uploaded) is a 409, not a silent answer from the wrong index.
+
+**Never combine `docker-compose.quality.yml` with the `QUALITY_*`
+variables.** `quality.yml`'s `environment:` values are literal YAML, which
+always wins over anything `.env` sets for the *same* unprefixed keys,
+regardless of `-f` order or `env_file` — so including it alongside
+`QUALITY_*` does not give you `portable` + `quality`, it silently gives you
+`quality` + `quality` under both labels (found live on `main-live`, MAS-169:
+`docker exec masign-api env` showed `EMBEDDING_BACKEND=openai-compatible`
+even with no `EMBEDDING_BACKEND` in `.env` at all, purely from `quality.yml`
+still being included). `quality.yml` is only for the quality-*only* row in
+the table above.
 
 ## API Endpoints
 

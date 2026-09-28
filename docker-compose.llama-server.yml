@@ -1,0 +1,51 @@
+# llama-server (MAS-58/61, split out MAS-169): the GPU inference server
+# behind the `quality` embedding profile, on its own so both deployment
+# shapes can use it -- a quality-*only* deployment (docker-compose.quality.yml
+# also included, replacing the default profile) and compare mode (MAS-62:
+# `quality` running *alongside* `portable`, via the QUALITY_EMBEDDING_*
+# variables in .env.example, this file alone, no third override needed).
+# Needs Docker with GPU access (NVIDIA driver + Container Toolkit, or Docker
+# Desktop on WSL2) and >= 3 GB of free VRAM; the api container never touches
+# it directly -- it ships CPU-only torch (docker-compose.yml) -- so the two
+# profiles never contend for the same GPU memory.
+#
+# Quality-only:  docker compose -f docker-compose.yml -f docker-compose.llama-server.yml -f docker-compose.quality.yml up --build
+# Compare mode:  docker compose -f docker-compose.yml -f docker-compose.llama-server.yml up --build
+#                (with QUALITY_EMBEDDING_* set in .env -- see .env.example)
+#
+# The first start downloads the 2.5 GB GGUF into the `llama_models` volume.
+# A 30-page contract takes ~25 s to embed on a 4 GB Quadro P1000 (measured
+# 2026-09-16), using 3.7 of its 4 GB.
+
+services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: masign-llama-server
+    # Last-token pooling is what Qwen3-Embedding is trained with; -ngl 99 puts
+    # every layer on the GPU. In embedding mode one input must fit a single
+    # batch, so -b/-ub must be >= EMBEDDING_MAX_TOKENS (512).
+    command: >
+      -hf ${LLAMA_MODEL:-Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M}
+      --embedding --pooling last -ngl 99 -c 2048 -b 512 -ub 512
+      --host 0.0.0.0 --port 8081
+    volumes:
+      # -hf downloads into the Hugging Face cache layout under /root/.cache.
+      - llama_models:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      # The first start downloads the model and loads it onto the GPU.
+      retries: 90
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  llama_models:
