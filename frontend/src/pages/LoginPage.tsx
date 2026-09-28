@@ -60,7 +60,9 @@ export function LoginPage() {
 
       <div className="login-form-panel">
         <div className="login-form-inner">
-          <Wordmark height={28} />
+          <a className="login-brand" href="/" aria-label="MaSign home">
+            <Wordmark height={28} />
+          </a>
           <h1 className="login-heading">{mode === 'sign-in' ? 'Welcome back' : 'Create your account'}</h1>
           <form className="login-form" onSubmit={(event) => void onSubmit(event)}>
             <label className="login-label" htmlFor="login-email">

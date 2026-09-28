@@ -22,6 +22,12 @@ export function PageChrome({ children, authControl }: { children: ReactNode; aut
   return (
     <>
       <Toaster position="top-right" theme="light" richColors closeButton />
+      {/* First thing on every screen, workspace included (MAS-155/MAS-159):
+          not legal advice, stated before the header, not buried in the
+          footer or only on the home page. */}
+      <p className="legal-banner">
+        Not legal advice — MaSign is an AI-assisted contract review tool. <a href="/educational-disclaimer">Full disclaimer</a>
+      </p>
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/" aria-label="MaSign home">

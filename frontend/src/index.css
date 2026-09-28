@@ -2408,7 +2408,7 @@ button.chip.ranked {
 
 .sitefoot .link:hover {
   color: #f4f6fa;
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 .sitefoot-divider {
@@ -2744,7 +2744,7 @@ select.standard-input {
   max-width: 1180px;
   margin: 0 auto;
   width: 100%;
-  padding: 56px 28px 72px;
+  padding: 56px 28px 0;
   gap: 48px;
   background: var(--bg);
 }
@@ -2763,13 +2763,21 @@ select.standard-input {
   margin: 0;
 }
 
-.home-legal-notice {
-  margin: 0 0 12px;
-  font-size: 0.82rem;
-  color: var(--muted);
+.home-hero h1 {
+  text-transform: uppercase;
 }
 
-.home-legal-notice a {
+.legal-banner {
+  margin: 0;
+  padding: 8px 28px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.legal-banner a {
   color: inherit;
   text-decoration: underline;
 }
@@ -3403,7 +3411,7 @@ select.standard-input {
 
 @media (max-width: 720px) {
   .homepage {
-    padding: 40px 16px 56px;
+    padding: 40px 16px 0;
     gap: 32px;
   }
 
@@ -3766,6 +3774,10 @@ select.standard-input {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.login-brand {
+  display: inline-flex;
 }
 
 .login-heading {
