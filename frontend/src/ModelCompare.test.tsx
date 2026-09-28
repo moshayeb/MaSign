@@ -86,7 +86,10 @@ function mockApi(contract: Contract, queryHandler: (body: { profile?: string }) 
 }
 
 async function openAskTab(filename: RegExp) {
-  await userEvent.click(await screen.findByRole('button', { name: filename }))
+  // getAllByRole(...)[0]: the row's own select button always renders before
+  // its "Actions for <filename>" menu trigger (MAS-126), and both match a
+  // loose filename regex against role=button.
+  await userEvent.click((await screen.findAllByRole('button', { name: filename }))[0])
   await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
 }
 

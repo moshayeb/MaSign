@@ -293,6 +293,11 @@ a {
   align-self: start;
 }
 
+/* Mobile drawer (MAS-126): CSS-inert at desktop widths and before a
+   contract is selected -- .layout only ever carries .has-selection /
+   .drawer-open once App has something to hand off to it. */
+.drawer-toggle, .drawer-close, .drawer-backdrop { display: none; }
+
 @media (max-width: 960px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
@@ -309,6 +314,56 @@ a {
 
   .topnav .tagline {
     display: none;
+  }
+
+  /* With a contract selected, the workspace comes first (MAS-126): the
+     sidebar moves off-canvas behind the toggle instead of stacking above
+     the workspace and pushing it down a full screen's height. */
+  .layout.has-selection .drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    margin-bottom: 4px;
+  }
+
+  .layout.has-selection .sidebar {
+    position: fixed;
+    inset: 0 15% 0 0;
+    z-index: 40;
+    margin: 0;
+    padding: 16px 16px 24px;
+    overflow-y: auto;
+    background: var(--panel);
+    box-shadow: 16px 0 40px -20px rgba(15, 23, 42, 0.5);
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+  }
+
+  .layout.has-selection.drawer-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .layout.has-selection.drawer-open .drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(15, 23, 42, 0.35);
+    border: 0;
+    padding: 0;
+    cursor: default;
+  }
+
+  .drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    margin-bottom: 4px;
   }
 }
 
@@ -327,6 +382,51 @@ a {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+}
+
+/* "Before you sign" is a plain block, not a card (MAS-126: fewer cards) --
+   status text alone gets no border. The full detail it links to stays a
+   card, since a reader opens it on purpose. */
+.review-status {
+  padding: 4px 2px 0;
+}
+
+.review-status-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+}
+
+.overview-detail-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.overview-detail-summary::-webkit-details-marker { display: none; }
+
+.overview-detail-summary::before {
+  content: '▸';
+  display: inline-block;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.overview-detail[open] > .overview-detail-summary::before {
+  transform: rotate(90deg);
+}
+
+.overview-detail-summary .muted.small { font-weight: 500; }
+
+.overview-detail > *:not(summary) {
+  margin-top: 16px;
 }
 
 .card-title {
@@ -3313,6 +3413,54 @@ button.chip.ranked {
   color: var(--accent);
   background: var(--accent-light);
 }
+
+/* The sidebar row's own menu (MAS-126): a plain button, not <details> --
+   the row list scrolls (`.contract-rows`, overflow-y: auto), which would
+   clip a position: absolute dropdown, so the open menu is portalled to
+   <body> and positioned: fixed from the trigger's own screen rect instead
+   (`RowActionsMenu` in ContractList.tsx). */
+.contract-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.contract-row .contract {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.row-actions-trigger {
+  flex: none;
+  align-self: center;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text-2);
+}
+
+.row-actions-trigger:hover, .row-actions-trigger[aria-expanded="true"] {
+  border-color: var(--accent-line);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.row-actions-trigger .export-icon { width: 14px; height: 14px; }
+
+.row-actions-list {
+  /* Position is set inline (top/left, computed from the trigger's rect);
+     everything else matches the header's .actions-list. */
+  z-index: 45;
+}
+
+.export-action.danger { color: var(--high); }
+.export-action.danger:hover, .export-action.danger:focus-visible { background: var(--warn-bg); color: var(--high); }
 
 .export-icon { width: 18px; height: 18px; display: block; }
 

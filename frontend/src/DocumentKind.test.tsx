@@ -66,16 +66,16 @@ afterEach(() => vi.restoreAllMocks())
 describe('document kind (MAS-107)', () => {
   it('tags the non-contract rows in the sidebar, with the markers as the tooltip', async () => {
     render(<App />)
-    const invoice = await screen.findByRole('button', { name: /august-invoice\.txt/ })
+    const invoice = (await screen.findAllByRole('button', { name: /august-invoice\.txt/ }))[0]
     expect(within(invoice).getByText('Not a contract?')).toHaveAttribute('title', "Invoice markers: 'Invoice number', 'Amount due', 'Bill to'")
-    expect(within(screen.getByRole('button', { name: /memo\.txt/ })).getByText('Type uncertain')).toBeInTheDocument()
-    expect(within(screen.getByRole('button', { name: /northwind\.txt/ })).queryByText(/contract\?|uncertain/)).not.toBeInTheDocument()
-    expect(within(screen.getByRole('button', { name: /old\.txt/ })).queryByText(/contract\?|uncertain/)).not.toBeInTheDocument()
+    expect(within(screen.getAllByRole('button', { name: /memo\.txt/ })[0]).getByText('Type uncertain')).toBeInTheDocument()
+    expect(within(screen.getAllByRole('button', { name: /northwind\.txt/ })[0]).queryByText(/contract\?|uncertain/)).not.toBeInTheDocument()
+    expect(within(screen.getAllByRole('button', { name: /old\.txt/ })[0]).queryByText(/contract\?|uncertain/)).not.toBeInTheDocument()
   })
 
   it('shows the kind in the header and, for an invoice, a note that the rubric may not apply — and no reassurance', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /august-invoice\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /august-invoice\.txt/ }))[0])
 
     const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
     expect(within(head).getByText('Likely not a contract — invoice')).toHaveClass('status', 'warn')
@@ -95,13 +95,13 @@ describe('document kind (MAS-107)', () => {
 
   it('keeps the quiet wording for a contract, and says nothing for a row not yet classified', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
     expect(within(head).getByText('Commercial contract')).toHaveClass('status', 'none')
     expect(await screen.findByText('Nothing needs attention')).toHaveClass('status', 'ok')
     expect(screen.queryByText(/rubric may not apply/i)).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /old\.txt/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /old\.txt/ })[0])
     const oldHead = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
     expect(oldHead).toHaveTextContent('old.txt')
     expect(within(oldHead).queryByText(/Commercial contract|not a contract|uncertain/)).not.toBeInTheDocument()
@@ -110,7 +110,7 @@ describe('document kind (MAS-107)', () => {
 
   it('words an uncertain file as uncertain, not as "not a contract"', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /memo\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /memo\.txt/ }))[0])
     expect(screen.getByText('Document type uncertain')).toHaveClass('status', 'warn')
     expect(await screen.findByText(/It is not clear whether this file is a commercial contract \(Only 12 words — too short to classify\)/)).toBeInTheDocument()
   })

@@ -90,6 +90,13 @@ export function listContracts(): Promise<Contract[]> {
   return request<Contract[]>('/api/contracts')
 }
 
+// Irreversible (MAS-126): its chunks, review, key terms, stored questions
+// and links cascade in Postgres, and its vectors are removed from Qdrant.
+// The UI confirms before calling this.
+export function deleteContract(contractId: string): Promise<void> {
+  return request<void>(`/api/contracts/${contractId}`, { method: 'DELETE' })
+}
+
 export interface RetrievedChunk {
   chunk_id: string
   contract_id: string

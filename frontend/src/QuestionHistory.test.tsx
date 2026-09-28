@@ -112,7 +112,7 @@ describe('question history (MAS-102)', () => {
   it('lists previously answered questions under the contract, newest handling and status pills', async () => {
     mockApi()
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
 
     const list = await screen.findByRole('list', { name: 'Previous questions' })
@@ -125,7 +125,7 @@ describe('question history (MAS-102)', () => {
   it('opening a stored question shows the full answer without a new /api/query call', async () => {
     const fetchMock = mockApi()
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await screen.findByText('What is the monthly fee?')
     const callsBefore = fetchMock.mock.calls.filter(([u]) => String(u) === '/api/query').length
@@ -142,7 +142,7 @@ describe('question history (MAS-102)', () => {
   it('asking a live question still calls the API and the new answer appears in the history', async () => {
     mockApi()
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await screen.findByText('What is the monthly fee?')
 
@@ -158,7 +158,7 @@ describe('question history (MAS-102)', () => {
   it('Forget removes a stored question from the list', async () => {
     mockApi()
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await screen.findByText('What is the monthly fee?')
 
@@ -177,7 +177,7 @@ describe('question history (MAS-102)', () => {
       return json(404, { detail: `unexpected ${url}` })
     })
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /northwind\.txt/ }))
+    await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
 
     await screen.findByLabelText('Ask about the contract')

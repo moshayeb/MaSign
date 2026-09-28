@@ -18,6 +18,12 @@ files under `app/database/migrations/`; `run_migrations()` applies any not
 yet recorded in `schema_migrations` and runs on API startup, so
 `docker compose up --build` always brings a fresh database to the current
 schema. `app/database/repository.py` is the only module that issues SQL.
+Every table with a contract's data (`chunks`, `risk_reviews`, `key_terms`,
+`questions`, `contract_links`) has cascaded from `contracts` since it was
+added, so `DELETE /api/contracts/{id}` (MAS-126, exposing what was
+previously only an internal failed-upload cleanup, `repository.delete_contract`)
+is a single Postgres delete plus a best-effort Qdrant cleanup — no per-table
+cleanup code to keep in sync.
 
 ## Embeddings and vector store
 
