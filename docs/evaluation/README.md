@@ -92,11 +92,19 @@ count it spent; Ragas' telemetry is switched off.
 | 2026-09-20 | quality (Qwen3-Embedding-4B) | Northwind | 16 | 0.94 | 1.00 | 0.96 | 0 |
 | 2026-09-20 | portable (ModernBERT) | Northwind | 16 | 0.88 | 1.00 | 0.94 | 0 |
 | 2026-09-28 | quality (see note below) | Northwind + Harbor | 29 | 0.86 | 1.00 | 0.91 | 0 |
+| 2026-09-28 | quality (see note below) | Northwind + Harbor + BNL/VIP (CUAD) | 35 | 0.80 | 1.00 | 0.88 | 0 |
 
 Both profiles put the right passage in the top 5 every time; Qwen3 misses
 top-1 once (nw-03, invoice due date ranked 3rd), ModernBERT twice (nw-03 and
 nw-06, the fee-increase clause ranked 2nd). Files:
 `results-2026-09-20-quality-northwind.md`, `results-2026-09-20-portable-northwind.md`.
+
+Adding the CUAD contract still puts every reference passage in the top 5
+(`hit@5 1.00`, 35/35), and BNL's 3 misses (bnl-01, bnl-04, bnl-05) are the
+same pattern as the fictional ones: the right clause ranked 2nd or 3rd, in a
+real 16-page document with denser, less example-shaped prose than the
+fictional set — not a retrieval failure, a harder read.
+`results-2026-09-28-live-all-three.md`.
 
 **Only one profile could be exercised on 2026-09-28 (MAS-32), and it is
 mislabelled `portable` by the API** — a real deployment gap, not a harness

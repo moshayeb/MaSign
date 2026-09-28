@@ -1,6 +1,6 @@
 # MaSign evaluation
 
-- Date: 2026-09-28 18:57 UTC
+- Date: 2026-09-28 19:18 UTC
 - Embedding profile: quality (deployed as default; see docs/evaluation/README.md note)
 - Chat model: n/a (retrieval only)
 - Judge model: n/a
@@ -9,9 +9,9 @@
 
 | Questions | Resolved | hit@1 | hit@5 | MRR |
 |---|---|---|---|---|
-| 29 | 29 | 0.86 | 1.00 | 0.91 |
+| 35 | 35 | 0.80 | 1.00 | 0.88 |
 
-Not top-1: nw-03, nw-19, hb-11, hb-13
+Not top-1: nw-03, nw-19, hb-11, hb-13, bnl-01, bnl-04, bnl-05
 
 | id | question | reference | retrieved (best first) |
 |---|---|---|---|
@@ -44,3 +44,9 @@ Not top-1: nw-03, nw-19, hb-11, hb-13
 | hb-10 | Is the customer's liability capped? | 5 | 5, 4, 3, 2, 6 |
 | hb-11 | Which country's courts have jurisdiction? | 5 | 6, 5, 3, 2, 1 |
 | hb-13 | What is the effective date of the agreement? | 1 | 3, 6, 5, 1, 2 |
+| bnl-01 | What is the minimum monthly fee BNL owes VIP? | 11 | 10, 11, 14, 23, 44 |
+| bnl-02 | How long does BNL have to pay a VIP invoice? | 14 | 14, 10, 23, 29, 22 |
+| bnl-03 | What late charge applies if BNL pays an invoice late? | 14 | 14, 32, 23, 10, 52 |
+| bnl-04 | Is VIP's liability to BNL capped? | 28 | 29, 22, 28, 36, 31 |
+| bnl-05 | What does BNL owe VIP if it ends the agreement early, during an Extended Term, with less than six months' notice? | 43 | 22, 43, 10, 29, 44 |
+| bnl-06 | Can VIP share BNL's data with third parties? | 18 | 18, 23, 22, 39, 56 |
