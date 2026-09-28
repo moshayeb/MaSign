@@ -12,7 +12,7 @@ client = TestClient(app)
 
 
 @pytest.fixture
-def retriever_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+def retriever_calls(monkeypatch: pytest.MonkeyPatch, db) -> list[str]:
     calls: list[str] = []
 
     def fake_retrieve(question: str, **_) -> list:
@@ -20,7 +20,9 @@ def retriever_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         return []
 
     monkeypatch.setattr(routes, "retrieve_contract_context", fake_retrieve)
-    app.dependency_overrides[get_db] = lambda: None  # retrieval is faked; no database needed
+    # Retrieval is faked, but a successful "not found" answer is still stored
+    # (MAS-102), so a real database is needed even for these routing tests.
+    app.dependency_overrides[get_db] = lambda: db
     yield calls
     app.dependency_overrides.pop(get_db, None)
 

@@ -98,6 +98,23 @@ are parsed and resolved to the chunks. `grounded` also requires each detected
 money amount, percentage, date and duration in the answer to occur in a cited
 passage; an answer that fails either check is returned as unverified.
 
+## Question history (MAS-102)
+
+A `questions` row (migration 013) is written by `/api/query` after every
+successful answer — `answered` or `not_found`, both real outcomes worth
+keeping — but never for a refused one (`answer_status = 'withheld'`, meaning
+the model was never asked). `contract_id` is nullable: a no-scope ("all
+contracts") question is stored once, not duplicated per contract. `response`
+holds the whole `QueryResponse` as JSONB, so `GET
+/api/contracts/{id}/questions` can return a stored answer's citations, flags
+and withheld notices exactly as they were, with no second model call.
+`list_questions` matches a contract either directly (`contract_id` equals
+it) or, for a no-scope question, by checking whether the stored `citations`
+actually named that contract (a `jsonb_array_elements` query over
+`response -> 'citations'`) — retrieval alone is not enough, since an
+unscoped question searches every contract but may not have cited most of
+them. `DELETE /api/questions/{id}` ("Forget") removes a row outright.
+
 ## Model calls and the prompt-injection guardrail (MAS-90)
 
 `app/answering/llm.py` has one adapter, `LiteLLMChatModel`, which calls

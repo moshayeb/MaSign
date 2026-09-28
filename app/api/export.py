@@ -22,7 +22,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 if TYPE_CHECKING:
-    from app.api.routes import KeyTermsResponse, RiskReviewResponse
+    from app.api.routes import KeyTermsResponse, QuestionOut, RiskReviewResponse
 
 NOT_ADVICE = "Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice."
 
@@ -33,7 +33,11 @@ def safe_filename(filename: str, extension: str) -> str:
 
 
 def render_markdown(
-    filename: str, review: RiskReviewResponse, terms: KeyTermsResponse, documents: dict[UUID, str] | None = None
+    filename: str,
+    review: RiskReviewResponse,
+    terms: KeyTermsResponse,
+    documents: dict[UUID, str] | None = None,
+    questions: list[QuestionOut] | None = None,
 ) -> str:
     documents = documents or {review.contract_id: filename}
     lines = [f"# Review of {filename}", ""]
@@ -97,15 +101,25 @@ def render_markdown(
         verdict = c.worst_severity or ("Nothing found" if review.complete and review.status == "done" else "Unable to determine")
         lines.append(f"| {c.name} | {verdict} |")
 
+    if questions:
+        lines += ["", "## Questions asked", ""]
+        for q in questions:
+            pill = "not found" if q.answer_status == "not_found" else ("grounded" if q.grounded else "ungrounded")
+            lines += [f"- **{_cell(q.question)}** ({_when(q.created_at)} · {pill})", f"  > {_cell(q.answer)}", ""]
+
     lines += ["", f"_{NOT_ADVICE}_", ""]
     return "\n".join(lines)
 
 
 def render_pdf(
-    filename: str, review: RiskReviewResponse, terms: KeyTermsResponse, documents: dict[UUID, str] | None = None
+    filename: str,
+    review: RiskReviewResponse,
+    terms: KeyTermsResponse,
+    documents: dict[UUID, str] | None = None,
+    questions: list[QuestionOut] | None = None,
 ) -> bytes:
     """Render the same no-cost review data as a readable, downloadable PDF."""
-    source = render_markdown(filename, review, terms, documents)
+    source = render_markdown(filename, review, terms, documents, questions)
     output = io.BytesIO()
     document = SimpleDocTemplate(output, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
     styles = getSampleStyleSheet()

@@ -5,6 +5,7 @@ import { AnswerView } from './components/AnswerView'
 import { CompareView } from './components/CompareView'
 import { ContractList } from './components/ContractList'
 import { PageChrome } from './components/PageChrome'
+import { PreviousQuestions } from './components/PreviousQuestions'
 import { QuestionPanel, type Asked } from './components/QuestionPanel'
 import { RiskReviewPanel } from './components/RiskReviewPanel'
 import { PassageReader, type SourceRef } from './components/PassageReader'
@@ -47,6 +48,9 @@ export default function App() {
   const [contracts, setContracts] = useState<Contract[] | null>(null)
   const [selected, setSelected] = useState<Contract | null>(null)
   const [asked, setAsked] = useState<Asked | null>(null)
+  // Bumped after a live answer is stored (MAS-102), so the previous-questions
+  // list refetches and shows it without a page reload.
+  const [questionsVersion, setQuestionsVersion] = useState(0)
   // Before any contract is selected, the composer stays hidden behind this
   // secondary trigger rather than being the default view (MAS-133): a new
   // visitor sees "pick or upload a contract" first, not a question box.
@@ -224,7 +228,21 @@ export default function App() {
   const answered = useCallback(
     (next: Asked | null) => {
       setAsked(next)
-      if (next) setTab('ask')
+      if (next) {
+        setTab('ask')
+        // A live ask just stored a new question (MAS-102); refetch the list.
+        setQuestionsVersion((v) => v + 1)
+      }
+    },
+    [setTab],
+  )
+  // Selecting a previous question (MAS-102) shows its stored answer the same
+  // way a live one renders, but never re-asks the model and never refetches
+  // the list -- nothing about the stored data changed.
+  const selectStoredQuestion = useCallback(
+    (next: Asked) => {
+      setAsked(next)
+      setTab('ask')
     },
     [setTab],
   )
@@ -356,6 +374,7 @@ export default function App() {
               </TabPanel>
               <TabPanel id="ask" active={tab}>
                 <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
+                <PreviousQuestions contract={selected} contracts={contracts ?? []} version={questionsVersion} onSelect={selectStoredQuestion} />
                 {/* Suggested questions, ranked by the review (MAS-108); a click fills the composer, Ask sends it. */}
                 {!asked && (
                   <div className="examples" aria-label="Suggested questions">

@@ -152,3 +152,23 @@ class ContractLink:
     linked_contract_id: UUID
     reference_name: str
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class Question:
+    """A stored answer to a past question (MAS-102), so a reviewer returning
+    to a contract does not repeat a call it already paid for. `contract_id`
+    is None for a question asked with no scope ("all contracts"); `response`
+    holds the full QueryResponse as it was sent, so a stored answer's
+    citations, flags and withheld notices render without a second call.
+    """
+
+    id: UUID
+    contract_id: UUID | None
+    question: str
+    answer: str
+    answer_status: str
+    grounded: bool
+    model: str | None
+    response: dict
+    created_at: datetime

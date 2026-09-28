@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, listContracts, uploadContract } from './api'
+import { ApiError, forgetQuestion, listContracts, unlinkContract, uploadContract } from './api'
 
 function respond(status: number, body: unknown, statusText = '') {
   return new Response(body === undefined ? null : JSON.stringify(body), {
@@ -56,5 +56,16 @@ describe('requests', () => {
     expect(url).toBe('/api/contracts/upload')
     expect(init?.method).toBe('POST')
     expect((init?.body as FormData).get('file')).toBeInstanceOf(File)
+  })
+
+  // A 204 response (unlink, forget) has no body. Calling .json() on it
+  // throws "Unexpected end of JSON input", which used to turn a successful
+  // delete into a false error toast -- found while adding MAS-102's Forget
+  // button, but it already affected the existing Unlink button too.
+  it('resolves a 204 No Content response instead of throwing on its empty body', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }))
+
+    await expect(unlinkContract('c1', 'link1')).resolves.toBeUndefined()
+    await expect(forgetQuestion('q1')).resolves.toBeUndefined()
   })
 })
