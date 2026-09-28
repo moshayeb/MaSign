@@ -40,14 +40,55 @@ instruction, which it adds itself so no caller has to know. It also exposes
 are not a safe proxy (number-dense clauses reach ~0.45 tokens/char). An oversized
 text reaching `embed_documents` is a bug and raises rather than being truncated.
 An unreachable embedding service is a 503 (`EmbeddingServiceError`) during a
-request and fatal at startup.
+request and fatal at startup for the required `portable` profile.
 
-`app/retrieval/vector_store.py` keeps one Qdrant collection, `contract_chunks`,
-where each point's id **is** the chunk's Postgres UUID and the payload carries
-`contract_id`, `chunk_index` and `text`. On upload, `app/retrieval/indexing.py`
-embeds the stored chunks, upserts them and writes the point id back to
-`chunks.embedding_id`; if that fails the contract is removed from both stores
-again so nothing unsearchable lingers.
+`app/retrieval/vector_store.py` keeps one Qdrant collection per profile —
+`contract_chunks` for `portable` (the pre-MAS-62 name, unchanged so an
+existing deployment's collection is never silently orphaned) and
+`contract_chunks_quality` for `quality` by default — where each point's id
+**is** the chunk's Postgres UUID (the same id in both collections; only the
+vector differs) and the payload carries `contract_id`, `chunk_index` and
+`text`. On upload, `app/retrieval/indexing.py`'s `index_contract()` embeds
+the stored chunks, upserts them and writes the point id back to
+`chunks.embedding_id`; if the required `portable` call fails the contract is
+removed from both stores again so nothing unsearchable lingers.
+
+### Compare mode (MAS-62)
+
+`get_embedder(profile)` / `get_vector_store(profile)` are `lru_cache`d per
+profile (`"portable"` or `"quality"`), not the pre-MAS-62 bare singletons —
+both profiles can be live in the same process at once. `quality`'s settings
+are the same `EMBEDDING_*`/`QDRANT_COLLECTION` names with a `QUALITY_`
+prefix, entirely independent of `portable`'s (`embeddings.is_profile_configured
+("quality")` is false, and nothing else about the app changes, unless
+`QUALITY_EMBEDDING_API_URL` is set — MaSign never guesses an operator's GPU
+server address). `docker-compose.quality.yml` is unrelated and unchanged: it
+still *replaces* the plain `EMBEDDING_*` config for a quality-only
+deployment; the `QUALITY_*` variables are the additive surface for running
+both at once.
+
+Every upload indexes the required `portable` profile as before, then,
+best-effort, `quality` if configured — its failure is logged and reported on
+the upload response (`indexed_profiles`, and a `contracts.indexed_profiles`
+column, migration 014) but never fails the upload or rolls back the portable
+indexing already committed to Qdrant (caught inside the request handler, not
+allowed to propagate, since Postgres only commits the whole request's writes
+together — an uncaught exception there would have rolled back the successful
+`portable` write too, orphaning its already-upserted Qdrant vectors). Chunks
+are stored once and chunked to one token budget at upload time (`portable`'s,
+the required profile); Qwen3-Embedding-4B's much larger context means those
+same chunks are automatically valid for `quality` too, so this is a
+deliberate choice, not an oversight — a hypothetical `quality` profile with a
+*smaller* max_tokens than `portable` would simply fail indexing for that
+profile (`EmbeddingInputTooLong`, caught the same way).
+
+`POST /api/query`'s `profile` field (default `portable`) selects which
+collection `_retrieve()` searches; requesting `quality` when it is not
+configured, or for a specific contract never indexed into it, is a 409 —
+Qdrant's own point count for that contract is the source of truth
+(`store.count(contract_id=...)`), not a separate "was this indexed" flag that
+could drift from it. The response echoes back which profile actually
+answered so the UI never has to assume.
 
 `app/retrieval/retriever.py` answers `/api/query`: it embeds the question (query
 prefix applied by the embedder), searches the collection — filtered to one

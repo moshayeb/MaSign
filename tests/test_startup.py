@@ -34,8 +34,8 @@ def production_like_env(monkeypatch: pytest.MonkeyPatch) -> tuple[_StubEmbedder,
     # neither Postgres nor Qdrant is needed.
     monkeypatch.setenv("APP_ENV", "development")
     embedder, store = _StubEmbedder(), _StubStore()
-    monkeypatch.setattr(main, "get_embedder", lambda: embedder)
-    monkeypatch.setattr(main, "get_vector_store", lambda: store)
+    monkeypatch.setattr(main, "get_embedder", lambda profile=None: embedder)
+    monkeypatch.setattr(main, "get_vector_store", lambda profile=None: store)
     monkeypatch.setattr(main, "get_connection", lambda: nullcontext("fake connection"))
     monkeypatch.setattr(main.repository, "fail_interrupted_risk_reviews", lambda db: 0)
 
@@ -92,7 +92,7 @@ def test_startup_fails_when_the_embedding_service_is_down(
 
     monkeypatch.setattr(main, "run_migrations", lambda: [])
     embedder = OpenAICompatibleEmbedder("qwen", "http://llama-server:8081", transport=httpx.MockTransport(refuse))
-    monkeypatch.setattr(main, "get_embedder", lambda: embedder)
+    monkeypatch.setattr(main, "get_embedder", lambda profile=None: embedder)
 
     with caplog.at_level("ERROR", logger="app.main"):
         with pytest.raises(EmbeddingServiceError, match="http://llama-server:8081 is unreachable"):
@@ -100,6 +100,80 @@ def test_startup_fails_when_the_embedding_service_is_down(
                 pass
 
     assert "Cannot start: Embedding service at http://llama-server:8081 is unreachable" in caplog.text
+
+
+class _StubQualityEmbedder(_StubEmbedder):
+    model_name = "stub-quality"
+    dimension = 4
+
+
+def test_startup_skips_the_quality_profile_when_not_configured(
+    production_like_env: tuple[_StubEmbedder, _StubStore], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(main, "run_migrations", lambda: [])
+    monkeypatch.setattr(main.embeddings, "is_profile_configured", lambda profile: profile == "portable")
+
+    def fail_if_called(profile: str = "portable"):
+        raise AssertionError("get_embedder('quality') must not be called when quality is not configured")
+
+    # get_embedder is already stubbed to return the portable stub regardless
+    # of argument (production_like_env); assert is_profile_configured alone
+    # gates the whole block by checking no second ensure_index_current call
+    # happens for a second collection.
+    calls: list[str] = []
+    monkeypatch.setattr(
+        main, "ensure_index_current", lambda db, embedder, store: calls.append(embedder.model_name)
+    )
+
+    with TestClient(main.app):
+        pass
+
+    assert calls == ["stub"]  # portable only
+
+
+def test_startup_prepares_the_quality_profile_when_configured(
+    production_like_env: tuple[_StubEmbedder, _StubStore], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    portable_embedder, _ = production_like_env
+    quality_embedder = _StubQualityEmbedder()
+    monkeypatch.setattr(main, "run_migrations", lambda: [])
+    monkeypatch.setattr(main.embeddings, "is_profile_configured", lambda profile: True)
+    monkeypatch.setattr(main, "get_embedder", lambda profile="portable": quality_embedder if profile == "quality" else portable_embedder)
+
+    ensured: list[str] = []
+    monkeypatch.setattr(main, "ensure_index_current", lambda db, embedder, store: ensured.append(embedder.model_name))
+
+    with TestClient(main.app):
+        pass
+
+    assert ensured == ["stub", "stub-quality"]  # both profiles prepared, portable first
+    assert quality_embedder.warmed_up is True
+
+
+def test_startup_continues_on_portable_when_quality_is_configured_but_unreachable(
+    production_like_env: tuple[_StubEmbedder, _StubStore], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from app.retrieval.embeddings import EmbeddingServiceError
+
+    portable_embedder, _ = production_like_env
+    monkeypatch.setattr(main, "run_migrations", lambda: [])
+    monkeypatch.setattr(main.embeddings, "is_profile_configured", lambda profile: True)
+
+    class _BrokenQualityEmbedder(_StubQualityEmbedder):
+        def warm_up(self) -> None:
+            raise EmbeddingServiceError("simulated: quality server unreachable")
+
+    monkeypatch.setattr(
+        main, "get_embedder", lambda profile="portable": _BrokenQualityEmbedder() if profile == "quality" else portable_embedder
+    )
+
+    with caplog.at_level("ERROR", logger="app.main"):
+        with TestClient(main.app) as client:
+            # The app must still be fully up on portable alone.
+            assert client.get("/health").status_code == 200
+
+    assert portable_embedder.warmed_up is True
+    assert "quality profile is configured but not ready" in caplog.text
 
 
 def test_test_environment_skips_migrations(monkeypatch: pytest.MonkeyPatch) -> None:
