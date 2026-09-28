@@ -35,6 +35,7 @@ const liveAnswer: QueryResponse = {
   recommended_actions: [],
   blocked_passages: [],
   redacted_passages: [],
+  profile: 'portable',
 }
 
 const storedResponse: QueryResponse = {
@@ -50,6 +51,7 @@ const storedResponse: QueryResponse = {
   recommended_actions: [],
   blocked_passages: [],
   redacted_passages: [],
+  profile: 'portable',
 }
 
 const storedQuestions: StoredQuestion[] = [

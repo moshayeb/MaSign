@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { askQuestion, type Contract, type QueryResponse } from '../api'
-import { CALLS_PER_QUESTION } from '../cost'
+import { CALLS_PER_QUESTION, COMPARE_CALLS_PER_QUESTION, formatCalls } from '../cost'
 
 // Matches the backend's QueryRequest.question max_length (app/api/routes.py,
 // MAX_QUESTION_LENGTH) so a too-long question is stopped by the browser
@@ -14,17 +14,32 @@ export interface Asked {
   response: QueryResponse
 }
 
+// Compare mode (MAS-62): the same question asked of both embedding profiles.
+export interface Compared {
+  question: string
+  contract: Contract | null
+  portable: QueryResponse
+  quality: QueryResponse
+}
+
 interface Props {
   selected: Contract | null
   draft: string
   onDraftChange: (text: string) => void
   onAnswered: (asked: Asked) => void
+  // Present only when the compare toggle should show at all -- omit it to
+  // hide the feature entirely rather than show a button that always 409s.
+  onCompared?: (compared: Compared) => void
 }
 
-export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Props) {
+export function QuestionPanel({ selected, draft, onDraftChange, onAnswered, onCompared }: Props) {
   const [scope, setScope] = useState<'selected' | 'all'>('selected')
   const [busy, setBusy] = useState(false)
+  const [comparing, setComparing] = useState(false)
   const contract = scope === 'selected' ? selected : null
+  // Comparing is only offered for one specific, already quality-indexed
+  // contract -- "all contracts" scope has no single indexed-profile set to check.
+  const canCompare = Boolean(onCompared && scope === 'selected' && selected?.indexed_profiles?.includes('quality'))
 
   async function submit() {
     const text = draft.trim()
@@ -45,6 +60,27 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Pr
       // Already reported by the toast.
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function submitCompare() {
+    const text = draft.trim()
+    if (!text || busy || !onCompared || !contract) return
+    setComparing(true)
+    try {
+      // Two full /api/query round trips (one per profile), each its own
+      // answer + risk call -- the cost hint on the button already said so.
+      const [portable, quality] = await toast
+        .promise(
+          Promise.all([askQuestion(text, contract.contract_id, 5, 'portable'), askQuestion(text, contract.contract_id, 5, 'quality')]),
+          { loading: 'Reading the contract with both models…', error: (e: Error) => e.message },
+        )
+        .unwrap()
+      onCompared({ question: text, contract, portable, quality })
+    } catch {
+      // Already reported by the toast.
+    } finally {
+      setComparing(false)
     }
   }
 
@@ -90,7 +126,18 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered }: Pr
           </label>
         </fieldset>
         <span className="muted small cost-hint ask-cost">Each question uses about {CALLS_PER_QUESTION} model calls</span>
-        <button type="submit" className="primary ask" disabled={busy || !draft.trim()}>
+        {canCompare && (
+          <button
+            type="button"
+            className="ghost compare-models"
+            disabled={busy || comparing || !draft.trim()}
+            onClick={() => void submitCompare()}
+            title={`Ask both embedding models and show them side by side (${formatCalls(COMPARE_CALLS_PER_QUESTION)})`}
+          >
+            {comparing ? 'Comparing…' : `Compare models (${formatCalls(COMPARE_CALLS_PER_QUESTION)})`}
+          </button>
+        )}
+        <button type="submit" className="primary ask" disabled={busy || comparing || !draft.trim()}>
           {busy ? 'Asking…' : 'Ask'}
           {!busy && (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

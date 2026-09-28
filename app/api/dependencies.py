@@ -14,11 +14,11 @@ def get_db() -> Iterator[psycopg.Connection]:
 
 
 def get_embedder() -> embeddings.Embedder:
-    return embeddings.get_embedder()
+    return embeddings.get_embedder(embeddings.DEFAULT_PROFILE)
 
 
 def get_vector_store() -> vector_store.VectorStore:
-    return vector_store.get_vector_store()
+    return vector_store.get_vector_store(vector_store.DEFAULT_PROFILE)
 
 
 def get_chat_model() -> llm.ChatModel:

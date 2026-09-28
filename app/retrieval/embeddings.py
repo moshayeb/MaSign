@@ -7,6 +7,19 @@ and an OpenAI-compatible HTTP service such as llama-server hosting a GGUF
 one; see CLAUDE.md for the benchmark behind the defaults. Everything else in
 the app talks to the protocol, so tests substitute a fake and a model swap is
 config.
+
+Since MAS-62 ("compare mode") both profiles can be configured and run in the
+same process at once: `get_embedder("portable")` and `get_embedder("quality")`
+are independent, separately-cached instances. `portable`'s settings are the
+plain `EMBEDDING_*` variables, unchanged, and are always usable (the app
+cannot start without them). `quality`'s settings are the same names prefixed
+`QUALITY_` (`QUALITY_EMBEDDING_MODEL`, `QUALITY_EMBEDDING_API_URL`, ...) and
+are entirely optional: `is_profile_configured("quality")` is false unless
+`QUALITY_EMBEDDING_API_URL` is set, and nothing about `portable` requires it.
+`docker-compose.quality.yml` is unrelated and unchanged -- it still replaces
+the single legacy `EMBEDDING_*` config for a quality-only deployment; the
+`QUALITY_*` variables are the new, additive surface compare mode needs to run
+both profiles side by side in one process.
 """
 
 import logging
@@ -43,13 +56,28 @@ PROMPT_FORMATS: dict[str, dict[str, str]] = {
 }
 
 
-def prompt_format_for(model_name: str) -> str:
-    """Pick the prefix scheme for a model, unless EMBEDDING_PROMPT_FORMAT overrides it."""
-    configured = os.getenv("EMBEDDING_PROMPT_FORMAT")
+# Sentinel so `configured=None` (MAS-62: "this profile's override variable is
+# genuinely unset") is distinguishable from "no argument given" (read
+# EMBEDDING_PROMPT_FORMAT from the environment, the pre-MAS-62 behaviour).
+_READ_FROM_ENV = "\0read-from-env\0"
+
+
+def prompt_format_for(model_name: str, configured: str | None = _READ_FROM_ENV, *, var_name: str = "EMBEDDING_PROMPT_FORMAT") -> str:
+    """Pick the prefix scheme for a model, unless an override says otherwise.
+
+    With no `configured` argument this reads EMBEDDING_PROMPT_FORMAT from the
+    environment (unchanged since before MAS-62) -- `portable`'s behaviour.
+    Passing `configured` explicitly is how a non-default profile (MAS-62)
+    supplies its own prefixed variable instead, without ever falling back to
+    `portable`'s; `var_name` names that variable so a validation error points
+    at the one the caller actually set.
+    """
+    if configured == _READ_FROM_ENV:
+        configured = os.getenv("EMBEDDING_PROMPT_FORMAT")
     if configured:
         if configured not in PROMPT_FORMATS:
             raise ValueError(
-                f"EMBEDDING_PROMPT_FORMAT={configured!r} is not one of {sorted(PROMPT_FORMATS)}."
+                f"{var_name}={configured!r} is not one of {sorted(PROMPT_FORMATS)}."
             )
         return configured
     name = model_name.lower()
@@ -131,9 +159,17 @@ class SentenceTransformerEmbedder:
 
     backend = "sentence-transformers"
 
-    def __init__(self, model_name: str, max_tokens: int = DEFAULT_MAX_TOKENS, device: str = "auto") -> None:
+    def __init__(
+        self,
+        model_name: str,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        device: str = "auto",
+        *,
+        prompt_format: str | None = _READ_FROM_ENV,
+        prompt_format_var: str = "EMBEDDING_PROMPT_FORMAT",
+    ) -> None:
         self.model_name = model_name
-        self.prompt_format = prompt_format_for(model_name)
+        self.prompt_format = prompt_format_for(model_name, prompt_format, var_name=prompt_format_var)
         self._prefixes = PROMPT_FORMATS[self.prompt_format]
         self._requested_max_tokens = max_tokens
         self._requested_device = device
@@ -226,11 +262,13 @@ class OpenAICompatibleEmbedder:
         tokenizer: str | None = None,
         timeout: float = 600.0,
         transport: httpx.BaseTransport | None = None,
+        prompt_format: str | None = _READ_FROM_ENV,
+        prompt_format_var: str = "EMBEDDING_PROMPT_FORMAT",
     ) -> None:
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
         self.max_tokens = max_tokens
-        self.prompt_format = prompt_format_for(model_name)
+        self.prompt_format = prompt_format_for(model_name, prompt_format, var_name=prompt_format_var)
         self._prefixes = PROMPT_FORMATS[self.prompt_format]
         self._tokenizer_name = tokenizer
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
@@ -390,26 +428,85 @@ def _normalised(vector: list[float]) -> list[float]:
     return [value / norm for value in vector]
 
 
-@lru_cache(maxsize=1)
-def get_embedder() -> Embedder:
-    backend = os.getenv("EMBEDDING_BACKEND", DEFAULT_BACKEND)
-    model_name = os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
-    max_tokens = int(os.getenv("EMBEDDING_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+# The two profiles compare mode can run side by side (MAS-62/58/61).
+# `quality`'s settings are additive: none of them ever falls back to
+# `portable`'s value, even when unset.
+PROFILES = ("portable", "quality")
+DEFAULT_PROFILE = "portable"
+
+# quality's own defaults, matching docker-compose.quality.yml's llama-server
+# (MAS-58/61) -- QUALITY_EMBEDDING_API_URL still has no default: it names a
+# specific operator's server, never guessed.
+QUALITY_DEFAULT_MODEL = "Qwen/Qwen3-Embedding-4B-GGUF:Q4_K_M"
+QUALITY_DEFAULT_BACKEND = "openai-compatible"
+
+
+class ProfileNotConfigured(RuntimeError):
+    """The requested embedding profile (MAS-62) has no configuration.
+
+    Raised only for a non-default profile (`quality`) -- `portable` can never
+    raise this, since the app cannot start without it. Callers treat this as
+    "not available right now", not a crash: the API answers 409, not 500.
+    """
+
+
+def _profile_env(profile: str, key: str, default: str | None = None) -> str | None:
+    """`key` for `portable` is the plain, unprefixed variable (unchanged
+    since before MAS-62); for any other profile it is `{PROFILE}_{key}` -- an
+    independent, additive surface, never inherited from `portable`'s value."""
+    name = key if profile == DEFAULT_PROFILE else f"{profile.upper()}_{key}"
+    return os.getenv(name, default)
+
+
+def is_profile_configured(profile: str) -> bool:
+    """Whether `get_embedder(profile)` can succeed without raising `ProfileNotConfigured`.
+
+    `portable` is always configured. Any other profile needs at least its own
+    `{PROFILE}_EMBEDDING_API_URL` set -- MaSign never guesses an operator's
+    GPU server address.
+    """
+    if profile not in PROFILES:
+        raise ValueError(f"profile={profile!r} is not one of {PROFILES}.")
+    if profile == DEFAULT_PROFILE:
+        return True
+    return bool(_profile_env(profile, "EMBEDDING_API_URL"))
+
+
+@lru_cache(maxsize=None)
+def get_embedder(profile: str = DEFAULT_PROFILE) -> Embedder:
+    if profile not in PROFILES:
+        raise ValueError(f"profile={profile!r} is not one of {PROFILES}.")
+    is_default = profile == DEFAULT_PROFILE
+    backend_var = "EMBEDDING_BACKEND" if is_default else f"{profile.upper()}_EMBEDDING_BACKEND"
+    backend = _profile_env(profile, "EMBEDDING_BACKEND", DEFAULT_BACKEND if is_default else QUALITY_DEFAULT_BACKEND)
+    model_name = _profile_env(profile, "EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL if is_default else QUALITY_DEFAULT_MODEL)
+    max_tokens = int(_profile_env(profile, "EMBEDDING_MAX_TOKENS", str(DEFAULT_MAX_TOKENS)))
+    prompt_format_var = "EMBEDDING_PROMPT_FORMAT" if is_default else f"{profile.upper()}_EMBEDDING_PROMPT_FORMAT"
+    prompt_format = _READ_FROM_ENV if is_default else _profile_env(profile, "EMBEDDING_PROMPT_FORMAT")
     if backend == "sentence-transformers":
         return SentenceTransformerEmbedder(
             model_name=model_name,
             max_tokens=max_tokens,
-            device=os.getenv("EMBEDDING_DEVICE", "auto"),
+            device=_profile_env(profile, "EMBEDDING_DEVICE", "auto"),
+            prompt_format=prompt_format,
+            prompt_format_var=prompt_format_var,
         )
     if backend == "openai-compatible":
-        base_url = os.getenv("EMBEDDING_API_URL")
+        base_url = _profile_env(profile, "EMBEDDING_API_URL")
         if not base_url:
-            raise ValueError("EMBEDDING_BACKEND=openai-compatible needs EMBEDDING_API_URL (e.g. http://llama-server:8081).")
+            if is_default:
+                raise ValueError("EMBEDDING_BACKEND=openai-compatible needs EMBEDDING_API_URL (e.g. http://llama-server:8081).")
+            raise ProfileNotConfigured(
+                f"The {profile!r} embedding profile is not configured -- set {profile.upper()}_EMBEDDING_API_URL "
+                f"(e.g. http://llama-server:8081) to enable it."
+            )
         return OpenAICompatibleEmbedder(
             model_name=model_name,
             base_url=base_url,
-            api_key=os.getenv("EMBEDDING_API_KEY") or None,
+            api_key=_profile_env(profile, "EMBEDDING_API_KEY") or None,
             max_tokens=max_tokens,
-            tokenizer=os.getenv("EMBEDDING_TOKENIZER") or None,
+            tokenizer=_profile_env(profile, "EMBEDDING_TOKENIZER") or None,
+            prompt_format=prompt_format,
+            prompt_format_var=prompt_format_var,
         )
-    raise ValueError(f"EMBEDDING_BACKEND={backend!r} is not one of {BACKENDS}.")
+    raise ValueError(f"{backend_var}={backend!r} is not one of {BACKENDS}.")

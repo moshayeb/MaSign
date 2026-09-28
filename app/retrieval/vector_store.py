@@ -186,7 +186,25 @@ def get_vector_store_url() -> str:
     return os.getenv("VECTOR_STORE_URL", "http://localhost:6333")
 
 
-@lru_cache(maxsize=1)
-def get_vector_store() -> VectorStore:
+# Compare mode (MAS-62): one collection per embedding profile, so two models'
+# vectors never mix. `portable`'s collection name is exactly the pre-MAS-62
+# QDRANT_COLLECTION value, unsuffixed -- an existing deployment's Qdrant
+# collection is not silently orphaned by this change. `quality` defaults to
+# the same base name with a `_quality` suffix, overridable with its own
+# QUALITY_QDRANT_COLLECTION.
+PROFILES = ("portable", "quality")
+DEFAULT_PROFILE = "portable"
+
+
+def _default_collection_for(profile: str) -> str:
+    base = os.getenv("QDRANT_COLLECTION", DEFAULT_COLLECTION)
+    return base if profile == DEFAULT_PROFILE else f"{base}_{profile}"
+
+
+@lru_cache(maxsize=None)
+def get_vector_store(profile: str = DEFAULT_PROFILE) -> VectorStore:
+    if profile not in PROFILES:
+        raise ValueError(f"profile={profile!r} is not one of {PROFILES}.")
     client = QdrantClient(url=get_vector_store_url(), timeout=30)
-    return VectorStore(client, collection=os.getenv("QDRANT_COLLECTION", DEFAULT_COLLECTION))
+    var = "QDRANT_COLLECTION" if profile == DEFAULT_PROFILE else f"{profile.upper()}_QDRANT_COLLECTION"
+    return VectorStore(client, collection=os.getenv(var, _default_collection_for(profile)))
