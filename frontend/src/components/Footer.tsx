@@ -16,9 +16,6 @@ export function Footer() {
             <Wordmark height={24} className="sitefoot-logo" />
             <p className="sitefoot-tagline">Understand contracts before you sign.</p>
             <p className="sitefoot-sub muted small">Ask questions, review risks, and open the exact source clause.</p>
-            <a className="link" href={GITHUB} target="_blank" rel="noreferrer noopener">
-              GitHub
-            </a>
           </div>
 
           <nav className="sitefoot-col" aria-labelledby="sitefoot-product">
@@ -70,10 +67,7 @@ export function Footer() {
         <div className="sitefoot-divider" role="presentation" />
 
         <div className="sitefoot-bottom">
-          <p className="sitefoot-copyright">© 2026 MaSign · Educational project</p>
-          <a className="link" href={GITHUB} target="_blank" rel="noreferrer noopener">
-            GitHub
-          </a>
+          <p className="sitefoot-copyright">© 2026 MaSign</p>
         </div>
       </div>
     </footer>

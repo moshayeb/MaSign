@@ -23,12 +23,14 @@ describe('the shell', () => {
 
     const footer = screen.getByRole('contentinfo')
     expect(within(footer).getByText('Understand contracts before you sign.')).toBeInTheDocument()
-    expect(within(footer).getByText('© 2026 MaSign · Educational project')).toBeInTheDocument()
+    expect(within(footer).getByText('© 2026 MaSign')).toBeInTheDocument()
     expect(within(footer).getByRole('heading', { name: 'Product' })).toBeInTheDocument()
     expect(within(footer).getByRole('heading', { name: 'Resources' })).toBeInTheDocument()
     expect(within(footer).getByRole('heading', { name: 'Project' })).toBeInTheDocument()
-    // At least one GitHub link (column 1, Resources, and the bottom row all carry one).
-    expect(within(footer).getAllByRole('link', { name: 'GitHub' })[0]).toHaveAttribute('href', 'https://github.com/moshayeb/MaSign')
+    // Exactly one GitHub link now (Resources column) — MAS-160 dropped the
+    // brand-column and bottom-row duplicates.
+    expect(within(footer).getAllByRole('link', { name: 'GitHub' })).toHaveLength(1)
+    expect(within(footer).getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/moshayeb/MaSign')
     expect(within(footer).getByRole('link', { name: 'Report an issue' })).toHaveAttribute('href', 'https://github.com/moshayeb/MaSign/issues')
   })
 
@@ -66,11 +68,17 @@ describe('the shell', () => {
     for (const link of workspaceLinks) expect(link).toHaveAttribute('href', '/workspace')
   })
 
-  it('shows the not-legal-advice notice above the fold, not only in the footer (MAS-155)', () => {
+  it('shows the not-legal-advice notice first, on every screen, not only in the footer (MAS-155/MAS-160)', () => {
     render(<HomePage />)
 
-    expect(screen.getByText(/Educational tool — not legal advice\./)).toBeInTheDocument()
+    expect(screen.getByText(/Not legal advice/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Full disclaimer' })).toHaveAttribute('href', '/educational-disclaimer')
+
+    // The workspace carries the same notice — it is in the shared chrome,
+    // not a home-page-only marketing line.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
+    render(<App />)
+    expect(screen.getAllByText(/Not legal advice/).length).toBeGreaterThan(0)
   })
 
   it('explains four real MaSign behaviours without unsupported claims (MAS-134)', () => {
