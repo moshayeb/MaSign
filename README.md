@@ -398,6 +398,25 @@ trigger them; `tests/test_guardrails.py` keeps both lists honest, and its
 end-to-end test uploads a contract with an injected clause and asserts the
 clause never reaches the (fake) model.
 
+## Known limitations
+
+Explicitly out of scope this cycle (MAS-20):
+
+- **OCR for scanned documents.** A PDF with no extractable text layer is a
+  422, not a best-effort image read (`app/ingestion/`).
+- **Contract generation or redlining.** MaSign reads and analyzes an
+  existing contract; it never drafts or edits clause text.
+- **E-signature.** No signing workflow of any kind.
+- **Public, multi-tenant deployment.** Real accounts and personal workspaces
+  exist since MAS-143 (email + password, Argon2id-hashed — see "Security and
+  secrets" below), but the model is one workspace per account with no
+  sharing between accounts; it is not built or hardened for public
+  self-signup at scale. Accepted auth gaps for this course-quality tier: no
+  email verification, no password reset, no login rate limiting.
+- **A single active chat/embedding configuration per deployment,** not a
+  per-request choice, except where compare mode (MAS-62/MAS-169) is
+  explicitly configured — see "Embedding profiles" above.
+
 ## Security and secrets
 
 Checked on 2026-09-17 (MAS-33), repeated 2026-09-28 (two real findings fixed,
