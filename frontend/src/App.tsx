@@ -4,9 +4,10 @@ import { listContracts, type Contract, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
 import { CompareView } from './components/CompareView'
 import { ContractList } from './components/ContractList'
+import { ModelCompareView } from './components/ModelCompareView'
 import { PageChrome } from './components/PageChrome'
 import { PreviousQuestions } from './components/PreviousQuestions'
-import { QuestionPanel, type Asked } from './components/QuestionPanel'
+import { QuestionPanel, type Asked, type Compared } from './components/QuestionPanel'
 import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
 import { PassageReader, type SourceRef } from './components/PassageReader'
 import { Tabs, TabPanel } from './components/Tabs'
@@ -49,6 +50,10 @@ export default function App() {
   const [contracts, setContracts] = useState<Contract[] | null>(null)
   const [selected, setSelected] = useState<Contract | null>(null)
   const [asked, setAsked] = useState<Asked | null>(null)
+  // A question answered by both embedding profiles at once (MAS-62); shown
+  // instead of the normal single answer until closed. Independent of `asked`
+  // so a live compare and a live single ask never fight over one slot.
+  const [compared, setCompared] = useState<Compared | null>(null)
   // Bumped after a live answer is stored (MAS-102), so the previous-questions
   // list refetches and shows it without a page reload.
   const [questionsVersion, setQuestionsVersion] = useState(0)
@@ -164,6 +169,7 @@ export default function App() {
       return contract
     })
     setAsked((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
+    setCompared((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
     setSource(null)
     setReturnTab(null)
     setReview(null)
@@ -259,6 +265,18 @@ export default function App() {
     },
     [setTab],
   )
+  // Compare mode (MAS-62): each side is a full, independent /api/query call,
+  // so both are stored as ordinary questions (MAS-102) -- refetch the list
+  // the same way a single live ask does.
+  const compareAnswered = useCallback(
+    (next: Compared) => {
+      setCompared(next)
+      setTab('ask')
+      setQuestionsVersion((v) => v + 1)
+    },
+    [setTab],
+  )
+  const closeCompared = useCallback(() => setCompared(null), [])
   // Selecting a previous question (MAS-102) shows its stored answer the same
   // way a live one renders, but never re-asks the model and never refetches
   // the list -- nothing about the stored data changed.
@@ -426,7 +444,7 @@ export default function App() {
                   onChange={changeTab}
                   tabs={[
                     { id: 'overview', label: 'Overview' },
-                    { id: 'ask', label: 'Ask MaSign', hint: asked ? '· answered' : undefined },
+                    { id: 'ask', label: 'Ask MaSign', hint: asked || compared ? '· answered' : undefined },
                     { id: 'text', label: 'Sources' },
                   ]}
                 />
@@ -444,10 +462,10 @@ export default function App() {
                 />
               </TabPanel>
               <TabPanel id="ask" active={tab}>
-                <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} />
+                <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} onCompared={compareAnswered} />
                 <PreviousQuestions contract={selected} contracts={contracts ?? []} version={questionsVersion} onSelect={selectStoredQuestion} />
                 {/* Suggested questions, ranked by the review (MAS-108); a click fills the composer, Ask sends it. */}
-                {!asked && (
+                {!asked && !compared && (
                   <div className="examples" aria-label="Suggested questions">
                     <span className="muted">Try:</span>
                     {suggestQuestions(review).map((suggestion) => (
@@ -466,7 +484,11 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />}
+                {compared ? (
+                  <ModelCompareView compared={compared} contracts={contracts ?? []} onShowSource={showSource} onClose={closeCompared} />
+                ) : (
+                  asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />
+                )}
               </TabPanel>
               <TabPanel id="text" active={tab}>
                 {returnTab && (

@@ -66,6 +66,7 @@ const answered: QueryResponse = {
   risks_complete: true,
   blocked_passages: [],
   recommended_actions: ['Escalate to legal review before signing: Termination.', 'Raise in negotiation: Payment terms.'],
+  profile: 'portable',
 }
 
 function json(status: number, body: unknown) {
@@ -129,7 +130,7 @@ describe('asking a question', () => {
 
     expect(await screen.findByText(/The monthly fee is EUR 18,500 per month/)).toBeInTheDocument()
     const [, init] = queryCall(fetchMock)
-    expect(JSON.parse(String(init?.body))).toEqual({ question: 'What is the monthly fee?', contract_id: 'nw', limit: 5 })
+    expect(JSON.parse(String(init?.body))).toEqual({ question: 'What is the monthly fee?', contract_id: 'nw', limit: 5, profile: 'portable' })
 
     // The [n] markers are buttons that highlight the cited passage.
     const markers = screen.getAllByRole('button', { name: /Show cited passage/ })

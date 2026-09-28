@@ -670,6 +670,31 @@ selects that contract (exiting the comparison) and then calls the normal
 `showSource` — landing on that contract's own Sources tab via the MAS-83/
 MAS-109 machinery unchanged, rather than a parallel in-place viewer.
 
+## Compare embedding models (MAS-62)
+
+A different comparison from MAS-113's above: one contract, one question,
+answered independently by both embedding profiles. `QuestionPanel` shows a
+second button, "Compare models (≈ 4 model calls)", next to "Ask" — but only
+when a single contract is the search scope *and* that contract's
+`indexed_profiles` already includes `"quality"` (`GET /api/contracts`'s own
+field, MAS-62); there is no button that would just 409. The cost is stated on
+the button itself before it is pressed (CLAUDE.md's UI budget rule, MAS-122):
+comparing is two full `/api/query` round trips, each with its own paid answer
++ risk call, so it costs twice a normal question, not the same.
+
+Clicking it fires `Promise.all([askQuestion(..., 'portable'), askQuestion(...,
+'quality')])` under one `toast.promise` (one loading/error message for the
+pair; a rejection from either side reports the API's `detail` and renders
+neither side, rather than showing a half comparison) and hands both responses
+to `ModelCompareView`, which replaces the normal `AnswerView` in the Ask tab
+until "Exit comparison". Each side is `AnswerView` itself, unmodified, in a
+two-column grid (one column under 640px) headed "Portable · ModernBERT" /
+"Quality · Qwen3-Embedding-4B" — citations, risk pills, click-to-source and
+the withheld/not-found states all render exactly as a single answer would,
+since nothing about rendering one side needed to change to show two.
+Both sides are still stored as ordinary questions (MAS-102): comparing
+appears twice in "Previous questions", once per profile.
+
 ## Risk review (MAS-81)
 
 Selecting a contract mounts `RiskReviewPanel` (keyed by contract id) which

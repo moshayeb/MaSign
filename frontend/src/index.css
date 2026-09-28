@@ -4001,6 +4001,42 @@ button.contract.compare-checked .compare-checkbox {
   }
 }
 
+/* Compare embedding models (MAS-62): two full AnswerView cards side by side,
+   each already a .card, so this wrapper only needs the label above each and
+   the two-column grid -- no answer-specific styling duplicated here. */
+.model-compare-question {
+  margin: 4px 0 12px;
+}
+
+.model-compare-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.model-compare-column {
+  min-width: 0;
+}
+
+.model-compare-label {
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .model-compare-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+button.compare-models {
+  white-space: nowrap;
+}
+
 /* Previous questions (MAS-102) */
 
 .previous-questions {

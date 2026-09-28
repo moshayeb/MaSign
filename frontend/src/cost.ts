@@ -11,6 +11,12 @@
 export const REVIEW_BATCH_SIZE = 8
 export const CALLS_PER_BATCH = 2
 export const CALLS_PER_QUESTION = 2
+// Compare mode (MAS-62): comparing embedding models asks the same question
+// twice, once per profile -- each a full /api/query round trip with its own
+// answer + risk call, so the paid-model cost genuinely doubles even though
+// embedding itself is free (self-hosted). Stated here so the UI can say so
+// before the button is pressed, the same rule as every other paid action.
+export const COMPARE_CALLS_PER_QUESTION = CALLS_PER_QUESTION * 2
 
 export function reviewCalls(chunkCount: number): number {
   if (chunkCount <= 0) return 0

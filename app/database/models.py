@@ -21,6 +21,10 @@ class Contract:
     document_kind: str | None = None
     document_looks_like: str | None = None
     document_kind_reasons: list[str] = field(default_factory=list)
+    # Which embedding profiles this contract has actually been indexed into
+    # (MAS-62 compare mode); "portable" always, "quality" only once its
+    # best-effort indexing has actually succeeded for it.
+    indexed_profiles: list[str] = field(default_factory=lambda: ["portable"])
 
 
 @dataclass(frozen=True)

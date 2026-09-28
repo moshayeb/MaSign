@@ -93,10 +93,10 @@ interactive API docs stay at `/docs`.
 
 ### Embedding profiles
 
-The deployer picks one of two profiles (benchmark and rationale in `CLAUDE.md`,
-MAS-58; every model tried, compared side by side, in
-[`docs/embedding-models.md`](docs/embedding-models.md)). Switching changes the
-index fingerprint, so on the next start the vector index is rebuilt
+The deployer picks a *default* profile that always runs (benchmark and
+rationale in `CLAUDE.md`, MAS-58; every model tried, compared side by side,
+in [`docs/embedding-models.md`](docs/embedding-models.md)). Switching changes
+the index fingerprint, so on the next start the vector index is rebuilt
 automatically from the stored chunk text — nothing has to be re-uploaded.
 
 | Profile | Command | Model | Needs | ≈ 30-page contract |
@@ -112,7 +112,26 @@ the `llama-server` service; any server speaking the OpenAI embeddings API
 works the same way — one without llama-server's `/tokenize` endpoint also
 needs `EMBEDDING_TOKENIZER` (the model's Hugging Face tokenizer) so token
 counts stay exact (`.env.example` lists every setting). Both profiles serve
-the same API, so nothing else changes.
+the same API, so nothing else changes there.
+
+#### Compare mode (MAS-62)
+
+`docker-compose.quality.yml` still *replaces* the single legacy config for a
+quality-only deployment, unchanged. To run **both** profiles side by side in
+the same process — so a reviewer can ask one question against each model and
+see the two answers together — set the same settings again with a
+`QUALITY_` prefix (`QUALITY_EMBEDDING_BACKEND`, `QUALITY_EMBEDDING_MODEL`,
+`QUALITY_EMBEDDING_API_URL`, ...); the plain `EMBEDDING_*` variables keep
+meaning the `portable` profile, unchanged, and are never read as a fallback
+for `quality`. This is a separate, additive configuration surface, not a
+third file to run — leaving `QUALITY_EMBEDDING_API_URL` unset simply means
+compare mode is off: every upload indexes `portable` only and `/api/query`'s
+`profile` field only ever accepts `"portable"`. When it is set, every upload
+also indexes, best-effort, into a second Qdrant collection
+(`{QDRANT_COLLECTION}_quality` by default) and `/api/query` accepts
+`profile: "portable" | "quality"`. Requesting `"quality"` for a contract that
+was never indexed into it (not configured at all, or configured after that
+contract was uploaded) is a 409, not a silent answer from the wrong index.
 
 ## API Endpoints
 
@@ -120,8 +139,8 @@ Interactive docs at `http://localhost:8000/docs`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. |
-| `GET`  | `/api/contracts` | List stored contracts, newest first, with review status, worst severity, completeness, checked/total passage counts, `ingestion_notes`, the MAS-107 `document_kind` evidence, and the MAS-101 summary strip: `recurring_fee`, `initial_term` (text, from stored key terms), `high_findings` (High-severity risk count), `deviations` (MAS-96), `key_terms_status` (`complete` \| `partial` \| `none`) — all read from stored rows, no model call. |
+| `POST` | `/api/contracts/upload` | Upload a TXT/PDF/DOCX contract; parses, chunks and stores it, then starts the risk review in the background. Returns the `contract_id` and `risk_status: pending`. Indexes into the required `portable` embedding profile and, best-effort, into the optional `quality` profile if configured (MAS-62 compare mode) — a `quality` indexing failure never fails the upload; `indexed_profiles` on the response says which actually succeeded. |
+| `GET`  | `/api/contracts` | List stored contracts, newest first, with review status, worst severity, completeness, checked/total passage counts, `ingestion_notes`, the MAS-107 `document_kind` evidence, `indexed_profiles` (MAS-62), and the MAS-101 summary strip: `recurring_fee`, `initial_term` (text, from stored key terms), `high_findings` (High-severity risk count), `deviations` (MAS-96), `key_terms_status` (`complete` \| `partial` \| `none`) — all read from stored rows, no model call. |
 | `GET`  | `/api/contracts/{contract_id}` | One contract's metadata (404 if unknown). |
 | `DELETE` | `/api/contracts/{contract_id}` | Permanently remove a contract (MAS-126): its chunks, risk review, key terms, stored questions and links cascade in Postgres; its vectors are removed from Qdrant too (best-effort — a Qdrant failure is logged, not fatal, since Postgres already no longer has the contract). 404 if unknown. Irreversible; the UI confirms first. |
 | `GET`  | `/api/contracts/{contract_id}/links` | Contract bundles (MAS-137): every other contract explicitly linked as the resolution of one of this contract's external references (MAS-84), with the `reference_name` each link resolves. |
@@ -133,7 +152,7 @@ Interactive docs at `http://localhost:8000/docs`.
 | `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
 | `GET`  | `/api/contracts/{contract_id}/export.pdf` ? `export.md` ? `export.csv` | The review as a file (MAS-154): searchable PDF or Markdown with coverage, key terms and findings, or CSV with one row per finding and key term. Same data as `/risks` + `/key-terms`; 404 before a review. |
 | `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction. The start is atomic: one request gets 202; concurrent attempts get 409 while it runs. |
-| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?}` → `answer` with `[n]` citations resolved in `citations`; `grounded` requires valid citations, a complete reply, and every detected money amount, percentage, date and duration to occur in a cited passage. It is false for "Not found in contract.". `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. A successful answer (never a refused/`withheld` one) is stored (MAS-102) so it can be read back without asking the model again. |
+| `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?, "profile"?}` → `answer` with `[n]` citations resolved in `citations`; `grounded` requires valid citations, a complete reply, and every detected money amount, percentage, date and duration to occur in a cited passage. It is false for "Not found in contract.". `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. `profile` (MAS-62, default `portable`) picks the embedding index searched; the response echoes it back. `profile: "quality"` is 409 if that profile is not configured on this server, or if this specific contract was never indexed into it (`contract_id` given, no points found) — never a silent fallback answered under the "quality" label. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. A successful answer (never a refused/`withheld` one) is stored (MAS-102) so it can be read back without asking the model again. |
 | `GET`  | `/api/contracts/{contract_id}/questions` | Previously answered questions for this contract, newest first (MAS-102): each with its `question`, `answer`, `answer_status`, `grounded`, and the full stored `response` (the original `QueryResponse`, so citations and flags render without a new model call). Includes a no-scope ("all contracts") question if its answer actually cited this contract. |
 | `DELETE` | `/api/questions/{question_id}` | Forget a stored question (MAS-102). 404 if unknown. |
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |

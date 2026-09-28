@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
@@ -26,7 +27,9 @@ from app.key_terms.standards import compare as compare_to_standard
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
 from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
-from app.retrieval.embeddings import Embedder
+from app.retrieval import embeddings as embeddings_module
+from app.retrieval import vector_store as vector_store_module
+from app.retrieval.embeddings import Embedder, ProfileNotConfigured
 from app.retrieval.indexing import index_contract
 from app.retrieval.retriever import DEFAULT_LIMIT, retrieve_contract_context
 from app.retrieval.vector_store import ChunkHit, VectorStore, VectorStoreError
@@ -50,6 +53,11 @@ class QueryRequest(BaseModel):
     # Restrict the search to one contract; omit to search every uploaded contract.
     contract_id: UUID | None = None
     limit: int = Field(DEFAULT_LIMIT, ge=1, le=20)
+    # Compare mode (MAS-62): which embedding index to search. "quality" is
+    # only usable when it is both configured and actually indexed for the
+    # contract(s) in scope -- otherwise the request is refused (409), never
+    # silently answered from "portable" under the "quality" label.
+    profile: str = embeddings_module.DEFAULT_PROFILE
 
     @field_validator("question", mode="before")
     @classmethod
@@ -57,6 +65,13 @@ class QueryRequest(BaseModel):
         # Trim before min_length applies, so "   " is rejected like "" and the
         # retriever never sees surrounding whitespace.
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        if value not in embeddings_module.PROFILES:
+            raise ValueError(f"profile must be one of {embeddings_module.PROFILES}.")
+        return value
 
 
 class RetrievedChunk(BaseModel):
@@ -119,6 +134,8 @@ class QueryResponse(BaseModel):
     blocked_passages: list[int] = []
     # Passages read minus their injected sentences (MAS-99): the model saw the rest.
     redacted_passages: list[int] = []
+    # Which embedding index answered (MAS-62 compare mode): "portable" or "quality".
+    profile: str = embeddings_module.DEFAULT_PROFILE
 
 
 # Terms the contract-list summary strip needs (MAS-101): the two shown as
@@ -158,6 +175,10 @@ class ContractSummary(BaseModel):
     deviations: int = 0
     # complete | partial | none — how much of the key-terms pass has run.
     key_terms_status: str = "none"
+    # Compare mode (MAS-62): which embedding profiles this contract can
+    # currently be searched/asked under. Always includes "portable"; "quality"
+    # only once its best-effort indexing has actually succeeded for it.
+    indexed_profiles: list[str] = ["portable"]
 
     @classmethod
     def from_model(
@@ -198,6 +219,7 @@ class ContractSummary(BaseModel):
             high_findings=review.high_findings if review else 0,
             deviations=deviations,
             key_terms_status=key_terms_status,
+            indexed_profiles=list(contract.indexed_profiles),
         )
 
 
@@ -569,6 +591,24 @@ async def upload_contract(
     except Exception:
         await run_in_threadpool(_discard_failed_upload, db, store, contract.id)
         raise
+
+    # Compare mode (MAS-62): quality indexing is optional and best-effort.
+    # Its failure must never fail the upload, or roll back the portable
+    # indexing already committed to Qdrant above -- caught here, never
+    # allowed to propagate out of the request (see MAS-62 spec comment on
+    # the ticket for why this would otherwise corrupt the transaction).
+    if embeddings_module.is_profile_configured("quality"):
+        try:
+            quality_embedder = embeddings_module.get_embedder("quality")
+            quality_store = vector_store_module.get_vector_store("quality")
+            await run_in_threadpool(index_contract, db, contract, quality_embedder, quality_store)
+            await run_in_threadpool(repository.add_indexed_profile, db, contract.id, "quality")
+            contract = dataclasses.replace(contract, indexed_profiles=[*contract.indexed_profiles, "quality"])
+        except Exception as error:
+            logger.warning(
+                "Compare mode: quality-profile indexing failed for contract %s (%s); portable remains available.",
+                contract.id, error,
+            )
 
     # The whole-contract risk review (MAS-81) takes one model call per batch
     # of passages; it runs after the response, and the UI polls its status.
@@ -968,6 +1008,18 @@ async def query_contract(
     # before either model call (MAS-90); the guardrail would catch it in the
     # answer call, but the risk call runs alongside and would still be spent.
     refuse_injected_question(request.question)
+    # Compare mode (MAS-62): the injected `embedder`/`store` above are always
+    # the "portable" profile (dependencies.py), which is also what test
+    # fixtures override via app.dependency_overrides -- untouched for the
+    # default case. A non-default profile is resolved directly here instead;
+    # "quality" not being configured at all is a 409, immediately, never a
+    # silent fallback to "portable" answered under the "quality" label.
+    if request.profile != embeddings_module.DEFAULT_PROFILE:
+        try:
+            embedder = embeddings_module.get_embedder(request.profile)
+            store = vector_store_module.get_vector_store(request.profile)
+        except ProfileNotConfigured as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     # Embedding the question is CPU work, the lookups are synchronous and the
     # model call blocks, so all of it runs off the event loop like the upload path.
     hits, answer, risks = await run_in_threadpool(_retrieve_and_answer, request, db, embedder, store, chat_model)
@@ -1001,6 +1053,7 @@ async def query_contract(
         recommended_actions=build_follow_up_actions(risks.findings, checked=risks.checked, withheld=len(risks.blocked)),
         blocked_passages=sorted(set(answer.blocked) | set(risks.blocked)),
         redacted_passages=sorted(set(answer.redacted) | set(risks.redacted)),
+        profile=request.profile,
     )
 
     # Stored so a reviewer coming back does not repeat a call already paid
@@ -1055,6 +1108,20 @@ def _retrieve_and_answer(
 def _retrieve(request: QueryRequest, db: psycopg.Connection, embedder: Embedder, store: VectorStore) -> list[ChunkHit]:
     if request.contract_id is not None and repository.get_contract(db, request.contract_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    # Compare mode (MAS-62): a non-default profile may be configured server-wide
+    # yet never have indexed this particular contract (turned on after upload,
+    # or best-effort indexing failed for it) -- say so, rather than silently
+    # searching zero points and answering "Not found in contract." under the
+    # requested profile's name.
+    if (
+        request.contract_id is not None
+        and request.profile != embeddings_module.DEFAULT_PROFILE
+        and store.count(contract_id=request.contract_id) == 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This contract has not been indexed for the {request.profile!r} profile yet.",
+        )
     # A contract's bundle (MAS-137/138) is itself plus any linked documents;
     # a contract with no links is a bundle of one, same search as before.
     bundle_ids = repository.bundle_contract_ids(db, request.contract_id) if request.contract_id is not None else None

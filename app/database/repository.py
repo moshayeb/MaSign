@@ -148,6 +148,23 @@ def set_embedding_ids(
             )
 
 
+def add_indexed_profile(connection: psycopg.Connection, contract_id: UUID, profile: str) -> None:
+    """Record that `profile` has been successfully indexed for this contract (MAS-62).
+
+    Idempotent (array_append is skipped if already present); called after
+    indexing actually succeeds, never speculatively before it.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE contracts
+            SET indexed_profiles = array_append(indexed_profiles, %s)
+            WHERE id = %s AND NOT (%s = ANY(indexed_profiles))
+            """,
+            (profile, contract_id, profile),
+        )
+
+
 def delete_contract(connection: psycopg.Connection, contract_id: UUID) -> bool:
     """Remove a contract and, via the FK cascade, its chunks and contract_links rows."""
     with connection.transaction():
