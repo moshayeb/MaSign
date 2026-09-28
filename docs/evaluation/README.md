@@ -91,9 +91,28 @@ count it spent; Ragas' telemetry is switched off.
 |---|---|---|---|---|---|---|---|
 | 2026-09-20 | quality (Qwen3-Embedding-4B) | Northwind | 16 | 0.94 | 1.00 | 0.96 | 0 |
 | 2026-09-20 | portable (ModernBERT) | Northwind | 16 | 0.88 | 1.00 | 0.94 | 0 |
+| 2026-09-28 | quality (see note below) | Northwind + Harbor | 29 | 0.86 | 1.00 | 0.91 | 0 |
 
 Both profiles put the right passage in the top 5 every time; Qwen3 misses
 top-1 once (nw-03, invoice due date ranked 3rd), ModernBERT twice (nw-03 and
 nw-06, the fee-increase clause ranked 2nd). Files:
 `results-2026-09-20-quality-northwind.md`, `results-2026-09-20-portable-northwind.md`.
+
+**Only one profile could be exercised on 2026-09-28 (MAS-32), and it is
+mislabelled `portable` by the API** — a real deployment gap, not a harness
+limitation. `docker-compose.quality.yml` (as written) overwrites the
+unprefixed `EMBEDDING_*` variables, so the container's one and only active
+embedder *is* Qwen3-Embedding-4B, filed under the `portable` profile name
+because that is still `DEFAULT_PROFILE`. Compare mode's second profile is
+gated on the separate `QUALITY_EMBEDDING_API_URL` (`app/retrieval/
+embeddings.py`'s `is_profile_configured("quality")`), which nothing sets on
+this deployment — so `indexed_profiles` never gains `"quality"` and the
+"Compare models" button (MAS-62) cannot appear for any contract uploaded to
+it, no matter which one. This is the answer to the open "Compare models not
+visible" question from MAS-167: filed as its own ticket, MAS-169, since
+fixing it needs a second embedding endpoint running alongside the first, not
+a code change. Hit@1 dropping from 0.94 (Northwind alone, 2026-09-20 quality
+run) to 0.86 (both contracts) is Harbor's two extra misses (hb-11, hb-13),
+not a regression in Northwind's own numbers.
+
 No judged run yet — it needs the owner's OK (api-spend-guard).
