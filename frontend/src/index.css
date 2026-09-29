@@ -2855,10 +2855,6 @@ select.standard-input {
   background: #f0f9fe;
 }
 
-.home-hero-microcopy {
-  margin: 14px 0 0;
-}
-
 /* The hero product mockup (MAS-147): a static illustration of the real
    Risk review panel, not a live embed -- see HomePage.tsx for why its
    content is fixed and rubric-accurate rather than arbitrary. */
@@ -3017,13 +3013,6 @@ select.standard-input {
 
 .mockup-risks blockquote {
   font-size: 0.8rem;
-}
-
-.mockup-caption {
-  margin: 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.78rem;
 }
 
 /* How MaSign works (MAS-147): numbered-circle icons with arrow connectors

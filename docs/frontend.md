@@ -301,17 +301,16 @@ width.
 The hero became two columns (`.home-hero-row`, single column again under
 860px): an eyebrow badge, the headline, a primary **Open workspace** CTA
 plus a new secondary **See how it works** CTA (→ `/how-it-works`), a
-"Supports PDF, DOCX and TXT files" line, and a static product-screenshot
+static product-screenshot
 mockup (`HeroMockup` in `HomePage.tsx`). The mockup is `aria-hidden` and
 built from the app's own classes (`.filetype`, `.risks`/`li.risk`,
 `.severity`, `.status`) with content grounded in real behaviour rather than
 invented: the coverage notice repeats `CoverageNotice.tsx`'s exact copy
 ("AI instructions detected · 1 passage withheld"), the findings use real
 rubric categories and severity thresholds, and "Deviates" is
-`KeyTermsCard.tsx`'s real standard-comparison status. It is captioned
-"Illustrative example, not a real upload" — MaSign has no customer contract
-to screenshot, and MAS-134 already decided this page claims nothing it
-can't back up. `.home-cta` got real button styling to match the new
+`KeyTermsCard.tsx`'s real standard-comparison status. MAS-172 removes the
+file-format line and illustration caption at the owner's request; the mockup
+remains a static illustration. `.home-cta` got real button styling to match the new
 secondary CTA sitting next to it (previously `.primary` only styled
 `<button>`, so the link-only "Open workspace" CTA looked unstyled next to a
 real button once the two sat side by side).
