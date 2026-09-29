@@ -790,3 +790,13 @@ its cost disclosure: uploading starts the document review (about two
 model calls for up to eight passages). The explicit confirmation dialog and
 unlink behaviour are unchanged. The panel uses Inter and the normal body/text
 scale, and stacks the selector and button at narrow widths.
+
+### How it works walkthrough (MAS-173)
+
+`/how-it-works` uses a scoped `.how-*` layout: pale cyan hero, a three-step
+Upload / Review / Check sources walkthrough, and two outcome explanations.
+It inherits Inter and the existing brand tokens without changing workspace
+styles or the shared header/footer. Numbered rows and the outcome cards stack
+on mobile. All navigation links have visible keyboard focus. Copy distinguishes
+missing information from incomplete analysis and makes no accuracy promises.
+The other public information pages retain their existing layouts pending review.
