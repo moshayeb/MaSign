@@ -88,9 +88,9 @@ describe('the shell', () => {
     for (const title of ['Cited answers', 'Risk review', 'Key terms', 'Honest unknowns']) {
       expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
     }
-    expect(screen.getByText('Open the exact clause behind every answer.')).toBeInTheDocument()
+    expect(screen.getByText('Open the cited passage behind a grounded answer.')).toBeInTheDocument()
     expect(screen.getByText('A clear first read of your contract, with sources you can open.')).toBeInTheDocument()
-    expect(screen.getByText('MaSign clearly says when the contract does not contain enough information.')).toBeInTheDocument()
+    expect(screen.getByText('See when information is missing or could not be checked.')).toBeInTheDocument()
   })
 
   it('keeps one linked proof section and a final workspace action (MAS-171)', () => {

@@ -9,12 +9,12 @@ const STEPS = [
   },
   {
     title: 'Review',
-    text: 'Every upload gets a whole-contract risk review and the key financial terms extracted, source included.',
+    text: 'MaSign starts a risk review and looks for key terms. Check its coverage before relying on a result.',
     icon: <path d="M12 3 2.5 20h19L12 3ZM12 9v4m0 3h.01" />,
   },
   {
     title: 'Check sources',
-    text: 'Ask a question or open a finding; every answer links back to the exact passage it came from.',
+    text: 'Ask a question or open a finding, then read its cited passage in the contract.',
     icon: <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5" />,
   },
 ]
@@ -22,7 +22,7 @@ const STEPS = [
 const TRUST = [
   {
     title: 'Cited answers',
-    text: 'Open the exact clause behind every answer.',
+    text: 'Open the cited passage behind a grounded answer.',
     href: '/how-it-works',
     icon: <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5" />,
   },
@@ -40,7 +40,7 @@ const TRUST = [
   },
   {
     title: 'Honest unknowns',
-    text: 'MaSign clearly says when the contract does not contain enough information.',
+    text: 'See when information is missing or could not be checked.',
     href: '/how-it-works',
     icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Zm0-12v4m0 3h.01" />,
   },
@@ -87,7 +87,7 @@ function HeroMockup() {
           <span className="mockup-dot" />
           <span className="mockup-dot" />
           <span className="mockup-dot" />
-          <span className="mockup-titlebar-label">MaSign — Workspace</span>
+          <span className="mockup-titlebar-label">Workspace preview</span>
         </div>
         <div className="mockup-workspace">
           <div className="mockup-sidebar">
@@ -168,7 +168,7 @@ export function HomePage() {
               Understand your contract <span className="glow">before you sign.</span>
             </h1>
             <p>
-              MaSign helps you find important terms, review possible risks, and open the exact contract text behind every result.
+              Find important terms, see possible risks, and check the contract passages behind the results.
             </p>
             <div className="home-cta-row">
               <a className="primary home-cta" href="/workspace">
