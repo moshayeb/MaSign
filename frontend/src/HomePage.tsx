@@ -76,7 +76,7 @@ const EXPECTATIONS = [
 //   clause, termination Medium needs notice over 60 days);
 // - "Deviates" is KeyTermsCard.tsx's real standard-comparison status, not an
 //   invented "higher than standard" label.
-// It is static and captioned "Illustrative example": MaSign has no customer
+// It is a static illustration: MaSign has no customer
 // contracts to screenshot, and MAS-134 already decided this page claims
 // nothing it can't back up.
 function HeroMockup() {
@@ -151,7 +151,6 @@ function HeroMockup() {
           </div>
         </div>
       </div>
-      <p className="mockup-caption">Illustrative example, not a real upload</p>
     </div>
   )
 }
@@ -182,7 +181,6 @@ export function HomePage() {
                 See how it works
               </a>
             </div>
-            <p className="home-hero-microcopy muted small">Supports PDF, DOCX and TXT files</p>
           </div>
           <HeroMockup />
         </section>
