@@ -343,6 +343,18 @@ review a contract?** and an **Open workspace** link. It contains no speed,
 accuracy, legal-advice, or security claim. The layout stacks without horizontal
 scrolling under 720px and makes no request to the API or a model.
 
+### Homepage visual refinement (MAS-174)
+
+The supplied Gemini HTML is a visual reference, not an application template.
+The React homepage keeps MaSign's Inter font, original logo, uppercase hero
+headline, working routes and shared legal notice. The hero has more breathing
+room and a quiet cyan glow behind the static workspace preview. A pale section
+separates the three steps, followed by a white Why MaSign section with linked
+cards. Copy describes cited results and incomplete analysis without promising
+that every answer is grounded or every review completes. The layout retains
+visible keyboard focus and stacks at 400px; reduced-motion users do not get
+the link lift effect.
+
 ### Shared visual system (MAS-136)
 
 MaSign now shares MassQL's light brand direction: `#0caded` is the cyan used
