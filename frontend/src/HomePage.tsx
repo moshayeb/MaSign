@@ -1,21 +1,17 @@
-import { Fragment } from 'react'
 import { PageChrome } from './components/PageChrome'
 
 const STEPS = [
   {
     title: 'Upload',
     text: 'Add a contract — TXT, PDF or DOCX. MaSign reads it and splits it into passages.',
-    icon: <path d="M12 3v12m0-12 4 4m-4-4-4 4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />,
   },
   {
     title: 'Review',
     text: 'MaSign starts a risk review and looks for key terms. Check its coverage before relying on a result.',
-    icon: <path d="M12 3 2.5 20h19L12 3ZM12 9v4m0 3h.01" />,
   },
   {
     title: 'Check sources',
     text: 'Ask a question or open a finding, then read its cited passage in the contract.',
-    icon: <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5" />,
   },
 ]
 
@@ -156,29 +152,11 @@ export function HomePage() {
           </div>
           <div className="home-steps-row">
             {STEPS.map((step, i) => (
-              <Fragment key={step.title}>
-                <div className="card home-step">
-                  <div className="home-step-icon-wrap">
-                    <span className="home-step-icon" aria-hidden="true">
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {step.icon}
-                      </svg>
-                    </span>
-                    <span className="home-step-number-badge" aria-hidden="true">
-                      {i + 1}
-                    </span>
-                  </div>
-                  <h3>{step.title}</h3>
-                  <p>{step.text}</p>
-                </div>
-                {i < STEPS.length - 1 && (
-                  <span className="home-step-arrow" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </span>
-                )}
-              </Fragment>
+              <div className="card home-step" key={step.title}>
+                <span className="home-step-number" aria-hidden="true">{i + 1}</span>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+              </div>
             ))}
           </div>
         </section>

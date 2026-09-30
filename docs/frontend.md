@@ -360,7 +360,9 @@ the link lift effect.
 The owner's light premium reference informs homepage-only spacing, soft cyan
 decoration and motion. The hero and illustrative workspace preview rise in
 briefly on load. Workspace calls to action and linked Why MaSign cards respond
-to hover with a small lift; static step and expectation cards remain still.
+to hover with a small lift. The three How MaSign works cards use numbered
+cyan gradient squares, uppercase headings, and a stronger hover lift; the
+expectation cards remain still.
 At `prefers-reduced-motion: reduce`, these entrance and hover animations are
 disabled. The homepage uses the existing Inter font and MassQL-aligned cyan
 tokens; the footer and shared workspace styles are unchanged.
