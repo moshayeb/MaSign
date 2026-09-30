@@ -2836,11 +2836,40 @@ select.standard-input {
 }
 
 .pubpage-legend-item .severity {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
 }
 
-.severity-none {
-  background: var(--line-2);
+.pubpage-legend-item.severity-high .severity {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.pubpage-legend-item.severity-medium .severity {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.pubpage-legend-item.severity-low .severity {
+  color: #065f46;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.pubpage-legend-item.severity-none .severity {
+  color: #334155;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .pubpage-legend-item p {

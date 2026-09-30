@@ -294,10 +294,10 @@ statement to read top to bottom, not a set of distinct facts to scan.
 - **What MaSign checks** renders all seven `RISK_CATEGORIES`
   (`app/risk_analysis/rubric.py`) as cards, the ten `KEY_TERMS`
   (`app/key_terms/terms.py`) as a plain list, and a four-item legend for
-  High / Medium / Low / Not checked (`.pubpage-legend`, reusing the
-  workspace's `.severity`/`.severity-high|medium|low` pill styling plus a
-  new neutral `.severity-none` for "Not checked" — colours are not
-  reinvented per page). Category and term names and wording are read
+  High / Medium / Low / Not checked (`.pubpage-legend`). MAS-180 gives those
+  four public legend labels soft tinted backgrounds, dark text and a clear
+  pill shape, without changing workspace finding badges. Category and term
+  names and wording are read
   straight from those two modules' definitions, not restated from memory,
   so the page cannot drift from what the model is actually asked to find.
 - **Documentation** keeps the real README/`docs/` GitHub links and adds two
