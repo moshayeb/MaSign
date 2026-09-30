@@ -365,6 +365,12 @@ At `prefers-reduced-motion: reduce`, these entrance and hover animations are
 disabled. The homepage uses the existing Inter font and MassQL-aligned cyan
 tokens; the footer and shared workspace styles are unchanged.
 
+The owner-provided hero element is the visual reference for the three-line,
+sentence-case headline and cyan underline, pill label, paired calls to action,
+and floating workspace card. The card shows a file header, key-term rows and
+two risk findings as a static illustration; it does not display real contract
+data or offer working source links. The two columns stack at phone widths.
+
 ### Shared visual system (MAS-136)
 
 MaSign now shares MassQL's light brand direction: `#0caded` is the cyan used

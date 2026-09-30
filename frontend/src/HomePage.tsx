@@ -64,21 +64,10 @@ const EXPECTATIONS = [
   },
 ]
 
-// A static illustration of the real workspace (MAS-147), built from the same
-// markup/classes the app renders (`.filetype`, `.risks`, `li.risk`,
-// `.severity`, `.status`) so it looks like the product rather than an
-// invented UI. Content is fixed and grounded in real behaviour, not
-// arbitrary example text:
-// - the AI-instructions notice uses CoverageNotice.tsx's exact copy
-//   ("AI instructions detected · 1 passage withheld");
-// - the risk findings use real rubric categories and severity thresholds
-//   (app/risk_analysis/rubric.py: liability High needs an excluded-breach
-//   clause, termination Medium needs notice over 60 days);
-// - "Deviates" is KeyTermsCard.tsx's real standard-comparison status, not an
-//   invented "higher than standard" label.
-// It is a static illustration: MaSign has no customer
-// contracts to screenshot, and MAS-134 already decided this page claims
-// nothing it can't back up.
+// A static workspace illustration (MAS-147, refined in MAS-175). The visual
+// follows the owner's reference, while its categories and statuses reflect
+// real MaSign behaviour. It is hidden from assistive technology because the
+// values describe an illustrative contract, not a reviewed user document.
 function HeroMockup() {
   return (
     <div className="home-hero-mockup" aria-hidden="true">
@@ -87,66 +76,36 @@ function HeroMockup() {
           <span className="mockup-dot" />
           <span className="mockup-dot" />
           <span className="mockup-dot" />
-          <span className="mockup-titlebar-label">Workspace preview</span>
+          <span className="mockup-titlebar-label">MaSign Workspace</span>
         </div>
-        <div className="mockup-workspace">
-          <div className="mockup-sidebar">
-            <div className="mockup-sidebar-item mockup-sidebar-item-active">
-              <span className="filetype pdf">PDF</span>
-              <span className="mockup-sidebar-name">Master_Services...</span>
+        <div className="mockup-main">
+          <div className="mockup-file-row">
+            <div className="mockup-file-details">
+              <div className="mockup-file-meta">
+                <span className="mockup-filetype">PDF</span>
+                <span className="mockup-filename">Master_Services_Agreement.pdf</span>
+              </div>
+              <h3>Master Services Agreement</h3>
             </div>
-            <div className="mockup-sidebar-item">
-              <span className="filetype docx">DOCX</span>
-              <span className="mockup-sidebar-name">NDA_Vendor.docx</span>
-            </div>
-            <div className="mockup-sidebar-item">
-              <span className="filetype txt">TXT</span>
-              <span className="mockup-sidebar-name">Service_Agreement</span>
-            </div>
+            <span className="mockup-reviewed">✓ Reviewed</span>
           </div>
-          <div className="mockup-main">
-            <div className="mockup-file-row">
-              <span className="mockup-filename">Master_Services_Agreement.pdf</span>
-              <span className="status ok">Reviewed</span>
+          <div className="mockup-panel">
+            <h4>Key terms extracted</h4>
+            <dl className="mockup-terms">
+              <div className="mockup-term"><dt>Recurring fee</dt><dd>EUR 4,200 / month</dd></div>
+              <div className="mockup-term"><dt>Late-payment interest</dt><dd>1.5% / month <span className="mockup-deviation">Deviates</span></dd></div>
+              <div className="mockup-term"><dt>Initial term</dt><dd>24 months</dd></div>
+            </dl>
+          </div>
+          <div className="mockup-panel">
+            <h4>Risk review</h4>
+            <div className="mockup-risk mockup-risk-high">
+              <div className="mockup-risk-head"><span className="mockup-severity">High risk</span><strong>Liability cap</strong><span className="mockup-source">Source →</span></div>
+              <p>Vendor disclaims liability for its own data breaches entirely.</p>
             </div>
-            <p className="mockup-ai-notice">AI instructions detected · 1 passage withheld</p>
-            <div className="mockup-panel">
-              <h3>Key terms</h3>
-              <dl className="mockup-terms">
-                <div className="mockup-term">
-                  <dt>Recurring fee</dt>
-                  <dd>EUR 4,200 / month</dd>
-                </div>
-                <div className="mockup-term">
-                  <dt>Late-payment interest</dt>
-                  <dd>
-                    1.5% / month <span className="status warn tiny">Deviates</span>
-                  </dd>
-                </div>
-                <div className="mockup-term">
-                  <dt>Initial term</dt>
-                  <dd>24 months</dd>
-                </div>
-              </dl>
-            </div>
-            <div className="mockup-panel">
-              <h3>Risk review</h3>
-              <ul className="risks mockup-risks">
-                <li className="risk severity-high">
-                  <div className="risk-head">
-                    <span className="severity">High</span>
-                    <strong>Liability cap</strong>
-                  </div>
-                  <p className="risk-reason">Vendor disclaims liability for its own data breaches entirely.</p>
-                </li>
-                <li className="risk severity-medium">
-                  <div className="risk-head">
-                    <span className="severity">Medium</span>
-                    <strong>Termination</strong>
-                  </div>
-                  <p className="risk-reason">Termination for convenience requires 90 days' written notice.</p>
-                </li>
-              </ul>
+            <div className="mockup-risk mockup-risk-medium">
+              <div className="mockup-risk-head"><span className="mockup-severity">Medium</span><strong>Termination</strong><span className="mockup-source">Source →</span></div>
+              <p>Termination for convenience requires 90 days' written notice.</p>
             </div>
           </div>
         </div>
@@ -165,10 +124,15 @@ export function HomePage() {
           <div className="hero home-hero">
             <p className="home-eyebrow">AI-assisted contract analysis</p>
             <h1>
-              Understand your contract <span className="glow">before you sign.</span>
+              Understand <br />your contract <br />
+              <span className="home-headline-highlight">before you sign.
+                <svg viewBox="0 0 300 15" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M2 12C52 5 110 2 151 3c53-1 100 1 139 5 5 1 7 3 5 4-42-3-97-4-144-3C100 9 49 12 2 15Z" fill="#0caded" opacity=".75" />
+                </svg>
+              </span>
             </h1>
             <p>
-              Find important terms, see possible risks, and check the contract passages behind the results.
+              MaSign helps you find important terms, review possible risks, and open the exact contract text behind each result.
             </p>
             <div className="home-cta-row">
               <a className="primary home-cta" href="/workspace">

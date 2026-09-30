@@ -2741,35 +2741,35 @@ select.standard-input {
    landing page, not the workspace it sends visitors to. */
 .homepage {
   flex: 1 0 auto;
-  max-width: 1180px;
+  max-width: 1280px;
   margin: 0 auto;
   width: 100%;
-  padding: 56px 28px 0;
+  padding: 48px 32px 0;
   gap: 0;
   background: var(--bg);
 }
 
 .home-hero-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   align-items: center;
-  gap: 64px;
-  min-height: 720px;
-  padding: 80px 0 112px;
-  background: radial-gradient(ellipse 45% 58% at 82% 50%, rgba(12, 173, 237, 0.1), transparent 82%);
+  gap: clamp(48px, 6vw, 96px);
+  min-height: 700px;
+  padding: 64px 0 104px;
+  background: radial-gradient(ellipse 46% 60% at 83% 50%, rgba(12, 173, 237, 0.09), transparent 84%);
 }
 
 .home-hero {
   text-align: left;
   padding: 0;
-  max-width: 480px;
+  max-width: 560px;
   margin: 0;
   animation: home-rise-in 650ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .home-hero h1 {
-  text-transform: uppercase;
-  letter-spacing: -0.045em;
+  text-transform: none;
+  letter-spacing: -0.055em;
 }
 
 .legal-banner {
@@ -2791,15 +2791,16 @@ select.standard-input {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 20px;
-  padding: 6px 14px;
+  margin: 0 0 28px;
+  padding: 7px 15px;
   border-radius: 999px;
   border: 1px solid var(--accent-line);
   background: #f0faff;
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 
 .home-eyebrow::before {
@@ -2812,29 +2813,44 @@ select.standard-input {
 
 .home-hero h1 {
   max-width: none;
-  /* Bigger than the shared .hero h1 (used on pages with less room, like
-     the workspace's empty state): the homepage hero has the whole column
-     to itself, so the headline can lead harder. */
-  font-size: clamp(2.4rem, 4.4vw, 3.3rem);
-  line-height: 1.08;
+  margin: 0;
+  font-size: clamp(3rem, 4.65vw, 4rem);
+  line-height: 1.1;
 }
 
-.home-hero h1 .glow {
-  background-image: linear-gradient(90deg, #087eac, #0caded 65%, #1e9eed);
+.home-headline-highlight {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+  color: #087eac;
+  white-space: nowrap;
+}
+
+.home-headline-highlight svg {
+  position: absolute;
+  left: 0;
+  bottom: -0.09em;
+  z-index: -1;
+  width: 100%;
+  height: 0.23em;
+  pointer-events: none;
 }
 
 .home-hero p {
-  margin: 24px 0 0;
+  margin: 30px 0 0;
   max-width: 52ch;
   color: var(--text-2);
+  font-size: clamp(1.05rem, 1.5vw, 1.2rem);
+  line-height: 1.7;
+  font-weight: 500;
 }
 
 .home-cta-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-top: 32px;
+  gap: 16px;
+  margin-top: 36px;
 }
 
 .home-cta {
@@ -2842,12 +2858,12 @@ select.standard-input {
   align-items: center;
   gap: 12px;
   margin-top: 0;
-  padding: 13px 22px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, #1e9eed, #0caded);
+  padding: 16px 28px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #0caded, #087eac);
   color: #fff;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 1rem;
   text-decoration: none;
   box-shadow: 0 8px 20px -10px rgba(12, 173, 237, 0.6);
   transition: transform 240ms ease, box-shadow 240ms ease, background 240ms ease;
@@ -2872,12 +2888,12 @@ select.standard-input {
 .home-cta-secondary {
   display: inline-flex;
   align-items: center;
-  padding: 13px 22px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-sm);
+  padding: 15px 28px;
+  border: 2px solid var(--line-2);
+  border-radius: 12px;
   color: var(--text);
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 1rem;
   text-decoration: none;
   transition: transform 240ms ease, border-color 240ms ease, box-shadow 240ms ease, background 240ms ease;
 }
@@ -2911,18 +2927,18 @@ select.standard-input {
 .home-hero-mockup::before {
   content: '';
   position: absolute;
-  inset: 12% 4%;
+  inset: 5% 2%;
   z-index: -1;
   border-radius: 36px;
-  background: rgba(12, 173, 237, 0.2);
-  filter: blur(54px);
+  background: linear-gradient(135deg, rgba(12, 173, 237, 0.2), rgba(8, 126, 172, 0.14));
+  filter: blur(40px);
 }
 
 .mockup-window {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
   background: var(--panel);
-  box-shadow: 0 26px 58px -28px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 32px 64px -26px rgba(15, 23, 42, 0.28);
   overflow: hidden;
   transition: transform 350ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 350ms ease;
 }
@@ -2935,15 +2951,15 @@ select.standard-input {
 .mockup-titlebar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--line);
-  background: var(--panel-2);
+  background: #f8f9fb;
 }
 
 .mockup-dot {
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: var(--line-2);
 }
@@ -2953,49 +2969,17 @@ select.standard-input {
 .home-hero-mockup .mockup-dot:nth-child(3) { background: #4ade80; }
 
 .mockup-titlebar-label {
-  margin-left: 8px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  margin: 0 auto;
+  padding-right: 49px;
+  font-size: 0.68rem;
+  font-weight: 800;
   color: var(--muted);
-}
-
-.mockup-workspace {
-  display: grid;
-  grid-template-columns: 110px 1fr;
-}
-
-.mockup-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 8px;
-  border-right: 1px solid var(--line);
-  background: var(--panel-2);
-}
-
-.mockup-sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border-radius: 8px;
-}
-
-.mockup-sidebar-item-active {
-  background: var(--accent-soft);
-}
-
-.mockup-sidebar-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.66rem;
-  font-weight: 600;
-  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
 }
 
 .mockup-main {
-  padding: 16px;
+  padding: 28px 30px 32px;
   min-width: 0;
 }
 
@@ -3004,49 +2988,85 @@ select.standard-input {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 0.85rem;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.mockup-file-details { min-width: 0; }
+.mockup-file-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mockup-filetype {
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: #fff;
+  background: #111;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.mockup-file-details h3 {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: 1.2rem;
+  line-height: 1.3;
+  font-weight: 800;
 }
 
 .mockup-filename {
+  font-size: 0.72rem;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mockup-ai-notice {
-  margin: 8px 0 0;
-  color: var(--accent);
-  font-size: 0.74rem;
-  font-weight: 600;
+.mockup-reviewed {
+  flex: none;
+  padding: 7px 10px;
+  border: 1px solid #b8ead4;
+  border-radius: 8px;
+  color: #12805c;
+  background: #effcf5;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .mockup-panel {
-  margin-top: 14px;
+  margin-top: 24px;
 }
 
-.mockup-panel h3 {
-  margin: 0 0 8px;
-  font-size: 0.8rem;
+.mockup-panel h4 {
+  margin: 0 0 12px;
+  font-size: 0.7rem;
+  font-weight: 800;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.11em;
 }
 
 .mockup-terms {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: block;
   margin: 0;
+  padding: 18px 20px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  background: #f8f9fb;
 }
 
 .mockup-term {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
+  padding: 11px 0;
   font-size: 0.8rem;
+}
+
+.mockup-term + .mockup-term {
+  border-top: 1px solid #e5e7eb;
 }
 
 .mockup-term dt {
@@ -3058,25 +3078,63 @@ select.standard-input {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--ink);
+  text-align: right;
 }
 
-.mockup-risks {
-  gap: 8px;
+.mockup-deviation {
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #e0f4fc;
+  color: #087eac;
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
-.mockup-risks .risk {
-  padding: 8px 10px;
+.mockup-risk {
+  padding: 14px 16px;
+  border: 1px solid;
+  border-radius: 12px;
+  transition: background 250ms ease, box-shadow 250ms ease;
 }
 
-.mockup-risks .risk-reason {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
+.mockup-risk + .mockup-risk { margin-top: 12px; }
+.mockup-risk-high { border-color: #fecaca; background: #fff7f7; }
+.mockup-risk-medium { border-color: #fbd682; background: #fffdf3; }
+.mockup-risk-high:hover { background: #fef0f0; box-shadow: 0 8px 20px -14px #9f1239; }
+.mockup-risk-medium:hover { background: #fff8df; box-shadow: 0 8px 20px -14px #92400e; }
+.mockup-risk-head { display: flex; align-items: center; gap: 10px; }
+.mockup-risk-head strong { color: var(--ink); font-size: 0.8rem; }
+.mockup-severity {
+  flex: none;
+  padding: 5px 7px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.mockup-risks blockquote {
-  font-size: 0.8rem;
+.mockup-risk-high .mockup-severity { background: #dc2626; }
+.mockup-risk-medium .mockup-severity { background: #d97706; }
+.mockup-source {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.mockup-risk-high .mockup-source { color: #b91c1c; }
+.mockup-risk-medium .mockup-source { color: #92400e; }
+.mockup-risk p {
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 /* How MaSign works (MAS-147): numbered-circle icons with arrow connectors
@@ -3440,14 +3498,14 @@ select.standard-input {
   }
 
   .home-hero {
-    text-align: center;
+    text-align: left;
     max-width: 100%;
-    margin: 0 auto;
+    margin: 0;
   }
 
   .home-hero p {
-    margin-left: auto;
-    margin-right: auto;
+    margin-left: 0;
+    margin-right: 0;
   }
 
   .home-hero-mockup {
@@ -3514,28 +3572,18 @@ select.standard-input {
 }
 
 @media (max-width: 480px) {
-  .mockup-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .mockup-sidebar {
-    flex-direction: row;
-    overflow-x: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .mockup-sidebar-item {
-    flex: none;
-  }
-
-  .mockup-sidebar-name {
-    max-width: 90px;
-  }
-
-  .mockup-term {
-    flex-wrap: wrap;
-  }
+  .home-hero h1 { font-size: clamp(2.2rem, 9.8vw, 3rem); }
+  .home-hero-row { padding-top: 20px; }
+  .home-cta-row { gap: 10px; }
+  .home-cta, .home-cta-secondary { padding: 13px 15px; font-size: 0.88rem; }
+  .mockup-main { padding: 18px 16px 20px; }
+  .mockup-file-details h3 { font-size: 1rem; }
+  .mockup-reviewed { font-size: 0.56rem; }
+  .mockup-terms { padding: 10px 12px; }
+  .mockup-term { font-size: 0.7rem; }
+  .mockup-term dd { flex-wrap: wrap; justify-content: flex-end; }
+  .mockup-risk-head { flex-wrap: wrap; gap: 6px; }
+  .mockup-source { font-size: 0.57rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
