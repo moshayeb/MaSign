@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { PageChrome } from './PageChrome'
 
-// Shared layout for the three content-heavy public pages (MAS-142): How it
-// works, What MaSign checks, Documentation. Same header/footer chrome as
+// Shared layout for the two content-heavy public reference pages (MAS-179):
+// What MaSign checks and Documentation. Same header/footer chrome as
 // every other page (PageChrome), but a hero + card-grid body instead of
 // StaticPage's single narrow prose column — for pages that need to show
 // several distinct pieces of information, not one continuous read. About,
@@ -25,12 +25,14 @@ export function PublicPage({
     <PageChrome>
       <main className="content pubpage">
         <section className="pubpage-hero">
-          {eyebrow && <p className="pubpage-eyebrow">{eyebrow}</p>}
-          <h1>{title}</h1>
-          {subtitle && <p className="pubpage-subtitle">{subtitle}</p>}
-          {cta}
+          <div className="pubpage-inner">
+            {eyebrow && <p className="pubpage-eyebrow">{eyebrow}</p>}
+            <h1>{title}</h1>
+            {subtitle && <p className="pubpage-subtitle">{subtitle}</p>}
+            {cta}
+          </div>
         </section>
-        {children}
+        <div className="pubpage-body pubpage-inner">{children}</div>
       </main>
     </PageChrome>
   )

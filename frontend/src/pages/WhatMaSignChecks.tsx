@@ -66,12 +66,18 @@ export function WhatMaSignChecksPage() {
   return (
     <PublicPage
       eyebrow="What MaSign checks"
-      title="A fixed rubric, graded from your side of the deal"
-      subtitle="Every upload gets a whole-contract review against seven risk categories, graded from the Customer's perspective unless a passage makes clear otherwise. Each finding quotes the clause it came from — a finding whose quote can't be verified against the passage is dropped, not shown."
+      title="Know what MaSign checks"
+      subtitle="A review looks for seven kinds of contract risk and ten key terms. Open the source passage for a result, and check it before you act."
       cta={<OpenWorkspaceCta />}
     >
       <section className="pubpage-section" aria-labelledby="risk-categories-title">
-        <h2 id="risk-categories-title">Risk categories</h2>
+        <div className="pubpage-section-heading">
+          <span className="pubpage-section-number">01 / 03</span>
+          <div>
+            <h2 id="risk-categories-title">Seven risk categories</h2>
+            <p>MaSign grades findings from the Customer's side of the deal.</p>
+          </div>
+        </div>
         <div className="pubpage-grid pubpage-grid-3" aria-label="The seven risk categories">
           {CATEGORIES.map((category) => (
             <article key={category.name} className="card pubpage-card">
@@ -84,11 +90,13 @@ export function WhatMaSignChecksPage() {
       </section>
 
       <section className="pubpage-section" aria-labelledby="key-terms-title">
-        <h2 id="key-terms-title">Key terms extracted</h2>
-        <p>
-          Nine financial terms are pulled from every contract, each shown with the exact passage it was read from and typed
-          fields kept only when their numbers match the quote:
-        </p>
+        <div className="pubpage-section-heading">
+          <span className="pubpage-section-number">02 / 03</span>
+          <div>
+            <h2 id="key-terms-title">Ten key terms</h2>
+            <p>MaSign checks for these terms and shows where each stated value came from. A term it cannot find stays marked as missing.</p>
+          </div>
+        </div>
         <ul className="pubpage-grid pubpage-grid-3 pubpage-terms-list">
           {KEY_TERMS.map((term) => (
             <li key={term} className="card pubpage-term-chip">
@@ -99,8 +107,13 @@ export function WhatMaSignChecksPage() {
       </section>
 
       <section className="pubpage-section" aria-labelledby="outcomes-title">
-        <h2 id="outcomes-title">What each outcome means</h2>
-        <p>Findings are graded over the passages actually read for a question or the whole-contract review — never the document beyond that.</p>
+        <div className="pubpage-section-heading">
+          <span className="pubpage-section-number">03 / 03</span>
+          <div>
+            <h2 id="outcomes-title">Read the outcome carefully</h2>
+            <p>A grade describes the passages MaSign checked. “Not checked” does not mean that a contract is clear.</p>
+          </div>
+        </div>
         <div className="pubpage-legend">
           {OUTCOMES.map((outcome) => (
             <div key={outcome.label} className={`card pubpage-legend-item ${outcome.className}`}>

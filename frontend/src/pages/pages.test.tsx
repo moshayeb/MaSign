@@ -19,9 +19,9 @@ vi.mock('sonner', async () => {
 describe.each([
   ['/about', AboutPage, 'About MaSign'],
   ['/privacy', PrivacyPage, 'Privacy'],
-  ['/documentation', DocumentationPage, 'Docs that live with the code'],
+  ['/documentation', DocumentationPage, 'Find the right guide'],
   ['/how-it-works', HowItWorksPage, 'From upload to a cited answer'],
-  ['/what-masign-checks', WhatMaSignChecksPage, 'A fixed rubric, graded from your side of the deal'],
+  ['/what-masign-checks', WhatMaSignChecksPage, 'Know what MaSign checks'],
   ['/educational-disclaimer', EducationalDisclaimerPage, 'Educational disclaimer'],
 ] as const)('the %s page', (path, Page, heading) => {
   it('renders its heading and the shared header/footer chrome', () => {

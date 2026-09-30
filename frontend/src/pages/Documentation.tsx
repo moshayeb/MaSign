@@ -13,7 +13,7 @@ const RESOURCES = [
   },
   {
     title: 'Understanding results',
-    text: 'What the seven risk categories and nine key terms mean, and how to read High, Medium, Low and Not checked.',
+    text: 'See the seven risk categories, ten key terms and what each result means.',
     href: '/what-masign-checks',
     linkLabel: 'What MaSign checks',
     external: false,
@@ -21,7 +21,7 @@ const RESOURCES = [
   },
   {
     title: 'Technical documentation',
-    text: 'Local setup, the API, the risk rubric, architecture notes and frontend conventions — kept with the source so it never drifts from what is running.',
+    text: 'Find local setup, the API, the risk rubric, architecture notes and frontend conventions in the repository.',
     href: `${GITHUB}#readme`,
     linkLabel: 'README on GitHub',
     external: true,
@@ -37,20 +37,29 @@ export function DocumentationPage() {
   return (
     <PublicPage
       eyebrow="Documentation"
-      title="Docs that live with the code"
-      subtitle="MaSign's technical documentation lives with its source, so it never drifts from what is actually running."
+      title="Find the right guide"
+      subtitle="Start with a quick explanation of the product, learn how to read a result, or open the technical documentation in GitHub."
     >
-      <section className="pubpage-grid pubpage-grid-3" aria-label="Documentation resources">
-        {RESOURCES.map((resource) => (
-          <article key={resource.title} className="card pubpage-card">
-            <PublicPageIcon>{resource.icon}</PublicPageIcon>
-            <h2>{resource.title}</h2>
-            <p>{resource.text}</p>
-            <a className="link" href={resource.href} target={resource.external ? '_blank' : undefined} rel={resource.external ? 'noreferrer noopener' : undefined}>
-              {resource.linkLabel}
-            </a>
-          </article>
-        ))}
+      <section className="pubpage-section" aria-labelledby="documentation-resources-title">
+        <div className="pubpage-section-heading">
+          <span className="pubpage-section-number">01 / 02</span>
+          <div>
+            <h2 id="documentation-resources-title">Choose a starting point</h2>
+            <p>Three short routes for using MaSign or understanding how it works.</p>
+          </div>
+        </div>
+        <div className="pubpage-grid pubpage-grid-3" aria-label="Documentation resources">
+          {RESOURCES.map((resource) => (
+            <article key={resource.title} className="card pubpage-card pubpage-resource-card">
+              <PublicPageIcon>{resource.icon}</PublicPageIcon>
+              <h3>{resource.title}</h3>
+              <p>{resource.text}</p>
+              <a className="link" href={resource.href} target={resource.external ? '_blank' : undefined} rel={resource.external ? 'noreferrer noopener' : undefined}>
+                {resource.linkLabel} <span aria-hidden="true">→</span>
+              </a>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="pubpage-callout" aria-label="More in the repository">
