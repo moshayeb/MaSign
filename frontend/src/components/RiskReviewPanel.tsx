@@ -206,6 +206,13 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
 
   return (
     <>
+      <div className="overview-intro">
+        <div>
+          <span className="workspace-eyebrow">Your review</span>
+          <h2>Review overview</h2>
+          <p>See what was checked, what needs attention, and the text behind each result.</p>
+        </div>
+      </div>
       <SummaryStrip review={review} state={state} offRubric={offRubric} onJump={jumpTo} />
       {offRubric && (
         <p className="badge unverified document-kind-note" role="status" title="Keyword-based and English only: a hint, not a verdict.">

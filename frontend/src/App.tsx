@@ -27,11 +27,12 @@ function parseHash(): { contractId: string | null; tab: Tab } {
 
 const EXAMPLES = ['What is the termination fee?', 'Is there a cap on liability?', 'When are invoices due, and what happens if we pay late?']
 
-type ExportIconName = 'more' | 'pdf' | 'markdown' | 'csv' | 'print' | 'review'
+type ExportIconName = 'more' | 'document' | 'pdf' | 'markdown' | 'csv' | 'print' | 'review'
 
 function ExportIcon({ name }: { name: ExportIconName }) {
   const paths: Record<ExportIconName, ReactNode> = {
     more: <><circle cx="5" cy="12" r="1.25" /><circle cx="12" cy="12" r="1.25" /><circle cx="19" cy="12" r="1.25" /></>,
+    document: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>,
     pdf: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 15h6M9 18h4" /></>,
     markdown: <><path d="M4 5h16v14H4z" /><path d="M7 15V9l3 3 3-3v6M15 12h2" /></>,
     csv: <><path d="M7 3h7l3 3v15H7z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>,
@@ -414,7 +415,9 @@ export default function App() {
               <div className="workspace-head">
                 {/* The contract header (MAS-104): what this file is and whether it was reviewed. */}
                 <div className="contract-head">
+                  <span className="workspace-file-mark" aria-hidden="true"><ExportIcon name="document" /></span>
                   <div className="contract-head-main">
+                    <span className="workspace-eyebrow">Contract workspace</span>
                     {/* tabIndex -1: focusable from code after a selection, never in the tab order. */}
                     <h1 className="workspace-title" tabIndex={-1} ref={headingRef}>
                       {current!.filename}

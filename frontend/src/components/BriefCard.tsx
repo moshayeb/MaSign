@@ -54,56 +54,61 @@ export function BriefCard({ review, onShowSource, onShowCoverage, offRubric = fa
 
       {done && (
         <>
-          <h3>In brief</h3>
-          <dl className="brief-facts">
-            {facts.map((fact) => (
-              <div key={fact.id} className={`brief-fact${fact.tone ? ` ${fact.tone}` : ''}`}>
-                <dt>{fact.label}</dt>
-                <dd>
-                  <span className="brief-text">{fact.text}</span>
-                  {fact.source && onShowSource && (
-                    <button type="button" className="link" onClick={() => onShowSource(fact.source!)} aria-label={`Show ${fact.label.toLowerCase()} in contract`}>
-                      passage {fact.source.chunk_index + 1}
-                    </button>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
-          <h3>Needs attention</h3>
-          {items.length === 0 ? (
-            <p className="brief-clean">
-              {offRubric
-                ? 'No contract risks or deviations were flagged — but this file does not read as a commercial contract, so the rubric says little about it.'
-                : 'Nothing needs attention: no risks flagged, no deviations from your standard, the important terms are stated, and nothing is missing from the upload.'}
-            </p>
-          ) : (
-            <ul className="checklist" aria-label="Before you sign checklist">
-              {items.map((item) => (
-                <li key={item.id} className={`check ${item.kind}${ticked.has(item.id) ? ' done' : ''}`}>
-                  <label className="check-label">
-                    <input type="checkbox" checked={ticked.has(item.id)} onChange={() => toggle(item.id)} aria-label={`Done: ${item.text}`} />
-                    {item.severity && <span className={`severity severity-${item.severity.toLowerCase()}`}>{item.severity}</span>}
-                    <span className="check-text">
-                      <strong>{item.text}</strong>
-                      {item.detail && <span className="muted small"> — {item.detail}</span>}
-                    </span>
-                  </label>
-                  {item.source && onShowSource && (
-                    <button type="button" className="link" onClick={() => onShowSource(item.source!)} aria-label={`Show "${item.text}" in contract`}>
-                      passage {item.source.chunk_index + 1}
-                    </button>
-                  )}
-                  {item.kind === 'coverage' && onShowCoverage && (
-                    <button type="button" className="link" onClick={onShowCoverage}>
-                      which passages
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="brief-grid">
+            <div className="brief-column brief-facts-column">
+              <h3>In brief</h3>
+              <dl className="brief-facts">
+                {facts.map((fact) => (
+                  <div key={fact.id} className={`brief-fact${fact.tone ? ` ${fact.tone}` : ''}`}>
+                    <dt>{fact.label}</dt>
+                    <dd>
+                      <span className="brief-text">{fact.text}</span>
+                      {fact.source && onShowSource && (
+                        <button type="button" className="link" onClick={() => onShowSource(fact.source!)} aria-label={`Show ${fact.label.toLowerCase()} in contract`}>
+                          passage {fact.source.chunk_index + 1}
+                        </button>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="brief-column brief-attention-column">
+              <h3>Needs attention</h3>
+              {items.length === 0 ? (
+                <p className="brief-clean">
+                  {offRubric
+                    ? 'No contract risks or deviations were flagged — but this file does not read as a commercial contract, so the rubric says little about it.'
+                    : 'Nothing needs attention: no risks flagged, no deviations from your standard, the important terms are stated, and nothing is missing from the upload.'}
+                </p>
+              ) : (
+                <ul className="checklist" aria-label="Before you sign checklist">
+                  {items.map((item) => (
+                    <li key={item.id} className={`check ${item.kind}${ticked.has(item.id) ? ' done' : ''}`}>
+                      <label className="check-label">
+                        <input type="checkbox" checked={ticked.has(item.id)} onChange={() => toggle(item.id)} aria-label={`Done: ${item.text}`} />
+                        {item.severity && <span className={`severity severity-${item.severity.toLowerCase()}`}>{item.severity}</span>}
+                        <span className="check-text">
+                          <strong>{item.text}</strong>
+                          {item.detail && <span className="muted small"> — {item.detail}</span>}
+                        </span>
+                      </label>
+                      {item.source && onShowSource && (
+                        <button type="button" className="link" onClick={() => onShowSource(item.source!)} aria-label={`Show "${item.text}" in contract`}>
+                          passage {item.source.chunk_index + 1}
+                        </button>
+                      )}
+                      {item.kind === 'coverage' && onShowCoverage && (
+                        <button type="button" className="link" onClick={onShowCoverage}>
+                          which passages
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
           <p className="muted disclaimer">
             A review checklist from MaSign's rubric and your standards, built by rule from the terms and findings above — review assistance, not legal
             advice.
