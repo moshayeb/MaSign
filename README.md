@@ -196,7 +196,7 @@ the table above.
 
 Interactive docs at `http://localhost:8000/docs`.
 
-Every `/api/contracts/*` and `/api/questions/*` route (and `/api/query`) requires
+Every `/api/contracts/*`, `/api/questions/*` and `/api/standards/*` route (and `/api/query`) requires
 a signed-in session and is scoped to the caller's own workspace (MAS-143): a
 contract, link or question belonging to another workspace is 404, identical to
 one that does not exist, never a 403 that would confirm it exists. `/api/auth/*`
@@ -224,9 +224,9 @@ is the exception and needs no session (register/login themselves cannot).
 | `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?, "profile"?}` → `answer` with `[n]` citations resolved in `citations`; `grounded` requires valid citations, a complete reply, and every detected money amount, percentage, date and duration to occur in a cited passage. It is false for "Not found in contract.". `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. `profile` (MAS-62, default `portable`) picks the embedding index searched; the response echoes it back. `profile: "quality"` is 409 if that profile is not configured on this server, or if this specific contract was never indexed into it (`contract_id` given, no points found) — never a silent fallback answered under the "quality" label. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. A successful answer (never a refused/`withheld` one) is stored (MAS-102) so it can be read back without asking the model again. |
 | `GET`  | `/api/contracts/{contract_id}/questions` | Previously answered questions for this contract, newest first (MAS-102): each with its `question`, `answer`, `answer_status`, `grounded`, and the full stored `response` (the original `QueryResponse`, so citations and flags render without a new model call). Includes a no-scope ("all contracts") question if its answer actually cited this contract. |
 | `DELETE` | `/api/questions/{question_id}` | Forget a stored question (MAS-102). 404 if unknown. |
-| `GET`  | `/api/standards` | The four editable Customer-side standards (MAS-120: payment deadline, late-payment interest, notice period, termination cost) with their current `params`, the human-readable `text` computed from them, and `is_default` (no row saved yet — MaSign's built-in value applies). One shared set, not per-contract or per-user. |
-| `PUT`  | `/api/standards/{term_id}` | `{"params": {...}}` → validate and save one standard (422 with a plain-language reason if invalid); it is used by every key-terms/deviation read from then on, with no model call and no re-review needed. 404 for an unknown `term_id`. |
-| `DELETE` | `/api/standards/{term_id}` | Restore MaSign's built-in default for one standard (removes the saved row rather than writing default values back). 404 for an unknown `term_id`. |
+| `GET`  | `/api/standards` | The signed-in workspace's four editable Customer-side standards (MAS-120/181: payment deadline, late-payment interest, notice period, termination cost) with current `params`, human-readable `text`, and `is_default` (no override saved in this workspace). 401 without a session. |
+| `PUT`  | `/api/standards/{term_id}` | `{"params": {...}}` → validate and save one standard for the signed-in workspace (422 with a plain-language reason if invalid); it changes that workspace's key-terms/deviation reads with no model call or re-review. 404 for an unknown `term_id`. |
+| `DELETE` | `/api/standards/{term_id}` | Restore MaSign's built-in default for one standard in the signed-in workspace (removes its saved row). 404 for an unknown `term_id`. |
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |
 | `GET`  | `/ready` | Readiness: Postgres and Qdrant answer (200) or the failing one is named (503); also reports which chat model is configured. Use this, not `/health`, to know whether requests will succeed. |
 

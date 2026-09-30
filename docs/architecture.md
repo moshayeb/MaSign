@@ -273,12 +273,15 @@ position for the four numeric terms (payment deadline, late-payment
 interest, notice period, termination cost); `describe(term_id, params)`
 computes the one-line text from those numbers so it can never drift from
 what is actually stored. Since MAS-120 a `standards` row (migration 014,
-`term_id` primary key, `params` JSONB) overrides a term's default; a term
+`params` JSONB) overrides a term's default; a term
 with no row uses the default, and resetting (`DELETE /api/standards/{id}`)
 removes the row rather than ever writing default values back — the default
-lives in exactly one place. There is one shared set, not per-contract or
-per-user (MAS-143's accounts/workspaces are not merged as of this ticket;
-scoping standards per workspace is a follow-up, not bundled in here).
+lives in exactly one place. MAS-181 migration 016 adds `workspace_id` and a
+`(workspace_id, term_id)` primary key: old shared overrides are assigned only
+to MAS-143's explicit legacy demo workspace; new personal workspaces use
+MaSign's built-in defaults. The standards API requires the current workspace,
+as do the contract routes that display comparisons. There are no named
+profiles or per-contract overrides.
 `app/api/routes.py` loads the saved standards once per request
 (`repository.get_standards`) and threads them into `ContractSummary`,
 `KeyTermValue` and `KeyTermsResponse`, so a saved standard changes every

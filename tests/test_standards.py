@@ -3,10 +3,11 @@ that a saved standard actually changes the key-terms verdict shown -- all
 without a model call."""
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
+from app.api import dependencies
 from app.database import repository
 from app.database.session import get_connection
 from app.key_terms.standards import DEFAULT_PARAMS
@@ -57,13 +58,13 @@ def test_save_standard_is_validated_persisted_and_returned_by_get(db) -> None:
     assert saved["is_default"] is False
 
 
-def test_save_persists_across_a_fresh_connection_like_an_application_restart(db, database: str) -> None:
+def test_save_persists_across_a_fresh_connection_like_an_application_restart(db, database: str, workspace_id) -> None:
     client.put("/api/standards/notice_period", json={"params": {"notice_days_max": 30}})
 
     # A brand new connection, not the request-scoped one the PUT used --
     # the value must have actually reached Postgres, not just this process.
     with get_connection(database) as fresh:
-        stored = repository.get_standards(fresh)
+        stored = repository.get_standards(fresh, workspace_id)
     assert stored["notice_period"] == {"notice_days_max": 30}
 
 
@@ -82,6 +83,59 @@ def test_reset_restores_masigns_default(db) -> None:
 def test_unknown_standard_id_is_404_not_a_silent_no_op() -> None:
     assert client.put("/api/standards/not_a_real_term", json={"params": {}}).status_code == 404
     assert client.delete("/api/standards/not_a_real_term").status_code == 404
+
+
+def test_standards_require_a_session_for_reads_and_writes(db) -> None:
+    app.dependency_overrides.pop(dependencies.get_current_user, None)
+    app.dependency_overrides.pop(dependencies.get_current_workspace, None)
+    anonymous = TestClient(app)
+
+    assert anonymous.get("/api/standards").status_code == 401
+    assert anonymous.put("/api/standards/payment_deadline", json={"params": {"net_days_min": 45}}).status_code == 401
+    assert anonymous.delete("/api/standards/payment_deadline").status_code == 401
+
+
+def test_standards_and_existing_verdicts_are_isolated_between_workspaces(db, fake_chat_model: FakeChatModel) -> None:
+    app.dependency_overrides.pop(dependencies.get_current_user, None)
+    app.dependency_overrides.pop(dependencies.get_current_workspace, None)
+
+    def account() -> tuple[TestClient, UUID]:
+        signed_in = TestClient(app)
+        response = signed_in.post(
+            "/api/auth/register", json={"email": f"standard-{uuid4().hex}@example.com", "password": "correct horse battery staple"}
+        )
+        assert response.status_code == 201, response.text
+        user = repository.get_user_by_email(db, response.json()["email"])
+        assert user is not None
+        workspace = repository.get_workspace_for_user(db, user.id)
+        assert workspace is not None
+        return signed_in, workspace.id
+
+    first, first_workspace = account()
+    second, second_workspace = account()
+    first_id = _stored(db, first_workspace, FEES)
+    second_id = _stored(db, second_workspace, FEES)
+    fake_chat_model.key_terms_reply = json.dumps(
+        [_item("payment_deadline", "30 days", 1, "due thirty (30) days after the invoice date", {"net_days": 30})]
+    )
+    review_contract(first_id, fake_chat_model, batch_size=1)
+    review_contract(second_id, fake_chat_model, batch_size=1)
+
+    assert first.put("/api/standards/payment_deadline", json={"params": {"net_days_min": 60}}).status_code == 200
+    assert next(s for s in first.get("/api/standards").json() if s["id"] == "payment_deadline")["params"] == {"net_days_min": 60}
+    assert next(s for s in second.get("/api/standards").json() if s["id"] == "payment_deadline")["params"] == {"net_days_min": 30}
+
+    first_terms = first.get(f"/api/contracts/{first_id}/key-terms").json()
+    second_terms = second.get(f"/api/contracts/{second_id}/key-terms").json()
+    assert first_terms["deviations"] == 1
+    assert second_terms["deviations"] == 0
+    assert first.get(f"/api/contracts/{first_id}").json()["deviations"] == 1
+    assert second.get(f"/api/contracts/{second_id}").json()["deviations"] == 0
+    assert "net 60 days or longer" in first.get(f"/api/contracts/{first_id}/export.md").text
+    assert "net 30 days or longer" in second.get(f"/api/contracts/{second_id}/export.md").text
+
+    assert second.delete("/api/standards/payment_deadline").status_code == 200
+    assert first.get(f"/api/contracts/{first_id}/key-terms").json()["deviations"] == 1
 
 
 def test_termination_cost_preference_validates_its_mode_and_paired_fields(db) -> None:
