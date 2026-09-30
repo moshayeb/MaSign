@@ -82,7 +82,13 @@ pale-cyan hover surface and cyan border; header links use a simple cyan text
 hover. Status colours are the 700-weight shades (`--ok #047857`, `--warn
 #b45309`) on 12 % tints; severity tags are white on solid red/amber/green.
 Every shared colour is a `:root` token, and `color-scheme: light` is set. The
-header shows the full logo inlined (`components/Wordmark.tsx`,
+selected-contract workspace adds a scoped slate canvas (`#f5f8fb`) and white
+dashboard surfaces in MAS-178. This does not alter the shared brand tokens,
+Inter, the public pages, or the empty workspace. It adopts the owner-provided
+workspace mockup's spacing, section hierarchy, subtle card lift and cyan
+interaction cues while leaving out its simulated IDE chrome and unsupported
+confidence/completion claims.
+The header shows the full logo inlined (`components/Wordmark.tsx`,
 generated from `logo/MaSign_logo_BB.svg`) so the ink paths follow the theme
 and no font is needed: every letter is an outline — the owner exported the
 wordmark from Illustrator in Anurati, and the one letter Illustrator left as
@@ -222,6 +228,18 @@ to contain all findings and key terms, while High/Medium risks and every
 reason to doubt the review remain visible above it. The mockup's confidence
 percentages, PDF-page labels and "Complete Review" action are deliberately
 absent because MaSign does not produce those results.
+
+MAS-178 makes the mockup adaptation visible on the initial Overview: a
+document-context header with the real file status and existing actions, a
+"Review overview" introduction, four metric cards with meaning-specific
+icons, and a two-column "Before you sign" card. Source passage actions use
+compact cyan chips. Facts and items needing attention stack at narrower widths.
+The cards still show only stored review
+counts; no decorative progress bar suggests a success percentage. Coverage
+warnings, linked-document actions, failed/partial/off-rubric states and the
+review-again cost confirmation retain their established behavior and
+prominence. The existing Ask and Sources tabs remain the navigation model;
+the side-by-side source view is a separate backlog item (MAS-177).
 
 ### The shell (MAS-125)
 

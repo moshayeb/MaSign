@@ -1,7 +1,18 @@
+import type { ReactNode } from 'react'
 import type { RiskReview } from '../api'
 
 // Which section a tile's number lives in; the Overview scrolls there.
 export type SummaryTarget = 'key-terms' | 'review' | 'coverage'
+
+function MetricIcon({ name }: { name: string }) {
+  const paths: Record<string, ReactNode> = {
+    terms: <><path d="M7 3h9l3 3v15H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" /><path d="M16 3v4h3M9 11h6M9 15h6" /></>,
+    deviations: <><path d="M12 3 2.8 19a1.4 1.4 0 0 0 1.2 2h16a1.4 1.4 0 0 0 1.2-2L12 3Z" /><path d="M12 9v5M12 18h.01" /></>,
+    risks: <><path d="M12 2 4 5v6c0 5.2 3.2 8.6 8 11 4.8-2.4 8-5.8 8-11V5l-8-3Z" /><path d="M12 7v6M12 17h.01" /></>,
+    coverage: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>,
+  }
+  return <svg className="summary-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
+}
 
 interface Props {
   review: RiskReview | null
@@ -81,7 +92,7 @@ export function SummaryStrip({ review, state, offRubric = false, onJump }: Props
       {tiles.map((tile) => {
         const body = (
           <>
-            <span className="summary-label">{tile.label}</span>
+            <span className="summary-topline"><span className="summary-label">{tile.label}</span><MetricIcon name={tile.id} /></span>
             <strong className="summary-value">{tile.value}</strong>
             <span className="summary-note">{tile.note}</span>
           </>
