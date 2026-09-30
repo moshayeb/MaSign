@@ -329,32 +329,40 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
             </span>
           </summary>
 
-          <KeyTermsCard review={review} contracts={contracts} onShowSource={onShowSource} ref={keyTermsRef} />
-
           {findings.length > 0 && (
-            <ul className="risks" aria-label="Findings">
-              {findings.map((finding) => (
-                <li key={`${finding.category}-${finding.chunk_id}`} className={`risk severity-${finding.severity.toLowerCase()}`}>
-                  <div className="risk-head">
-                    <span className="severity">{finding.severity}</span>
-                    <strong>{finding.category_name}</strong>
-                    <span className="muted small">{sourceLabel(finding.contract_id, finding.chunk_index, contracts)}</span>
-                    {onShowSource && (
-                      <button
-                        type="button"
-                        className="link"
-                        onClick={() => onShowSource({ contract_id: finding.contract_id, chunk_index: finding.chunk_index, quote: finding.quote })}
-                        aria-label={`Show ${finding.category_name} finding in contract`}
-                      >
-                        Show in contract
-                      </button>
-                    )}
-                  </div>
-                  <p className="risk-reason">{finding.reason}</p>
-                  <blockquote>“{finding.quote}”</blockquote>
-                </li>
-              ))}
-            </ul>
+            <div className="finding-section">
+              <h3>Findings to review</h3>
+              <ul className="risks" aria-label="Findings">
+                {findings.map((finding) => (
+                  <li key={`${finding.category}-${finding.chunk_id}`} className={`risk severity-${finding.severity.toLowerCase()}`}>
+                    <details className="finding-detail">
+                      <summary className="finding-summary">
+                        <span className="severity">{finding.severity}</span>
+                        <span className="finding-summary-text">
+                          <strong>{finding.category_name}</strong>
+                          <span className="risk-reason">{finding.reason}</span>
+                        </span>
+                        <span className="finding-chevron" aria-hidden="true" />
+                      </summary>
+                      <div className="finding-evidence">
+                        <p className="finding-source">{sourceLabel(finding.contract_id, finding.chunk_index, contracts)}</p>
+                        <blockquote>“{finding.quote}”</blockquote>
+                        {onShowSource && (
+                          <button
+                            type="button"
+                            className="link"
+                            onClick={() => onShowSource({ contract_id: finding.contract_id, chunk_index: finding.chunk_index, quote: finding.quote })}
+                            aria-label={`Show ${finding.category_name} finding in contract`}
+                          >
+                            Open source passage
+                          </button>
+                        )}
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {/* The categories without a finding, as one line: clean only when the review is complete (MAS-104). */}
@@ -381,6 +389,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
               )}
             </p>
           )}
+          <KeyTermsCard review={review} contracts={contracts} onShowSource={onShowSource} ref={keyTermsRef} />
           <p className="muted disclaimer">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
         </details>
       )}

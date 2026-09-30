@@ -573,6 +573,12 @@ describe('progressive disclosure never hides a reason to doubt the review (MAS-1
     await userEvent.click(screen.getByText('View complete analysis'))
     expect(fold).toHaveAttribute('open')
     expect(lowFinding).toBeVisible()
+    const lowCard = lowFinding.closest('details')!
+    expect(lowCard).not.toHaveAttribute('open')
+    expect(within(lowCard).getByText('“confidentiality obligations”')).not.toBeVisible()
+    await userEvent.click(within(lowCard).getByText('Confidentiality'))
+    expect(lowCard).toHaveAttribute('open')
+    expect(within(lowCard).getByText('“confidentiality obligations”')).toBeVisible()
   })
 
   it('a summary-strip jump opens the fold before scrolling into it', async () => {
