@@ -1,12 +1,14 @@
 # MaSign
 
-MaSign is an AI-powered contract analysis assistant that helps users understand contracts faster. It is designed to make long, technical agreements easier to explore by combining document management, semantic search, question answering, and contract-risk analysis.
+MaSign is an AI-assisted contract review tool for finding key terms, possible
+risks, and cited answers in uploaded agreements. It combines document storage,
+semantic search, question answering, and contract-risk analysis.
 
 The application is not intended to replace a lawyer or make final legal decisions. Its purpose is to provide a useful first analysis, highlight clauses that deserve attention, and help users locate the original contract passages behind an answer.
 
 ## What It Does
 
-A user uploads a contract, and the system should process it through several stages:
+A signed-in user uploads a contract. MaSign then:
 
 1. Read and process the uploaded document.
 2. Divide the contract into smaller, meaningful sections.
@@ -30,33 +32,71 @@ Contracts are often long, technical, and time-consuming to review. Important obl
 ## Intended Users
 
 - Small businesses reviewing supplier or customer contracts
-- Employees trying to understand employment agreements
+- People reading an agreement before discussing it with a professional
 - Project managers checking obligations and deadlines
 - Legal teams performing an initial contract review
-- Anyone comparing multiple agreements
+- People comparing the terms of two uploaded agreements
 
 ## Example Scenario
 
 A company uploads a 30-page supplier agreement. The assistant finds a clause allowing automatic renewal, identifies a large late-payment penalty, and shows the sections describing how the agreement can be terminated. The user can then examine those exact passages or take them to a lawyer.
 
-## Local Setup
+## Quick start with Docker
 
-The API needs Postgres and Qdrant; the easiest way to get them is the compose
-file, running only those two services:
+Install Docker with Compose, then run these commands from the repository root:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Open `http://localhost:8000`, create an account, and sign in to your personal
+workspace. The first start downloads the local embedding model, so it can take
+longer than subsequent starts. Check `http://localhost:8000/ready` for Postgres
+and Qdrant readiness; `chat_model: "not configured"` means those stores are
+ready but AI review and answers are not.
+
+To use contract review and Ask MaSign, set `ANTHROPIC_API_KEY` in your local
+`.env` (the default provider), or set `CHAT_PROVIDER=openai` and
+`OPENAI_API_KEY`. Restart the API after changing `.env`. Uploading a contract
+starts a background review that sends contract passages to the chosen provider;
+asking a question also sends relevant passages and the question. These calls
+can incur charges. Without a provider key, the site and account flow still
+work, but a contract's review fails and Ask MaSign cannot answer. Do not use a
+real contract until you are comfortable sending its text to that provider.
+
+In the workspace, upload a TXT, PDF, or DOCX file (up to 10 MB), select it from
+the list, and wait for the review status to finish. Overview shows key terms,
+possible risks, and how much text was checked. Select a cited passage to read
+its source in Sources; use Ask MaSign to ask a question about the selected
+contract. The API reference is at `http://localhost:8000/docs`. Stop the stack
+without deleting its saved data with `docker compose down`.
+
+## Local API setup
+
+The API needs Postgres and Qdrant; run only those two services with Compose.
+Create a Python 3.12 virtual environment, then activate it for your shell:
 
 ```bash
 docker compose up -d postgres qdrant
-
 python -m venv .venv
-source .venv/bin/activate        # Windows Git Bash: source .venv/Scripts/activate
+```
+
+Check that `python --version` reports Python 3.12. On Windows Git Bash use
+`source .venv/Scripts/activate`; on macOS/Linux use
+`source .venv/bin/activate`; on Windows PowerShell use
+`.\.venv\Scripts\Activate.ps1`. Then run:
+
+```bash
 pip install -r requirements.txt
-cp .env.example .env             # loaded automatically at startup; edit if your ports differ
+cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-On startup the API applies any pending database migrations, then serves at
-`http://localhost:8000` (the root redirects to the interactive docs at `/docs`).
-If Postgres isn't reachable the API refuses to start and says so.
+On startup the API applies pending migrations. Without a frontend build, the
+root redirects to `/docs`; run `npm ci` and `npm run dev` from `frontend/` for
+the UI at `http://localhost:5173` (API requests proxy to port 8000). If
+Postgres is unreachable, the API refuses to start and says so.
 
 ## Docker Services
 
@@ -74,22 +114,19 @@ The compose file starts three services:
 
 Inside the compose network the API reaches the other services by name
 (`postgres`, `qdrant`); `docker-compose.yml` overrides `DATABASE_URL` and
-`VECTOR_STORE_URL` accordingly. A local `.env` is loaded if present (for
-`OPENAI_API_KEY` etc.) but is not required to start the stack.
+`VECTOR_STORE_URL` accordingly. A local `.env` is loaded if present (for the
+chosen provider key and other settings), but is not required to start the stack.
 
 Check it is up:
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/ready
 ```
 
-Then open **http://localhost:8000** — the web UI (built into the image from
-`frontend/`) lets you upload a contract, pick it, and ask questions: the
-answer cites the passages it came from (click a `[n]` to see the quote) and
-is marked *Unverified* when citations are missing or a concrete financial
-value does not appear in a cited passage. Every action
-reports its outcome in a toast, errors with the API's own message. The
-interactive API docs stay at `/docs`.
+The Docker image includes the frontend at `http://localhost:8000`. Answers
+link to source passages and show when they could not be verified. Actions
+report their outcome in a toast; errors show the API's message. The
+interactive API docs remain at `/docs`.
 
 ### Embedding profiles
 
@@ -180,9 +217,9 @@ is the exception and needs no session (register/login themselves cannot).
 | `DELETE` | `/api/contracts/{contract_id}/links/{link_id}` | Remove a link. Invalidates this contract's existing risk review (`status: failed`) so it is never left silently claiming coverage of a document it no longer includes. |
 | `GET`  | `/api/contracts/{contract_id}/risks` | The whole-contract risk review: `status` (pending / running / done / failed), the model, passages checked, `complete`, the verified `findings` (category, severity, reason, quoted clause, passage), the seven `categories` with their worst severity, the `key_terms`, and `coverage` (MAS-84: `unreadable_passages`, `withheld_passages`, `ingestion_notes`, `external_references`, and the `document_kind` of MAS-107). Runs automatically after upload. |
 | `GET`  | `/api/contracts/{contract_id}/search` | `?q=<question>&limit=5` → the passages the question would be answered from, best first, with scores. Retrieval only, no model call (MAS-91). Scoped to the contract's bundle (itself plus any linked documents), same as `/api/query` (MAS-151). |
-| `GET`  | `/api/contracts/{contract_id}/passages` | Every stored passage of the contract in order (`chunk_id`, `chunk_index`, `text`) — the text behind each citation, finding and key term (MAS-83). |
-| `GET`  | `/api/contracts/{contract_id}/key-terms` | The contract's nine financial key terms (recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
-| `GET`  | `/api/contracts/{contract_id}/export.pdf` ? `export.md` ? `export.csv` | The review as a file (MAS-154): searchable PDF or Markdown with coverage, key terms and findings, or CSV with one row per finding and key term. Same data as `/risks` + `/key-terms`; 404 before a review. |
+| `GET`  | `/api/contracts/{contract_id}/passages` | This document's stored passages in order (`chunk_id`, `chunk_index`, `text`). A bundle result can cite another linked document; its `contract_id` identifies whose passages to open (MAS-83). |
+| `GET`  | `/api/contracts/{contract_id}/key-terms` | Ten key terms (effective date, recurring fee, one-off fees, payment deadline, late-payment interest, termination cost, initial term, renewal, notice period, price changes), each `found` with its value, verbatim quote, passage and typed fields, `conflicting` when passages disagree, `not_stated` only when every passage was read, else `unchecked`. Also embedded in `/risks` as `key_terms`. |
+| `GET`  | `/api/contracts/{contract_id}/export.pdf`, `export.md`, `export.csv` | The review as a file (MAS-154): searchable PDF or Markdown with coverage, key terms and findings, or CSV with one row per finding and key term. Same data as `/risks` + `/key-terms`; 404 before a review. |
 | `POST` | `/api/contracts/{contract_id}/review` | Re-run the risk review and key-terms extraction. The start is atomic: one request gets 202; concurrent attempts get 409 while it runs. |
 | `POST` | `/api/query` | `{"question", "contract_id"?, "limit"?, "profile"?}` → `answer` with `[n]` citations resolved in `citations`; `grounded` requires valid citations, a complete reply, and every detected money amount, percentage, date and duration to occur in a cited passage. It is false for "Not found in contract.". `retrieved_context` lists every passage considered, best first; `risks` holds the rubric findings (`docs/risk-rubric.md`) with severity, reason and the quoted clause, `risks_checked` says whether the analysis ran; `blocked_passages` lists passages the prompt-injection guardrail withheld. Omit `contract_id` to search every contract. `profile` (MAS-62, default `portable`) picks the embedding index searched; the response echoes it back. `profile: "quality"` is 409 if that profile is not configured on this server, or if this specific contract was never indexed into it (`contract_id` given, no points found) — never a silent fallback answered under the "quality" label. Needs `ANTHROPIC_API_KEY` (or `CHAT_PROVIDER=openai` + `OPENAI_API_KEY`); otherwise 503 with the reason. A successful answer (never a refused/`withheld` one) is stored (MAS-102) so it can be read back without asking the model again. |
 | `GET`  | `/api/contracts/{contract_id}/questions` | Previously answered questions for this contract, newest first (MAS-102): each with its `question`, `answer`, `answer_status`, `grounded`, and the full stored `response` (the original `QueryResponse`, so citations and flags render without a new model call). Includes a no-scope ("all contracts") question if its answer actually cited this contract. |
@@ -207,7 +244,29 @@ also keeps its own separate review when opened on its own. Removing a link
 marks the primary agreement's existing review as needing a new review, because
 it may have relied on text that is no longer part of the bundle.
 
+## Architecture at a glance
+
+FastAPI (`app/`) serves the React/Vite frontend (`frontend/`) and the API.
+Uploads pass through `app/ingestion/` to extract text and split it into
+passages. Postgres stores accounts, contracts, passages, links, reviews, key
+terms, and question history; Qdrant stores passage embeddings for semantic
+search. `app/retrieval/` finds relevant passages for a question. The configured
+chat provider produces cited answers and, in a background job after upload,
+the risk review and key terms. Verification and coverage rules can mark a
+result incomplete; a missing or unusable source does not become a clean bill
+of health. See [docs/architecture.md](docs/architecture.md) for the data flow
+and schema details.
+
 ## Evaluation
+
+The [2026-09-28 retrieval run](docs/evaluation/results-2026-09-28-live-all-three.md)
+found the reference passage first for 28 of 35 questions (hit@1 0.80), and
+within the top five for all 35 (hit@5 1.00) using the quality embedding
+profile. These are retrieval scores, not answer accuracy. A separate
+[six-question judged run](docs/evaluation/results-2026-09-28-judged-cuad.md)
+reported 0.88 faithfulness and 0.59 factual correctness with two of two
+not-found questions handled correctly. That small answer sample does not
+establish reliability for other contracts or legal decisions.
 
 `docs/evaluation/` holds the question set, the results and how to run the
 harness: `python -m evaluation.evaluate --retrieval-only` measures retrieval
@@ -220,12 +279,12 @@ retrieval-only endpoint it uses. See `docs/evaluation/README.md` (MAS-91).
 ## Running the Tests
 
 ```bash
-pytest
+MASIGN_REQUIRE_DB=1 python -m pytest -q
 ```
 
-Frontend (from `frontend/`, needs Node 24): `npm ci`, then `npm test` and
-`npm run build`; `npm run dev` serves the UI on :5173 with `/api` proxied to
-a locally running API. See `frontend/README.md`.
+Frontend (from `frontend/`, needs Node 24): `npm ci`, then `npm test`,
+`npm run build`, and `npm run lint`. `npm run dev` serves the UI on :5173
+with `/api` proxied to a locally running API. See `frontend/README.md`.
 
 Tests that need Postgres use a separate `contract_rag_test` database, created
 automatically from `DATABASE_URL` and emptied after each test — your dev data
@@ -235,11 +294,11 @@ is never touched. Without a reachable Postgres they are skipped; set
 ## Financial key terms (MAS-82)
 
 The 2026-09-17 product review put the *financial consequences* of a
-contract first. Every upload therefore also extracts nine key terms, defined
+contract first. Every upload therefore also extracts ten key terms, defined
 as data in `app/key_terms/terms.py` (the prompt, the API and this list are
-built from it): recurring fee, one-off fees, payment deadline, late-payment
-interest or penalty, termination cost, initial term, renewal, notice period,
-price changes. The pass runs in the same background job as the risk review,
+built from it): effective date, recurring fee, one-off fees, payment deadline,
+late-payment interest or penalty, termination cost, initial term, renewal,
+notice period, price changes. The pass runs in the same background job as the risk review,
 one extra model call per batch of 8 passages, with the same discipline:
 
 - a term is kept only with a **verbatim quote** from the passage it names
@@ -256,14 +315,14 @@ one extra model call per batch of 8 passages, with the same discipline:
   reply was usable; otherwise it is **`unchecked`** ("Not checked" in the
   UI) — an unreadable reply never turns into "the contract does not say".
 
-The **Key terms** card sits above the Risk review for the selected contract:
-a pill with `n of 9 stated · passages read`, one tile per term with the value,
-its passage number and the quote, and amber notices for conflicts or an
-incomplete pass.
+The workspace's **Overview** tab shows the key terms alongside the risk
+review and coverage: a count of stated terms, a tile for each found term with
+its value, source passage and quote, and notices for conflicts or an
+incomplete pass. The **Sources** tab opens the stored text behind a citation.
 
-**Deadlines (MAS-100).** A tenth key term, the *effective date* (typed as an
+**Deadlines (MAS-100).** The *effective date* (typed as an
 ISO date and verified by its written form in the quote — `1 March 2026`,
-`March 1, 2026`, `01.03.2026`…), lets MaSign compute three dates by plain
+`March 1, 2026`, `01.03.2026`…) lets MaSign compute three dates by plain
 arithmetic in `app/key_terms/deadlines.py`: when the initial term ends (the
 day before the anniversary), the last day to give notice against a renewal,
 and when the first renewal runs to (the `renewal` term may now carry a typed
@@ -284,12 +343,13 @@ month is 1.5× the standard") or **Can't compare** (stated, but not as a
 number the text confirms — no verdict is guessed from prose); the card pill
 counts the deviations, and the API carries `standard: {status, standard,
 detail}` per term plus `deviations`. Fees, the initial term, renewal and
-price changes have no standard (deal-specific). Changing a standard is an
-edit to the data file; a settings UI is post-course (MAS-98).
+price changes have no standard (deal-specific). The **Standards** page lets
+users edit the four supported thresholds; these are shared across the
+deployment, not stored separately for each account.
 
 **Click-to-source (MAS-83).** Every finding has a *Show in contract* button
-and every key term's passage number is a link: both open the **Contract
-text** reader below the review at that passage, scrolled into view, with the
+and every key term's passage number is a link: both open the **Sources** tab's
+Contract text reader at that passage, scrolled into view, with the
 verified quote marked. The reader lists the stored passages
 (`GET /api/contracts/{id}/passages`); the quote is located the same loose
 way the API verified it (whitespace and quote style), and if it still cannot
