@@ -58,6 +58,14 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 
+async function openTerminationFinding() {
+  await userEvent.click(screen.getByText('View complete analysis'))
+  const finding = screen.getByText('Half the fees.').closest('details')!
+  await userEvent.click(within(finding).getByText('Termination'))
+  expect(finding).toHaveAttribute('open')
+  expect(within(finding).getByText(/fifty percent \(50%\)/)).toBeVisible()
+}
+
 describe('contract workspace tabs (MAS-95)', () => {
   it('shows the tabs only once a contract is selected, with Overview first', async () => {
     render(<App />)
@@ -79,6 +87,8 @@ describe('contract workspace tabs (MAS-95)', () => {
     await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     await screen.findByText('Half the fees.')
 
+    await openTerminationFinding()
+
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
 
     expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
@@ -95,6 +105,8 @@ describe('contract workspace tabs (MAS-95)', () => {
     await screen.findByText('Half the fees.')
     expect(screen.queryByRole('button', { name: /Back to/ })).not.toBeInTheDocument()
 
+    await openTerminationFinding()
+
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
 
     const back = screen.getByRole('button', { name: '← Back to Overview' })
@@ -107,6 +119,8 @@ describe('contract workspace tabs (MAS-95)', () => {
   it('remembers Ask MaSign, not Overview, when a source is opened from a cited answer', async () => {
     render(<App />)
     await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
+    await screen.findByText('Half the fees.')
+    await openTerminationFinding()
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     await userEvent.click(screen.getByRole('tab', { name: 'Overview' }))
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))

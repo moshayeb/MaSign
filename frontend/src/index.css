@@ -434,6 +434,7 @@ a {
   gap: 8px;
   font-weight: 700;
   color: var(--text);
+  padding: 2px 0;
 }
 
 .overview-detail-summary::-webkit-details-marker { display: none; }
@@ -453,6 +454,24 @@ a {
 
 .overview-detail > *:not(summary) {
   margin-top: 16px;
+}
+
+#panel-overview {
+  gap: 22px;
+}
+
+#panel-overview > .brief,
+#panel-overview > .overview-detail {
+  padding: 26px 28px;
+  border-radius: 18px;
+  box-shadow: 0 12px 32px -28px rgba(17, 17, 17, 0.35);
+}
+
+@media (max-width: 540px) {
+  #panel-overview > .brief,
+  #panel-overview > .overview-detail {
+    padding: 20px 18px;
+  }
 }
 
 .card-title {
@@ -1266,6 +1285,24 @@ li.risk.severity-low {
   border-left-color: var(--low);
 }
 
+.overview-detail .risks {
+  gap: 12px;
+}
+
+.overview-detail li.risk {
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.overview-detail li.risk.severity-high { border-left-color: var(--high); }
+.overview-detail li.risk.severity-medium { border-left-color: var(--medium); }
+.overview-detail li.risk.severity-low { border-left-color: var(--low); }
+
 .risk-head {
   display: flex;
   gap: 8px;
@@ -1302,6 +1339,111 @@ li.risk.severity-low {
 
 .risk-reason {
   margin: 6px 0 4px;
+}
+
+.finding-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 17px 18px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.finding-summary .severity {
+  flex: none;
+  margin-top: 1px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #fff;
+  background: #64748b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.risk.severity-high .finding-summary .severity { background: var(--high); }
+.risk.severity-medium .finding-summary .severity { background: var(--medium); }
+.risk.severity-low .finding-summary .severity { background: var(--low); }
+
+.finding-section h3 {
+  margin: 22px 0 12px;
+}
+
+.finding-summary::-webkit-details-marker { display: none; }
+
+.finding-summary:hover {
+  background: var(--panel-2);
+}
+
+.finding-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
+.finding-summary-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.finding-summary-text strong {
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.finding-summary .risk-reason {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.finding-chevron {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  margin: 7px 3px 0 0;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+
+.finding-detail[open] .finding-chevron {
+  transform: rotate(225deg);
+}
+
+.finding-evidence {
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.finding-source {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.finding-evidence .link {
+  margin: 12px 0 0;
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.finding-evidence blockquote {
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finding-chevron { transition: none; }
 }
 
 li.risk blockquote {
@@ -1978,13 +2120,13 @@ a.link:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 14px 16px;
-  border-radius: 14px;
+  gap: 5px;
+  padding: 18px 20px;
+  border-radius: 18px;
   background: var(--panel);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  border-top: 3px solid var(--accent-bright);
+  box-shadow: 0 10px 26px -24px rgba(17, 17, 17, 0.4);
+  border-top: 2px solid var(--accent-bright);
 }
 
 .summary-tile.ok {
@@ -2029,12 +2171,12 @@ a.link:hover {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 5px;
   width: 100%;
   height: 100%;
-  padding: 14px 16px;
+  padding: 18px 20px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 18px;
   background: transparent;
   text-align: left;
   cursor: pointer;

@@ -212,6 +212,17 @@ cards. A `SummaryStrip` tile whose target lives behind the fold (`key-terms`,
 own `<details>` directly, unaffected, since that was never behind the fold
 to begin with.
 
+MAS-176 refines the Overview's spacing and evidence hierarchy using the
+existing Inter font and MassQL-aligned light tokens. Each finding is an
+individual `<details>` card: the closed row shows its severity, category and
+reason; opening it reveals the stored verbatim quote, source document/passage
+and an **Open source passage** action. The source still opens the existing
+Sources tab and retains the return path. The complete-analysis fold continues
+to contain all findings and key terms, while High/Medium risks and every
+reason to doubt the review remain visible above it. The mockup's confidence
+percentages, PDF-page labels and "Complete Review" action are deliberately
+absent because MaSign does not produce those results.
+
 ### The shell (MAS-125)
 
 The permanent header carries the wordmark alone (height 26); the tagline it
