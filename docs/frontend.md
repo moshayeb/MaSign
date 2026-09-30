@@ -355,6 +355,16 @@ that every answer is grounded or every review completes. The layout retains
 visible keyboard focus and stacks at 400px; reduced-motion users do not get
 the link lift effect.
 
+### Homepage motion and spacing (MAS-175)
+
+The owner's light premium reference informs homepage-only spacing, soft cyan
+decoration and motion. The hero and illustrative workspace preview rise in
+briefly on load. Workspace calls to action and linked Why MaSign cards respond
+to hover with a small lift; static step and expectation cards remain still.
+At `prefers-reduced-motion: reduce`, these entrance and hover animations are
+disabled. The homepage uses the existing Inter font and MassQL-aligned cyan
+tokens; the footer and shared workspace styles are unchanged.
+
 ### Shared visual system (MAS-136)
 
 MaSign now shares MassQL's light brand direction: `#0caded` is the cyan used

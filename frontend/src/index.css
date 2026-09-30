@@ -2754,8 +2754,9 @@ select.standard-input {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   align-items: center;
   gap: 64px;
-  min-height: 620px;
-  padding: 48px 0 88px;
+  min-height: 720px;
+  padding: 80px 0 112px;
+  background: radial-gradient(ellipse 45% 58% at 82% 50%, rgba(12, 173, 237, 0.1), transparent 82%);
 }
 
 .home-hero {
@@ -2763,6 +2764,7 @@ select.standard-input {
   padding: 0;
   max-width: 480px;
   margin: 0;
+  animation: home-rise-in 650ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .home-hero h1 {
@@ -2786,14 +2788,26 @@ select.standard-input {
 }
 
 .home-eyebrow {
-  display: inline-block;
-  margin: 0 0 14px;
-  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+  padding: 6px 14px;
   border-radius: 999px;
-  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  background: #f0faff;
   color: var(--accent);
   font-size: 0.78rem;
   font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.home-eyebrow::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-bright);
 }
 
 .home-hero h1 {
@@ -2810,7 +2824,7 @@ select.standard-input {
 }
 
 .home-hero p {
-  margin: 16px 0 0;
+  margin: 24px 0 0;
   max-width: 52ch;
   color: var(--text-2);
 }
@@ -2820,15 +2834,15 @@ select.standard-input {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-top: 26px;
+  margin-top: 32px;
 }
 
 .home-cta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   margin-top: 0;
-  padding: 10px 18px;
+  padding: 13px 22px;
   border-radius: var(--radius-sm);
   background: linear-gradient(135deg, #1e9eed, #0caded);
   color: #fff;
@@ -2836,30 +2850,44 @@ select.standard-input {
   font-size: 0.92rem;
   text-decoration: none;
   box-shadow: 0 8px 20px -10px rgba(12, 173, 237, 0.6);
+  transition: transform 240ms ease, box-shadow 240ms ease, background 240ms ease;
 }
 
 .home-cta:hover {
   background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(12, 173, 237, 0.35);
+  transform: translateY(-4px);
+  box-shadow: 0 14px 28px -10px rgba(12, 173, 237, 0.48);
+}
+
+.home-cta svg,
+.home-final-cta-button svg {
+  transition: transform 240ms ease;
+}
+
+.home-cta:hover svg,
+.home-final-cta-button:hover svg {
+  transform: translateX(3px);
 }
 
 .home-cta-secondary {
   display: inline-flex;
   align-items: center;
-  padding: 10px 18px;
+  padding: 13px 22px;
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   color: var(--text);
   font-weight: 600;
   font-size: 0.92rem;
   text-decoration: none;
+  transition: transform 240ms ease, border-color 240ms ease, box-shadow 240ms ease, background 240ms ease;
 }
 
 .home-cta-secondary:hover {
   border-color: var(--accent-bright);
   color: var(--accent);
   background: #f0f9fe;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px -14px rgba(8, 126, 172, 0.28);
 }
 
 .homepage a:focus-visible {
@@ -2877,6 +2905,7 @@ select.standard-input {
   position: relative;
   min-width: 0;
   isolation: isolate;
+  animation: home-rise-in 750ms 120ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .home-hero-mockup::before {
@@ -2885,8 +2914,8 @@ select.standard-input {
   inset: 12% 4%;
   z-index: -1;
   border-radius: 36px;
-  background: rgba(12, 173, 237, 0.16);
-  filter: blur(42px);
+  background: rgba(12, 173, 237, 0.2);
+  filter: blur(54px);
 }
 
 .mockup-window {
@@ -2895,6 +2924,12 @@ select.standard-input {
   background: var(--panel);
   box-shadow: 0 26px 58px -28px rgba(15, 23, 42, 0.28);
   overflow: hidden;
+  transition: transform 350ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 350ms ease;
+}
+
+.home-hero-mockup:hover .mockup-window {
+  transform: translateY(-5px);
+  box-shadow: 0 34px 68px -28px rgba(8, 126, 172, 0.3);
 }
 
 .mockup-titlebar {
@@ -2912,6 +2947,10 @@ select.standard-input {
   border-radius: 50%;
   background: var(--line-2);
 }
+
+.home-hero-mockup .mockup-dot:nth-child(1) { background: #f87171; }
+.home-hero-mockup .mockup-dot:nth-child(2) { background: #fbbf24; }
+.home-hero-mockup .mockup-dot:nth-child(3) { background: #4ade80; }
 
 .mockup-titlebar-label {
   margin-left: 8px;
@@ -3045,12 +3084,12 @@ select.standard-input {
 .home-steps-section {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 48px;
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
-  padding: 72px max(28px, calc((100vw - 1124px) / 2));
-  background: #f7fafc;
+  padding: 100px max(28px, calc((100vw - 1124px) / 2));
+  background: #f8fafc;
   border-block: 1px solid var(--line);
 }
 
@@ -3063,8 +3102,8 @@ select.standard-input {
 
 .home-step {
   text-align: center;
-  min-height: 204px;
-  padding: 24px;
+  min-height: 222px;
+  padding: 32px;
 }
 
 .home-step-icon-wrap {
@@ -3122,14 +3161,14 @@ select.standard-input {
    borrowed accuracy, speed, security or enterprise claims. */
 .home-proof {
   margin: 0 -28px;
-  padding: 80px 28px 48px;
+  padding: 108px 28px 64px;
   background: var(--bg);
   text-align: center;
 }
 
 .home-proof-heading {
   max-width: 580px;
-  margin: 0 auto 28px;
+  margin: 0 auto 48px;
 }
 
 .home-proof-heading h2 {
@@ -3147,7 +3186,7 @@ select.standard-input {
 .home-proof-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
+  gap: 24px;
   max-width: 1044px;
   margin: 0 auto;
   text-align: left;
@@ -3156,12 +3195,12 @@ select.standard-input {
 .home-proof-card {
   position: relative;
   display: block;
-  min-height: 204px;
-  padding: 24px;
-  background: var(--panel-2);
+  min-height: 216px;
+  padding: 28px;
+  background: #f8fafc;
   color: inherit;
   text-decoration: none;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition: border-color 280ms ease, box-shadow 280ms ease, transform 280ms ease, background 280ms ease;
 }
 
 .home-proof-card:hover,
@@ -3169,6 +3208,7 @@ select.standard-input {
   border-color: var(--accent-bright);
   box-shadow: 0 8px 24px rgba(12, 173, 237, 0.12);
   transform: translateY(-3px);
+  background: var(--panel);
 }
 
 .home-proof-card:focus-visible {
@@ -3181,11 +3221,13 @@ select.standard-input {
   top: 20px;
   right: 18px;
   color: var(--line-2);
+  transition: transform 280ms ease, color 280ms ease;
 }
 
 .home-proof-card:hover .home-proof-card-arrow,
 .home-proof-card:focus-visible .home-proof-card-arrow {
   color: var(--accent);
+  transform: translateX(3px);
 }
 
 .home-proof-icon {
@@ -3197,6 +3239,14 @@ select.standard-input {
   border-radius: 10px;
   background: var(--accent-soft);
   color: var(--accent);
+  transition: transform 280ms ease, background 280ms ease, color 280ms ease;
+}
+
+.home-proof-card:hover .home-proof-icon,
+.home-proof-card:focus-visible .home-proof-icon {
+  transform: scale(1.08);
+  background: var(--accent);
+  color: #fff;
 }
 
 .home-proof-card h3 {
@@ -3223,23 +3273,26 @@ select.standard-input {
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
+  transition: transform 240ms ease, background 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
 }
 
 .home-proof-cta:hover {
   background: #f0f9fe;
   border-color: var(--accent-bright);
   color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px -14px rgba(8, 126, 172, 0.28);
 }
 
 /* Clear expectations (MAS-147): what MaSign is honest about up front --
    assists rather than replaces a lawyer, AI findings need verifying, and
    what happens to the contract text. */
 .home-expectations {
-  padding: 32px;
+  padding: 40px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-2);
-  margin: 0 0 72px;
+  margin: 0 0 88px;
 }
 
 .home-expectations-heading {
@@ -3303,7 +3356,7 @@ select.standard-input {
 /* A decisive final action closes the public page before the footer, without
    adding a marketing promise that the app cannot prove. */
 .home-final-cta {
-  padding: 40px 28px;
+  padding: 72px 28px;
   background: linear-gradient(135deg, #087eac, #0caded);
   color: #fff;
   box-shadow: 0 22px 42px -28px rgba(12, 173, 237, 0.8);
@@ -3363,12 +3416,19 @@ select.standard-input {
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
+  transition: transform 240ms ease, box-shadow 240ms ease, background 240ms ease;
 }
 
 .home-final-cta-button:hover {
   background: var(--panel-2);
   color: var(--accent);
-  transform: translateY(-1px);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 30px -14px rgba(17, 17, 17, 0.35);
+}
+
+@keyframes home-rise-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 860px) {
@@ -3376,7 +3436,7 @@ select.standard-input {
     grid-template-columns: 1fr;
     gap: 32px;
     min-height: 0;
-    padding-block: 24px 64px;
+    padding-block: 32px 80px;
   }
 
   .home-hero {
@@ -3408,7 +3468,7 @@ select.standard-input {
   }
 
   .home-steps-section {
-    padding: 48px 16px;
+    padding: 64px 16px;
   }
 
   .home-step {
@@ -3422,7 +3482,7 @@ select.standard-input {
 
   .home-proof {
     margin: 0 -16px;
-    padding: 56px 16px 40px;
+    padding: 72px 16px 48px;
   }
 
   .home-proof-grid {
@@ -3435,7 +3495,7 @@ select.standard-input {
 
   .home-expectations {
     padding: 20px;
-    margin-bottom: 56px;
+    margin-bottom: 64px;
   }
 
   .home-expectations-grid {
@@ -3444,7 +3504,7 @@ select.standard-input {
   }
 
   .home-final-cta {
-    padding: 30px 16px;
+    padding: 48px 16px;
   }
 
   .home-final-cta-inner {
@@ -3479,11 +3539,18 @@ select.standard-input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .homepage a {
-    transition: none;
+  .homepage *, .homepage *::before, .homepage *::after {
+    animation: none !important;
+    transition: none !important;
   }
 
-  .homepage a:hover {
+  .homepage a:hover,
+  .home-hero-mockup:hover .mockup-window {
+    transform: none;
+  }
+
+  .home-cta:hover svg,
+  .home-final-cta-button:hover svg {
     transform: none;
   }
 }
