@@ -278,13 +278,12 @@ desktop nav and the phone menu (MAS-142).
 
 ### Public content pages (MAS-142)
 
-How it works, What MaSign checks and Documentation moved off `StaticPage`'s
-single prose column onto a second shared layout, `PublicPage.tsx`
-(`.pubpage`): a hero (eyebrow, `<h1>`, subtitle, optional CTA) over one or
-more card-grid sections (`.pubpage-grid-3`, `.pubpage-card`,
-`.pubpage-icon`), reusing the home page's (MAS-133/134) visual language —
-line icons in a soft cyan tile, `.card` surfaces — without sharing its CSS
-classes, since the two pages are laid out differently. `About`, `Privacy`
+How it works has its own walkthrough layout. What MaSign checks and
+Documentation use the shared `PublicPage.tsx` layout (`.pubpage`): a hero
+(eyebrow, `<h1>`, subtitle, optional CTA) over card-grid sections
+(`.pubpage-grid-3`, `.pubpage-card`, `.pubpage-icon`). These pages share the
+home page's cyan palette and line icons while keeping their own CSS classes.
+`About`, `Privacy`
 and the educational disclaimer stay on `StaticPage`: each is a single
 statement to read top to bottom, not a set of distinct facts to scan.
 
@@ -293,7 +292,7 @@ statement to read top to bottom, not a set of distinct facts to scan.
   rather than keeping it a fourth step, plus a callout repeating the
   honest-unknowns behaviour ("Not found in contract.").
 - **What MaSign checks** renders all seven `RISK_CATEGORIES`
-  (`app/risk_analysis/rubric.py`) as cards, the nine `KEY_TERMS`
+  (`app/risk_analysis/rubric.py`) as cards, the ten `KEY_TERMS`
   (`app/key_terms/terms.py`) as a plain list, and a four-item legend for
   High / Medium / Low / Not checked (`.pubpage-legend`, reusing the
   workspace's `.severity`/`.severity-high|medium|low` pill styling plus a
@@ -304,6 +303,14 @@ statement to read top to bottom, not a set of distinct facts to scan.
 - **Documentation** keeps the real README/`docs/` GitHub links and adds two
   in-app cross-links (How it works, What MaSign checks) as the third
   "resource" alongside the technical docs.
+
+MAS-179 gives What MaSign checks and Documentation a full-width pale cyan
+hero, the same Inter heading scale and section rhythm as How it works, and
+more spacious responsive cards. The homepage eyebrow is deliberately smaller
+than its headline; the headline keeps the same Inter family as the rest of
+MaSign, with tighter spacing and a cyan emphasis on “before you sign.” The
+copy now describes ten key terms and avoids implying that every term or
+finding is always found. The footer and legal pages remain unchanged.
 
 ### Public home and workspace (MAS-133)
 

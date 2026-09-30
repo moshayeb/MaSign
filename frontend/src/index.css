@@ -4526,6 +4526,59 @@ button.compare-models {
   .how-next { align-items: flex-start; flex-direction: column; padding-block: 40px; gap: 20px; }
 }
 
+/* MAS-179: give the reference pages the same calm hierarchy as How it works. */
+.pubpage { max-width: none; padding: 0; gap: 0; }
+.pubpage-inner { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
+.pubpage-hero { max-width: none; padding: 76px 0 80px; background: var(--accent-light); border-bottom: 1px solid var(--accent-line); }
+.pubpage-hero .pubpage-inner { max-width: 1120px; }
+.pubpage-eyebrow { margin-bottom: 16px; font-size: 12px; letter-spacing: .12em; }
+.pubpage-hero h1 { max-width: 720px; font-size: clamp(32px, 4vw, 48px); line-height: 1.12; letter-spacing: -.04em; font-weight: 800; }
+.pubpage-subtitle { max-width: 62ch; margin-top: 22px; color: var(--text-2); font-size: 16px; line-height: 1.7; }
+.pubpage-cta { display: inline-flex; align-items: center; gap: 16px; width: fit-content; margin-top: 28px; padding: 12px 20px; border-radius: 8px; background: var(--accent); color: white; font-weight: 700; text-decoration: none; }
+.pubpage-cta:hover { background: var(--ink); color: white; text-decoration: none; }
+.pubpage-body { display: flex; flex-direction: column; gap: 0; padding-block: 24px 80px; }
+.pubpage-section { min-width: 0; padding-block: 48px; }
+.pubpage-section + .pubpage-section { border-top: 1px solid var(--line); }
+.pubpage-section-heading { display: flex; align-items: flex-start; gap: 22px; margin-bottom: 28px; }
+.pubpage-section-number { flex: 0 0 48px; color: var(--accent); font-size: 13px; font-weight: 700; padding-top: 5px; }
+.pubpage-section-heading h2 { margin: 0 0 8px; font-size: 24px; line-height: 1.25; letter-spacing: -.025em; }
+.pubpage-section-heading p { max-width: 66ch; margin: 0; color: var(--text-2); line-height: 1.65; }
+.pubpage-grid { gap: 20px; }
+.pubpage-card { min-width: 0; padding: 28px; border-radius: 14px; border: 1px solid var(--line); box-shadow: none; }
+.pubpage-card h3 { color: var(--text); font-size: 16px; line-height: 1.35; letter-spacing: -.01em; font-weight: 700; text-transform: none; margin: 22px 0 8px; }
+.pubpage-card p { color: var(--text-2); font-size: 14px; line-height: 1.65; }
+.pubpage-icon { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--accent-light), var(--accent-soft)); }
+.pubpage-resource-card { display: flex; flex-direction: column; }
+.pubpage-resource-card .link { margin-top: auto; padding-top: 24px; font-weight: 700; text-underline-offset: 4px; }
+.pubpage-resource-card .link span { margin-left: 6px; }
+.pubpage-terms-list { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.pubpage-term-chip { padding: 16px; line-height: 1.35; }
+.pubpage-legend { gap: 16px; margin-top: 0; }
+.pubpage-legend-item { padding: 22px; border-radius: 12px; }
+.pubpage-legend-item p { color: var(--text-2); line-height: 1.6; }
+.pubpage-callout { margin-top: 8px; padding: 28px 32px; border-radius: 14px; }
+.pubpage a:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+
+.home-hero .home-eyebrow { margin: 0 0 20px; padding: 5px 11px; font-size: .64rem; letter-spacing: .075em; }
+.home-hero h1 { font-weight: 800; letter-spacing: -.04em; line-height: 1.08; }
+
+@media (max-width: 860px) {
+  .pubpage-terms-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .pubpage-inner { width: calc(100% - 40px); }
+  .pubpage-hero { padding: 48px 0 52px; }
+  .pubpage-body { padding-block: 8px 48px; }
+  .pubpage-section { padding-block: 36px; }
+  .pubpage-section-heading { gap: 12px; margin-bottom: 22px; }
+  .pubpage-section-number { flex-basis: 40px; }
+  .pubpage-section-heading h2 { font-size: 21px; }
+  .pubpage-grid { gap: 14px; }
+  .pubpage-card { padding: 22px; }
+  .pubpage-terms-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pubpage-callout { padding: 22px; }
+}
+
 /* MAS-178: the real workspace takes the reference's calm dashboard hierarchy.
    The mockup's confidence scores and simulated editor are not product states. */
 .layout.has-selection {
