@@ -372,6 +372,10 @@ sentence-case headline and cyan underline, pill label, paired calls to action,
 and floating workspace card. The card shows a file header, key-term rows and
 two risk findings as a static illustration; it does not display real contract
 data or offer working source links. The two columns stack at phone widths.
+The Why MaSign reference also sets four pale feature cards with white icon
+tiles and a small cyan hover lift (two columns at tablet width), followed by
+the pale Clear expectations panel with three text columns. Existing feature
+links, the secondary workspace CTA, and cautious product wording remain.
 
 ### Shared visual system (MAS-136)
 
