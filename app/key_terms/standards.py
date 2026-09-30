@@ -143,6 +143,8 @@ def compare(term_id: str, typed: dict | None, params: dict[str, Any] | None = No
         if monthly <= cap + 1e-9:
             return Verdict("meets", standard_text)
         shown = f"{rate:g}% per {per}"
+        if cap == 0:
+            return Verdict("deviates", standard_text, f"{shown} exceeds the 0% standard")
         return Verdict("deviates", standard_text, f"{shown} is {monthly / cap:.1f}× the standard")
 
     if term_id == "notice_period":
