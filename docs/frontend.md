@@ -360,10 +360,22 @@ the link lift effect.
 The owner's light premium reference informs homepage-only spacing, soft cyan
 decoration and motion. The hero and illustrative workspace preview rise in
 briefly on load. Workspace calls to action and linked Why MaSign cards respond
-to hover with a small lift; static step and expectation cards remain still.
+to hover with a small lift. The three How MaSign works cards use numbered
+cyan gradient squares, uppercase headings, and a stronger hover lift; the
+expectation cards remain still.
 At `prefers-reduced-motion: reduce`, these entrance and hover animations are
 disabled. The homepage uses the existing Inter font and MassQL-aligned cyan
 tokens; the footer and shared workspace styles are unchanged.
+
+The owner-provided hero element is the visual reference for the three-line,
+sentence-case headline and cyan underline, pill label, paired calls to action,
+and floating workspace card. The card shows a file header, key-term rows and
+two risk findings as a static illustration; it does not display real contract
+data or offer working source links. The two columns stack at phone widths.
+The Why MaSign reference also sets four pale feature cards with white icon
+tiles and a small cyan hover lift (two columns at tablet width), followed by
+the pale Clear expectations panel with three text columns. Existing feature
+links, the secondary workspace CTA, and cautious product wording remain.
 
 ### Shared visual system (MAS-136)
 
