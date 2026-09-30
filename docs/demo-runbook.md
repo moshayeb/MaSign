@@ -54,8 +54,9 @@ substitute this table for a successful review.
    produced it.
 4. Rehearse the full browser flow **twice** on the intended build and record
    date, build commit, account, review statuses, answers/citations, failures,
-   and actual provider-call count. This is MAS-21's completion criterion; the
-   two rehearsals have not yet been recorded here.
+   and provider-call count. This is MAS-21's completion criterion. The two
+   rehearsals on 2026-09-30 are recorded in
+   [the live verification evidence](demo-evidence/2026-09-30.md).
 
 ## Ten-minute route through the UI
 
