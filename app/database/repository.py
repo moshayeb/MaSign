@@ -6,7 +6,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import AuditEvent, CoveragePassage, Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, VectorIndex, Workspace
+from app.database.models import AuditEvent, CoveragePassage, Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, InvoiceChunk, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, VectorIndex, Workspace
 from app.ingestion.document_type import DocumentKind, classify_document
 
 # The single legacy workspace every contract that existed before MAS-143
@@ -817,3 +817,135 @@ def delete_standard(connection: psycopg.Connection, workspace_id: UUID, term_id:
     with connection.cursor() as cursor:
         cursor.execute("DELETE FROM standards WHERE workspace_id = %s AND term_id = %s", (workspace_id, term_id))
         return cursor.rowcount > 0
+
+
+# --- invoices (MAS-92) ---
+
+def create_invoice(
+    connection: psycopg.Connection,
+    *,
+    workspace_id: UUID,
+    contract_id: UUID,
+    filename: str,
+    size_bytes: int,
+    character_count: int,
+    pages: list[tuple[int, str]],
+    ingestion_notes: list[str] | None = None,
+) -> Invoice:
+    """Store a parsed invoice together with its page-level chunks in one transaction.
+
+    `pages` is `(page_number, text)` for every readable page -- `page_number`
+    is the real 1-based PDF page number, not a sequential position, so a
+    dropped unreadable page never renumbers the pages after it.
+    """
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO invoices (workspace_id, contract_id, filename, size_bytes, character_count, page_count, ingestion_notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (workspace_id, contract_id, filename, size_bytes, character_count, len(pages), Jsonb(ingestion_notes or [])),
+            )
+            invoice = Invoice(**cursor.fetchone())
+            cursor.executemany(
+                "INSERT INTO invoice_chunks (invoice_id, chunk_index, chunk_text) VALUES (%s, %s, %s)",
+                [(invoice.id, page_number, text) for page_number, text in pages],
+            )
+    return invoice
+
+
+def get_invoice(connection: psycopg.Connection, invoice_id: UUID, workspace_id: UUID) -> Invoice | None:
+    """An invoice in another workspace is indistinguishable from a missing one (MAS-143)."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM invoices WHERE id = %s AND workspace_id = %s", (invoice_id, workspace_id))
+        row = cursor.fetchone()
+    return Invoice(**row) if row else None
+
+
+def list_invoices_for_contract(connection: psycopg.Connection, contract_id: UUID, workspace_id: UUID) -> list[Invoice]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM invoices WHERE contract_id = %s AND workspace_id = %s ORDER BY created_at DESC",
+            (contract_id, workspace_id),
+        )
+        return [Invoice(**row) for row in cursor.fetchall()]
+
+
+def list_invoice_chunks(connection: psycopg.Connection, invoice_id: UUID) -> list[InvoiceChunk]:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM invoice_chunks WHERE invoice_id = %s ORDER BY chunk_index", (invoice_id,))
+        return [InvoiceChunk(**row) for row in cursor.fetchall()]
+
+
+def create_invoice_check(
+    connection: psycopg.Connection,
+    *,
+    workspace_id: UUID,
+    invoice_id: UUID,
+    contract_id: UUID,
+    model: str | None,
+    checked: bool,
+    items: list[dict],
+) -> tuple[InvoiceCheck, list[InvoiceCheckItem]]:
+    """Store one comparison run and its items in one transaction.
+
+    Re-checking the same invoice adds a new row rather than overwriting the
+    old one (same spirit as risk reviews): a past outcome stays auditable.
+    """
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO invoice_checks (workspace_id, invoice_id, contract_id, model, checked)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (workspace_id, invoice_id, contract_id, model, checked),
+            )
+            check = InvoiceCheck(**cursor.fetchone())
+            stored_items: list[InvoiceCheckItem] = []
+            for item in items:
+                cursor.execute(
+                    """
+                    INSERT INTO invoice_check_items (
+                        invoice_check_id, label, outcome, reason,
+                        contract_term, contract_value, contract_quote, contract_chunk_id, source_contract_id,
+                        invoice_field, invoice_value, invoice_quote, invoice_chunk_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING *
+                    """,
+                    (
+                        check.id, item["label"], item["outcome"], item["reason"],
+                        item.get("contract_term"), item.get("contract_value"), item.get("contract_quote"),
+                        item.get("contract_chunk_id"), item.get("source_contract_id"),
+                        item.get("invoice_field"), item.get("invoice_value"), item.get("invoice_quote"),
+                        item.get("invoice_chunk_id"),
+                    ),
+                )
+                stored_items.append(InvoiceCheckItem(**cursor.fetchone()))
+    return check, stored_items
+
+
+def get_invoice_check(connection: psycopg.Connection, check_id: UUID, workspace_id: UUID) -> InvoiceCheck | None:
+    """A check in another workspace is indistinguishable from a missing one (MAS-143)."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM invoice_checks WHERE id = %s AND workspace_id = %s", (check_id, workspace_id))
+        row = cursor.fetchone()
+    return InvoiceCheck(**row) if row else None
+
+
+def list_invoice_check_items(connection: psycopg.Connection, check_id: UUID) -> list[InvoiceCheckItem]:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM invoice_check_items WHERE invoice_check_id = %s ORDER BY created_at", (check_id,))
+        return [InvoiceCheckItem(**row) for row in cursor.fetchall()]
+
+
+def list_invoice_checks(connection: psycopg.Connection, contract_id: UUID, workspace_id: UUID) -> list[InvoiceCheck]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM invoice_checks WHERE contract_id = %s AND workspace_id = %s ORDER BY created_at DESC",
+            (contract_id, workspace_id),
+        )
+        return [InvoiceCheck(**row) for row in cursor.fetchall()]

@@ -1588,6 +1588,68 @@ li.risk blockquote {
   color: var(--muted);
 }
 
+/* Invoice verification (MAS-92) */
+.invoice-check-result {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.invoice-check-result-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+}
+
+.invoice-check-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.invoice-check-item {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--inset);
+  border-left: 3px solid var(--line);
+}
+
+.invoice-check-item.match {
+  border-left-color: var(--ok);
+}
+
+.invoice-check-item.possible_mismatch {
+  border-left-color: var(--warn);
+}
+
+.invoice-check-item.cannot_verify {
+  border-left-color: var(--line-2);
+}
+
+.invoice-check-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.invoice-check-item-label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.invoice-check-item .term-quote {
+  overflow-wrap: anywhere;
+}
+
 /* Contract text reader (MAS-83) */
 .reader > summary {
   cursor: pointer;

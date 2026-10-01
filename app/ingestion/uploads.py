@@ -89,6 +89,46 @@ async def validate_contract_upload(upload: UploadFile) -> ValidatedUpload:
     )
 
 
+async def validate_invoice_upload(upload: UploadFile) -> ValidatedUpload:
+    """Same checks as `validate_contract_upload`, but PDF only (MAS-92).
+
+    The story is scoped to a digital, text-based PDF invoice; OCR and other
+    formats are out of scope, so a non-PDF upload is rejected here rather than
+    accepted and failing later.
+    """
+    content = await upload.read(MAX_UPLOAD_BYTES + 1)
+    size_bytes = len(content)
+
+    if size_bytes == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+    if size_bytes > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Uploaded file must be {MAX_UPLOAD_BYTES} bytes or smaller.",
+        )
+
+    detected_type = detect_supported_file_type(content)
+    if detected_type != "pdf":
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported file content. Upload a digital PDF invoice.")
+
+    claimed_extension_type = supported_extension_type(upload.filename)
+    if has_extension(upload.filename) and claimed_extension_type != "pdf":
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported filename extension. Upload a PDF invoice.")
+
+    claimed_mime_type = supported_mime_type(upload.content_type)
+    if has_non_generic_mime_type(upload.content_type) and claimed_mime_type != "pdf":
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported client MIME type. Upload a PDF invoice.")
+
+    return ValidatedUpload(
+        filename=upload.filename or "uploaded-invoice.pdf",
+        file_type="pdf",
+        content_type=upload.content_type,
+        size_bytes=size_bytes,
+        content=content,
+    )
+
+
 def detect_supported_file_type(content: bytes) -> str | None:
     if content.startswith(b"%PDF-"):
         return "pdf"

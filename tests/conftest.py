@@ -100,6 +100,9 @@ class FakeChatModel:
         self.risk_reply: str | Callable[[str], str] = "[]"
         # The key-terms pass (MAS-82) is a third call; by default it states nothing.
         self.key_terms_reply: str | Callable[[str], str] = "[]"
+        # Invoice field extraction (MAS-92) is a fourth, independent call;
+        # by default it states nothing.
+        self.invoice_fields_reply: str | Callable[[str], str] = "[]"
         self.truncated = False
         # Set to an exception to make only the risk call fail (MAS-76).
         self.risk_error: Exception | None = None
@@ -107,20 +110,26 @@ class FakeChatModel:
         # the risk call for the same batch (and every other batch) unaffected
         # (MAS-129).
         self.key_terms_error: Exception | None = None
+        # Set to an exception to make only the invoice-fields call fail.
+        self.invoice_fields_error: Exception | None = None
 
     def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None):
         from app.answering.llm import Completion
+        from app.invoices.extractor import SYSTEM_PROMPT as INVOICE_PROMPT
         from app.key_terms.extractor import SYSTEM_PROMPT as TERMS_PROMPT
         from app.risk_analysis.analyzer import SYSTEM_PROMPT as RISK_PROMPT
 
         self.calls.append((system, user))
         is_risk = system == RISK_PROMPT
         is_terms = system == TERMS_PROMPT
+        is_invoice = system == INVOICE_PROMPT
         if is_risk and self.risk_error is not None:
             raise self.risk_error
         if is_terms and self.key_terms_error is not None:
             raise self.key_terms_error
-        reply = self.risk_reply if is_risk else self.key_terms_reply if is_terms else self.reply
+        if is_invoice and self.invoice_fields_error is not None:
+            raise self.invoice_fields_error
+        reply = self.risk_reply if is_risk else self.key_terms_reply if is_terms else self.invoice_fields_reply if is_invoice else self.reply
         return Completion(reply(user) if callable(reply) else reply, truncated=self.truncated)
 
 

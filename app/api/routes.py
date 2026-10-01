@@ -16,11 +16,14 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_current_user, get_current_workspace, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Chunk, Contract, ContractLink, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
+from app.database.models import Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
 from app.ingestion.references import find_external_references
+from app.invoices.comparison import compare_invoice
+from app.invoices.extractor import extract_invoice_fields
+from app.invoices.parsing import ExtractedInvoice, InvoiceTextError, extract_invoice
 from app.key_terms.deadlines import compute_deadlines
 from app.key_terms.standards import STANDARD_TERM_IDS, DEFAULT_PARAMS, describe as describe_standard
 from app.key_terms.standards import compare as compare_to_standard
@@ -28,7 +31,7 @@ from app.key_terms.standards import effective_params as effective_standard_param
 from app.key_terms.standards import validate_params as validate_standard_params
 from app.key_terms.terms import KEY_TERMS, NOT_STATED, TERM_BY_ID
 from app.ingestion.pipeline import TokenBudget, chunk_contract_text
-from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload
+from app.ingestion.uploads import MAX_UPLOAD_BYTES, ValidatedUpload, validate_contract_upload, validate_invoice_upload
 from app.retrieval import embeddings as embeddings_module
 from app.retrieval import vector_store as vector_store_module
 from app.retrieval.embeddings import Embedder, ProfileNotConfigured
@@ -910,6 +913,241 @@ def forget_question(
     if not repository.delete_question(db, question_id, workspace.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class InvoicePageOut(BaseModel):
+    chunk_id: UUID
+    page: int
+    text: str
+
+
+class InvoiceOut(BaseModel):
+    id: UUID
+    contract_id: UUID
+    filename: str
+    size_bytes: int
+    character_count: int
+    page_count: int
+    ingestion_notes: list[str]
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, invoice: Invoice) -> "InvoiceOut":
+        return cls(
+            id=invoice.id,
+            contract_id=invoice.contract_id,
+            filename=invoice.filename,
+            size_bytes=invoice.size_bytes,
+            character_count=invoice.character_count,
+            page_count=invoice.page_count,
+            ingestion_notes=list(invoice.ingestion_notes),
+            created_at=invoice.created_at,
+        )
+
+
+class InvoiceCheckItemOut(BaseModel):
+    """One compared item with both sides' evidence (MAS-92): a mismatch is
+    never shown without the invoice and contract quotes that justify it."""
+
+    label: str
+    outcome: str  # match | possible_mismatch | cannot_verify
+    reason: str
+    contract_term: str | None
+    contract_value: str | None
+    contract_quote: str | None
+    contract_chunk_id: UUID | None
+    contract_chunk_index: int | None
+    # The document the contract passage itself belongs to (MAS-137/138): the
+    # primary contract, or a linked Order Form/SOW one bundle level deep.
+    source_contract_id: UUID | None
+    invoice_field: str | None
+    invoice_value: str | None
+    invoice_quote: str | None
+    invoice_chunk_id: UUID | None
+    invoice_page: int | None
+
+    @classmethod
+    def from_row(
+        cls, row: InvoiceCheckItem, chunk_index: dict[UUID, int], invoice_page: dict[UUID, int]
+    ) -> "InvoiceCheckItemOut":
+        return cls(
+            label=row.label,
+            outcome=row.outcome,
+            reason=row.reason,
+            contract_term=row.contract_term,
+            contract_value=row.contract_value,
+            contract_quote=row.contract_quote,
+            contract_chunk_id=row.contract_chunk_id,
+            contract_chunk_index=chunk_index.get(row.contract_chunk_id) if row.contract_chunk_id else None,
+            source_contract_id=row.source_contract_id,
+            invoice_field=row.invoice_field,
+            invoice_value=row.invoice_value,
+            invoice_quote=row.invoice_quote,
+            invoice_chunk_id=row.invoice_chunk_id,
+            invoice_page=invoice_page.get(row.invoice_chunk_id) if row.invoice_chunk_id else None,
+        )
+
+
+class InvoiceCheckResponse(BaseModel):
+    id: UUID
+    invoice: InvoiceOut
+    contract_id: UUID
+    model: str | None
+    # False when the invoice's fields could not be read at all -- every item
+    # is then cannot_verify, never a false "clean" result (honest-outcomes).
+    checked: bool
+    items: list[InvoiceCheckItemOut]
+    created_at: datetime
+    matches: int
+    possible_mismatches: int
+    cannot_verify: int
+
+    @classmethod
+    def from_models(
+        cls,
+        check: InvoiceCheck,
+        invoice: Invoice,
+        items: list[InvoiceCheckItem],
+        chunk_index: dict[UUID, int],
+        invoice_page: dict[UUID, int],
+    ) -> "InvoiceCheckResponse":
+        out_items = [InvoiceCheckItemOut.from_row(item, chunk_index, invoice_page) for item in items]
+        return cls(
+            id=check.id,
+            invoice=InvoiceOut.from_model(invoice),
+            contract_id=check.contract_id,
+            model=check.model,
+            checked=check.checked,
+            items=out_items,
+            created_at=check.created_at,
+            matches=sum(1 for i in out_items if i.outcome == "match"),
+            possible_mismatches=sum(1 for i in out_items if i.outcome == "possible_mismatch"),
+            cannot_verify=sum(1 for i in out_items if i.outcome == "cannot_verify"),
+        )
+
+
+def _bundle_chunk_index(db: psycopg.Connection, contract_id: UUID) -> dict[UUID, int]:
+    return {c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)}
+
+
+def _invoice_page_by_chunk(db: psycopg.Connection, invoice_id: UUID) -> dict[UUID, int]:
+    return {c.id: c.chunk_index for c in repository.list_invoice_chunks(db, invoice_id)}
+
+
+def _extract_invoice_or_reject(upload: ValidatedUpload) -> ExtractedInvoice:
+    """Parse a validated PDF invoice, or turn the failure into a clear 422.
+
+    Validation only proves the bytes look like a PDF. A scanned invoice is a
+    structurally valid PDF and passes that check, but has no text layer to
+    read -- OCR is out of scope for MAS-92, so the caller is told the document
+    is unusable rather than receiving an empty or falsely "clean" result.
+    """
+    try:
+        return extract_invoice(upload.content)
+    except InvoiceTextError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+
+
+@router.post("/contracts/{contract_id}/invoices", response_model=InvoiceCheckResponse, status_code=status.HTTP_201_CREATED)
+async def upload_invoice(
+    contract_id: UUID,
+    file: UploadFile = File(...),
+    db: psycopg.Connection = Depends(get_db),
+    chat_model: ChatModel = Depends(get_chat_model),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+) -> InvoiceCheckResponse:
+    """Upload a digital PDF invoice and check it against `contract_id` (MAS-92).
+
+    Deliberately a separate path from POST /contracts/upload: an invoice is
+    never indexed for search and never gets a commercial-contract risk review
+    (MAS-107's document-kind check is a hint, never a gate, so this intake
+    does not depend on it either). The contract's verified key terms are
+    read bundle-aware (MAS-137/138), so a fee or payment clause that lives in
+    a linked Order Form/SOW is still found -- the invoice itself is never
+    treated as a bundle member.
+    """
+    contract = repository.get_contract(db, contract_id, workspace.id)
+    if contract is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+
+    upload = await validate_invoice_upload(file)
+    extracted = await run_in_threadpool(_extract_invoice_or_reject, upload)
+
+    invoice = await run_in_threadpool(
+        repository.create_invoice,
+        db,
+        workspace_id=workspace.id,
+        contract_id=contract_id,
+        filename=upload.filename,
+        size_bytes=upload.size_bytes,
+        character_count=sum(len(page.text) for page in extracted.pages),
+        pages=[(page.page, page.text) for page in extracted.pages],
+        ingestion_notes=extracted.notes,
+    )
+
+    # One short model call to read the invoice's own header fields -- small
+    # enough to run inline rather than as a polled background job.
+    report = await run_in_threadpool(extract_invoice_fields, extracted.pages, chat_model)
+
+    chunk_ids = {c.chunk_index: c.id for c in repository.list_invoice_chunks(db, invoice.id)}
+    fields_by_id = {f.field: f for f in report.findings}
+    terms_by_id: dict[str, KeyTermRow] = {}
+    for row in repository.list_key_terms(db, contract_id):
+        terms_by_id.setdefault(row.term, row)
+    outcomes = compare_invoice(fields_by_id, terms_by_id, chunk_ids, checked=report.checked)
+
+    check, items = repository.create_invoice_check(
+        db,
+        workspace_id=workspace.id,
+        invoice_id=invoice.id,
+        contract_id=contract_id,
+        model=chat_model.model_name if report.checked else None,
+        checked=report.checked,
+        items=[dataclasses.asdict(outcome) for outcome in outcomes],
+    )
+    repository.create_audit_event(
+        db,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        event_type="invoice.checked",
+        target_type="invoice",
+        target_id=invoice.id,
+        metadata={"contract_id": str(contract_id), "filename": invoice.filename},
+    )
+    db.commit()
+
+    return InvoiceCheckResponse.from_models(
+        check, invoice, items, _bundle_chunk_index(db, contract_id), _invoice_page_by_chunk(db, invoice.id)
+    )
+
+
+@router.get("/contracts/{contract_id}/invoice-checks", response_model=list[InvoiceCheckResponse])
+def list_contract_invoice_checks(
+    contract_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[InvoiceCheckResponse]:
+    """Past invoice checks for this contract, newest first (MAS-92)."""
+    if repository.get_contract(db, contract_id, workspace.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    chunk_index = _bundle_chunk_index(db, contract_id)
+    responses = []
+    for check in repository.list_invoice_checks(db, contract_id, workspace.id):
+        invoice = repository.get_invoice(db, check.invoice_id, workspace.id)
+        if invoice is None:
+            continue
+        items = repository.list_invoice_check_items(db, check.id)
+        responses.append(InvoiceCheckResponse.from_models(check, invoice, items, chunk_index, _invoice_page_by_chunk(db, invoice.id)))
+    return responses
+
+
+@router.get("/invoices/{invoice_id}/pages", response_model=list[InvoicePageOut])
+def get_invoice_pages(
+    invoice_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[InvoicePageOut]:
+    """Every stored page of the invoice in order -- the text behind each citation (MAS-92)."""
+    if repository.get_invoice(db, invoice_id, workspace.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found.")
+    return [InvoicePageOut(chunk_id=c.id, page=c.chunk_index, text=c.chunk_text) for c in repository.list_invoice_chunks(db, invoice_id)]
 
 
 class Passage(BaseModel):

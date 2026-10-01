@@ -215,3 +215,73 @@ class Question:
     response: dict
     created_at: datetime
     workspace_id: UUID
+
+
+@dataclass(frozen=True)
+class Invoice:
+    """An uploaded invoice checked against a contract (MAS-92). Never run
+    through the contract pipeline -- no vector index, no risk review -- just
+    enough extraction to compare its stated amounts, dates and rates."""
+
+    id: UUID
+    workspace_id: UUID
+    contract_id: UUID
+    filename: str
+    size_bytes: int
+    character_count: int
+    page_count: int
+    ingestion_notes: list[str]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class InvoiceChunk:
+    """One readable page of an invoice (MAS-92). `chunk_index` is the real PDF
+    page number, not a sequential position -- a page with no text layer is
+    skipped, so later pages keep their true numbers for citation."""
+
+    id: UUID
+    invoice_id: UUID
+    chunk_index: int
+    chunk_text: str
+
+
+@dataclass(frozen=True)
+class InvoiceCheck:
+    """One comparison run of an invoice against a contract (MAS-92). Re-checking
+    the same invoice adds a new row rather than overwriting the old one, so a
+    past outcome stays auditable. `checked` is false when the model's reply
+    describing the invoice's fields could not be read at all."""
+
+    id: UUID
+    workspace_id: UUID
+    invoice_id: UUID
+    contract_id: UUID
+    model: str | None
+    checked: bool
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class InvoiceCheckItem:
+    """One compared item -- a fee, a due date, a late-payment rate -- with
+    both sides' evidence (MAS-92). `outcome` is match | possible_mismatch |
+    cannot_verify; a mismatch always carries both an invoice and a contract
+    quote, and a term/field that was not found on either side is left None
+    rather than guessed (honest-outcomes)."""
+
+    id: UUID
+    invoice_check_id: UUID
+    label: str
+    outcome: str
+    reason: str
+    contract_term: str | None
+    contract_value: str | None
+    contract_quote: str | None
+    contract_chunk_id: UUID | None
+    source_contract_id: UUID | None
+    invoice_field: str | None
+    invoice_value: str | None
+    invoice_quote: str | None
+    invoice_chunk_id: UUID | None
+    created_at: datetime

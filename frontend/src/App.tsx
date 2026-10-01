@@ -4,6 +4,7 @@ import { ApiError, getCurrentUser, listContracts, logout as apiLogout, type Cont
 import { AnswerView } from './components/AnswerView'
 import { CompareView } from './components/CompareView'
 import { ContractList } from './components/ContractList'
+import { InvoiceCheckPanel } from './components/InvoiceCheckPanel'
 import { ModelCompareView } from './components/ModelCompareView'
 import { PageChrome } from './components/PageChrome'
 import { PreviousQuestions } from './components/PreviousQuestions'
@@ -15,8 +16,8 @@ import { UploadForm } from './components/UploadForm'
 import { formatSize, kindBadge, reviewBadge } from './reviewStatus'
 import { suggestQuestions } from './suggestions'
 
-type Tab = 'overview' | 'ask' | 'text'
-const TABS: Tab[] = ['overview', 'ask', 'text']
+type Tab = 'overview' | 'ask' | 'invoices' | 'text'
+const TABS: Tab[] = ['overview', 'ask', 'invoices', 'text']
 
 // The selected contract and tab live in the URL hash (#<contract_id>/<tab>)
 // so a refresh, or a pasted link, lands on the same view (MAS-95).
@@ -491,6 +492,7 @@ export default function App() {
                   tabs={[
                     { id: 'overview', label: 'Overview' },
                     { id: 'ask', label: 'Ask MaSign', hint: asked || compared ? '· answered' : undefined },
+                    { id: 'invoices', label: 'Invoices' },
                     { id: 'text', label: 'Sources' },
                   ]}
                 />
@@ -536,10 +538,13 @@ export default function App() {
                   asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />
                 )}
               </TabPanel>
+              <TabPanel id="invoices" active={tab}>
+                <InvoiceCheckPanel key={selected.contract_id} contract={selected} onShowSource={showSource} />
+              </TabPanel>
               <TabPanel id="text" active={tab}>
                 {returnTab && (
                   <button type="button" className="back-to-context" onClick={() => changeTab(returnTab)}>
-                    ← Back to {returnTab === 'ask' ? 'Ask MaSign' : 'Overview'}
+                    ← Back to {returnTab === 'ask' ? 'Ask MaSign' : returnTab === 'invoices' ? 'Invoices' : 'Overview'}
                   </button>
                 )}
                 <PassageReader key={`reader-${selected.contract_id}`} contract={selected} contracts={contracts ?? []} target={source} open />

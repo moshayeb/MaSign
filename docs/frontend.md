@@ -154,6 +154,20 @@ the active tab is in the tab order):
   finished review the base order shows. A click fills the composer and
   focuses it; Ask sends it — a chip never spends a call by itself. The chips
   go once an answer is shown and return when another contract is selected.
+- **Invoices** (MAS-92) — `components/InvoiceCheckPanel.tsx`: a dropzone that
+  accepts a digital PDF invoice only (`accept=".pdf"`), and the contract's
+  past invoice checks, newest first. Each check lists its compared items —
+  fee amount, payment deadline, late-payment rate — with a status pill
+  (`match` green, `possible_mismatch` amber, `cannot_verify` grey, the same
+  `.status .ok/.warn/.none` vocabulary as key terms) and both sides' verbatim
+  quote as a `.term-quote` blockquote: the invoice's (with its page number)
+  and the contract's (a "passage N" button that opens Sources through the
+  same `onShowSource`/`SourceRef` mechanism as risk findings and key terms,
+  naming the linked document when the passage comes from one). A check whose
+  invoice could not be read at all (`checked: false`) shows a warning banner
+  instead of any item looking clean. Uploading shows a loading toast, then a
+  success toast with the match/possible-mismatch/cannot-verify counts, or the
+  API's `detail` verbatim on failure (415 non-PDF, 422 unreadable/scanned).
 - **Contract text** — the passage reader, always expanded. "Show in
   contract" and passage links switch here with the passage highlighted.
 

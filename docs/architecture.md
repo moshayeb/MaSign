@@ -324,6 +324,54 @@ upload), on `Coverage` (review and key-terms responses) and into the
 Markdown export. Nothing branches on it server-side: it is information for
 the reader, never a gate.
 
+## Invoice verification (MAS-92)
+
+A separate, minimal pipeline from the contract one — an invoice is never
+indexed for search and never gets a commercial-contract risk review.
+`app/invoices/parsing.py` extracts a digital PDF invoice's text page by page
+(`extract_invoice`), keeping page boundaries rather than flattening them the
+way `ingestion/parsing.py` does for contracts, so a citation can point at a
+page; a PDF with no text layer on any page raises
+`NoExtractableInvoiceTextError` (422) rather than producing an empty or
+falsely "clean" result — OCR is out of scope for this story.
+`app/invoices/fields.py` defines the header fields (`invoice_number`,
+`invoice_date`, `due_date`, `total_amount`, `late_fee_rate`) with the same
+`kind` typing as `key_terms/terms.py` (money, date, rate, text — the field
+kinds this module was prepared for, owner decision 2026-09-18); line-item
+tables are explicitly out of scope and are never shown to the model.
+`app/invoices/extractor.py` asks the model for these fields with one call
+per invoice, verified exactly like key terms: verbatim quote from the named
+page or dropped, an unreadable reply is `checked: false` (never "nothing
+stated"), and `app.key_terms.extractor.verify_typed` is reused unchanged for
+the typed values.
+
+`app/invoices/comparison.py` compares the extracted fields against
+`repository.list_key_terms(contract_id)` — already bundle-aware (MAS-137/138),
+so a fee or payment clause living in a linked Order Form/SOW is found the
+same way the risk review finds one; the invoice itself is never added to a
+contract's bundle. Three outcomes only: `match`, `possible_mismatch` (both
+sides' quotes shown) or `cannot_verify` — used for a missing value on either
+side, a currency mismatch, a recurring contract fee compared against a single
+invoice total with no stated billing period (pro-rating is never assumed
+away), or a late-payment rate expressed two different ways (percentage vs.
+fixed fee). `cannot_verify` is also what every item becomes when the
+invoice's own fields could not be read at all (`checked: false`) — never a
+silent "clean" result.
+
+Storage (migration 017): `invoices` (workspace- and contract-scoped),
+`invoice_chunks` (one row per readable page, `chunk_index` is the real PDF
+page number), `invoice_checks` (one row per comparison run — re-checking adds
+a new row rather than overwriting, same as risk reviews), and
+`invoice_check_items` (one row per compared item, carrying both sides'
+value/quote/chunk so a mismatch is never shown without the evidence behind
+it). `POST /api/contracts/{id}/invoices` runs the whole pipeline inline (one
+short model call, not a polled background job) and returns the persisted
+result; `GET .../invoice-checks` lists past runs, `GET
+/api/invoices/{id}/pages` serves the stored page text for citation. Every
+contract-side lookup goes through the workspace-scoped `repository.get_contract`
+pair (MAS-143): a cross-workspace contract or invoice id 404s exactly like a
+missing one.
+
 ## Accounts, workspaces and the audit trail (MAS-143)
 
 Tier 3 of the ticket: internal accounts (email + Argon2id-hashed password,

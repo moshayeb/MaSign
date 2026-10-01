@@ -238,7 +238,7 @@ describe('upload', () => {
     expect((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0]).toHaveAttribute('aria-pressed', 'true')
     const calls = fetchMock.mock.calls
       .map(([url]) => String(url))
-      .filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages') && !url.endsWith('/questions') && !url.endsWith('/auth/me'))
+      .filter((url) => !url.endsWith('/risks') && !url.endsWith('/passages') && !url.endsWith('/questions') && !url.endsWith('/auth/me') && !url.endsWith('/invoice-checks'))
     expect(calls).toEqual(['/api/contracts', '/api/contracts/upload', '/api/contracts'])
   })
 
