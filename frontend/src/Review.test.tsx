@@ -357,6 +357,31 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(onShowSource).toHaveBeenCalledWith(expect.objectContaining({ contract_id: 'sow', chunk_index: 2 }))
   })
 
+  it('cites which document a conflicting term\'s other value came from, when it is a linked document (MAS-190)', async () => {
+    const linkedName = 'statement-of-work.pdf'
+    const linkedContract = { ...northwind, contract_id: 'sow', filename: linkedName }
+    const term = stated(TERMS[2], '30 days', 1, 'thirty (30) days', [
+      { value: '45 days', quote: 'forty-five (45) days', chunk_id: 'c5', chunk_index: 5, contract_id: 'sow', typed: null },
+    ])
+    term.source = { ...term.source!, contract_id: 'nw' }
+    const terms = TERMS.map((t) => (t[0] === 'payment_deadline' ? term : notStated(t)))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', key_terms_complete: true, key_terms: terms })))
+    const onShowSource = vi.fn()
+
+    render(<RiskReviewPanel contract={northwind} contracts={[northwind, linkedContract]} onShowSource={onShowSource} />)
+
+    const card = (await screen.findByText('Key terms', { selector: 'h2' })).closest('section')!
+    expect(within(card).getByText('Conflicting')).toBeInTheDocument()
+    // The primary's own value reads as before -- no document name for its own contract.
+    expect(within(card).getByRole('button', { name: 'Show Payment deadline in contract' })).toHaveTextContent('passage 2')
+    // The other value states which document it actually came from, same as a primary source would.
+    const otherLink = within(card).getByRole('button', { name: `Show Payment deadline also stated in ${linkedName}, passage 6` })
+    expect(otherLink).toHaveTextContent('passage 6')
+    expect(within(card).getByText(/Also stated in statement-of-work\.pdf, .*: “45 days”/)).toBeInTheDocument()
+    await userEvent.click(otherLink)
+    expect(onShowSource).toHaveBeenCalledWith({ contract_id: 'sow', chunk_index: 5, quote: 'forty-five (45) days' })
+  })
+
   it('shows the standard verdict on a key term and counts deviations in the pill (MAS-96)', async () => {
     const terms = TERMS.map((t) =>
       t[0] === 'late_payment'

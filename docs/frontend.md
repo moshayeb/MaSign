@@ -621,7 +621,15 @@ show only the passage. A linked-document source keeps its filename (clipped
 visually if needed, with the full name in its tooltip and accessible name),
 then its passage number. This preserves bundle provenance without overflowing
 the tile. The verbatim quote sits beneath it; `conflicting` terms add an amber
-tag plus "Also stated in passage m" lines. The terms that are `not_stated` share one line
+tag plus "Also stated in passage m" lines — since MAS-190, each of those lines
+gets the same document attribution and clickable citation as the main value
+when it names a different bundle document (e.g. "Also stated in
+statement-of-work.pdf, passage 6"), not just the main value; a conflict
+within the same document still reads as plain "passage m" as before. The
+underlying mechanism this surfaces was already there (MAS-138's bundle-wide
+extraction already compared values with no document-identity check), just
+never attributed or regression-tested across documents until this ticket.
+The terms that are `not_stated` share one line
 ("Not stated in the reviewed text: One-off fees, Price changes") — only sent
 when the pass completed — and `unchecked` terms another ("Not checked: …")
 with an amber notice that some passages could not be checked — never
