@@ -110,6 +110,14 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
     void load()
   }, [load])
 
+  // A new standard profile changes verdicts/deviation counts with no
+  // re-review (MAS-185): re-read this contract's review for the new
+  // KeyTermsCard numbers, and tell the contract list to do the same.
+  const handleProfileChanged = useCallback(() => {
+    void load()
+    onSettled?.()
+  }, [load, onSettled])
+
   const loadLinks = useCallback(() => {
     // Links are stored on their primary contract. Looking through the loaded
     // library lets either document offer Unlink without a second API route.
@@ -396,7 +404,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
               )}
             </p>
           )}
-          <KeyTermsCard review={review} contracts={contracts} onShowSource={onShowSource} ref={keyTermsRef} />
+          <KeyTermsCard review={review} contract={contract} contracts={contracts} onShowSource={onShowSource} onProfileChanged={handleProfileChanged} ref={keyTermsRef} />
           <p className="muted disclaimer">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
         </details>
       )}

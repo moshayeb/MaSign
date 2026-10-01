@@ -6,7 +6,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import AuditEvent, CoveragePassage, Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, InvoiceChunk, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, VectorIndex, Workspace
+from app.database.models import AuditEvent, CoveragePassage, Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, InvoiceChunk, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, StandardProfile, User, VectorIndex, Workspace
 from app.ingestion.document_type import DocumentKind, classify_document
 
 # The single legacy workspace every contract that existed before MAS-143
@@ -791,31 +791,163 @@ def list_audit_events(connection: psycopg.Connection, workspace_id: UUID, limit:
         return [AuditEvent(**row) for row in cursor.fetchall()]
 
 
-def get_standards(connection: psycopg.Connection, workspace_id: UUID) -> dict[str, dict]:
-    """Stored overrides only (MAS-120) -- a term with no row here uses MaSign's
-    built-in default (`app.key_terms.standards.DEFAULT_PARAMS`), never a row
-    holding default values."""
+# --- standard profiles (MAS-185) ---
+
+def get_standards(connection: psycopg.Connection, profile_id: UUID) -> dict[str, dict]:
+    """Stored overrides only, for one profile (MAS-120/185) -- a term with no
+    row here uses MaSign's built-in default (`app.key_terms.standards.DEFAULT_PARAMS`),
+    never a row holding default values."""
     with connection.cursor() as cursor:
-        cursor.execute("SELECT term_id, params FROM standards WHERE workspace_id = %s", (workspace_id,))
+        cursor.execute("SELECT term_id, params FROM standards WHERE profile_id = %s", (profile_id,))
         return {row["term_id"]: row["params"] for row in cursor.fetchall()}
 
 
-def set_standard(connection: psycopg.Connection, workspace_id: UUID, term_id: str, params: dict) -> None:
+def get_standards_by_profiles(connection: psycopg.Connection, profile_ids: Sequence[UUID]) -> dict[UUID, dict[str, dict]]:
+    """Batched `get_standards`, one round trip for every profile a page of
+    contracts actually uses (MAS-185), so listing contracts never pays one
+    query per row."""
+    result: dict[UUID, dict[str, dict]] = {pid: {} for pid in profile_ids}
+    if not profile_ids:
+        return result
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT profile_id, term_id, params FROM standards WHERE profile_id = ANY(%s)",
+            (list(profile_ids),),
+        )
+        for row in cursor.fetchall():
+            result[row["profile_id"]][row["term_id"]] = row["params"]
+    return result
+
+
+def set_standard(connection: psycopg.Connection, profile_id: UUID, term_id: str, params: dict) -> None:
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO standards (workspace_id, term_id, params, updated_at)
+            INSERT INTO standards (profile_id, term_id, params, updated_at)
             VALUES (%s, %s, %s, now())
-            ON CONFLICT (workspace_id, term_id) DO UPDATE SET params = EXCLUDED.params, updated_at = now()
+            ON CONFLICT (profile_id, term_id) DO UPDATE SET params = EXCLUDED.params, updated_at = now()
             """,
-            (workspace_id, term_id, Jsonb(params)),
+            (profile_id, term_id, Jsonb(params)),
         )
 
 
-def delete_standard(connection: psycopg.Connection, workspace_id: UUID, term_id: str) -> bool:
+def delete_standard(connection: psycopg.Connection, profile_id: UUID, term_id: str) -> bool:
     """Reset one term to MaSign's default by removing its override row."""
     with connection.cursor() as cursor:
-        cursor.execute("DELETE FROM standards WHERE workspace_id = %s AND term_id = %s", (workspace_id, term_id))
+        cursor.execute("DELETE FROM standards WHERE profile_id = %s AND term_id = %s", (profile_id, term_id))
+        return cursor.rowcount > 0
+
+
+def list_standard_profiles(connection: psycopg.Connection, workspace_id: UUID) -> list[StandardProfile]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM standard_profiles WHERE workspace_id = %s ORDER BY is_default DESC, name",
+            (workspace_id,),
+        )
+        return [StandardProfile(**row) for row in cursor.fetchall()]
+
+
+def get_standard_profile(connection: psycopg.Connection, workspace_id: UUID, profile_id: UUID) -> StandardProfile | None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM standard_profiles WHERE id = %s AND workspace_id = %s", (profile_id, workspace_id)
+        )
+        row = cursor.fetchone()
+        return StandardProfile(**row) if row else None
+
+
+def get_or_create_default_profile(connection: psycopg.Connection, workspace_id: UUID) -> StandardProfile:
+    """Every workspace has exactly one `is_default` profile; created lazily
+    the first time it's needed, so a fresh workspace (created after MAS-185,
+    or one that never customised anything) never has to be backfilled."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM standard_profiles WHERE workspace_id = %s AND is_default = true", (workspace_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            return StandardProfile(**row)
+        cursor.execute(
+            """
+            INSERT INTO standard_profiles (workspace_id, name, is_default)
+            VALUES (%s, 'Default', true)
+            RETURNING *
+            """,
+            (workspace_id,),
+        )
+        return StandardProfile(**cursor.fetchone())
+
+
+def create_standard_profile(connection: psycopg.Connection, workspace_id: UUID, name: str) -> StandardProfile:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO standard_profiles (workspace_id, name, is_default) VALUES (%s, %s, false) RETURNING *",
+            (workspace_id, name),
+        )
+        return StandardProfile(**cursor.fetchone())
+
+
+def rename_standard_profile(connection: psycopg.Connection, workspace_id: UUID, profile_id: UUID, name: str) -> StandardProfile | None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE standard_profiles SET name = %s, updated_at = now() WHERE id = %s AND workspace_id = %s RETURNING *",
+            (name, profile_id, workspace_id),
+        )
+        row = cursor.fetchone()
+        return StandardProfile(**row) if row else None
+
+
+def set_default_standard_profile(connection: psycopg.Connection, workspace_id: UUID, profile_id: UUID) -> StandardProfile | None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT 1 FROM standard_profiles WHERE id = %s AND workspace_id = %s", (profile_id, workspace_id)
+        )
+        if cursor.fetchone() is None:
+            return None
+        cursor.execute("UPDATE standard_profiles SET is_default = false, updated_at = now() WHERE workspace_id = %s", (workspace_id,))
+        cursor.execute(
+            "UPDATE standard_profiles SET is_default = true, updated_at = now() WHERE id = %s RETURNING *", (profile_id,)
+        )
+        return StandardProfile(**cursor.fetchone())
+
+
+def delete_standard_profile(connection: psycopg.Connection, workspace_id: UUID, profile_id: UUID) -> bool:
+    """Deleting cascades the profile's own `standards` overrides and, via
+    `contracts.standard_profile_id ON DELETE SET NULL`, falls every contract
+    that used it back to the workspace default automatically (honest-outcomes:
+    never a dangling reference). Refuses to delete the workspace's one
+    default profile -- raises ValueError, same pattern as validate_standard_params."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT is_default FROM standard_profiles WHERE id = %s AND workspace_id = %s", (profile_id, workspace_id)
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return False
+        if row["is_default"]:
+            raise ValueError("The default profile can't be deleted. Set another profile as default first.")
+        cursor.execute("DELETE FROM standard_profiles WHERE id = %s", (profile_id,))
+        return cursor.rowcount > 0
+
+
+def set_contract_standard_profile(
+    connection: psycopg.Connection, workspace_id: UUID, contract_id: UUID, profile_id: UUID | None
+) -> bool:
+    """Assign (or clear, with None) the standard profile a contract compares
+    against. Raises ValueError if `profile_id` is given but doesn't belong to
+    this workspace -- MaSign never lets a contract point at another
+    workspace's profile."""
+    with connection.cursor() as cursor:
+        if profile_id is not None:
+            cursor.execute(
+                "SELECT 1 FROM standard_profiles WHERE id = %s AND workspace_id = %s", (profile_id, workspace_id)
+            )
+            if cursor.fetchone() is None:
+                raise ValueError("No standard profile with that id in this workspace.")
+        cursor.execute(
+            "UPDATE contracts SET standard_profile_id = %s WHERE id = %s AND workspace_id = %s",
+            (profile_id, contract_id, workspace_id),
+        )
         return cursor.rowcount > 0
 
 

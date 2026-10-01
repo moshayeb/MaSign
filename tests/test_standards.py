@@ -64,7 +64,8 @@ def test_save_persists_across_a_fresh_connection_like_an_application_restart(db,
     # A brand new connection, not the request-scoped one the PUT used --
     # the value must have actually reached Postgres, not just this process.
     with get_connection(database) as fresh:
-        stored = repository.get_standards(fresh, workspace_id)
+        profile = repository.get_or_create_default_profile(fresh, workspace_id)
+        stored = repository.get_standards(fresh, profile.id)
     assert stored["notice_period"] == {"notice_days_max": 30}
 
 

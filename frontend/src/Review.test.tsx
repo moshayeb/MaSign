@@ -202,7 +202,10 @@ describe('whole-contract risk review (MAS-81)', () => {
     let releaseDone: () => void = () => undefined
     const doneReady = new Promise<void>((resolve) => (releaseDone = resolve))
     let calls = 0
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      // The standards-profile picker (MAS-185) fetches independently on
+      // mount; it must not consume a slot in this test's poll sequence.
+      if (String(input) === '/api/standard-profiles') return json(200, [])
       calls += 1
       if (calls === 1) return json(200, review({ status: 'running', chunks_checked: 4, complete: false }))
       if (calls === 2) return json(503, { detail: 'Database temporarily unavailable' })
@@ -215,7 +218,7 @@ describe('whole-contract risk review (MAS-81)', () => {
 
     expect(await screen.findByText(/Reviewing… 4\/12 passages/)).toBeInTheDocument()
     expect(await screen.findByText(/Connection interrupted — retrying/)).toBeInTheDocument()
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(calls).toBe(3))
     releaseDone()
     expect(await screen.findByText(/Reviewed · 12 passages/)).toBeInTheDocument()
     await waitFor(() => expect(onSettled).toHaveBeenCalledTimes(1))

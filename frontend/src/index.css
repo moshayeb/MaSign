@@ -1038,6 +1038,22 @@ fieldset.scope {
   max-width: 100%;
 }
 
+.key-terms-profile-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.key-terms-profile-picker select {
+  min-width: 0;
+  max-width: 180px;
+  font-size: 0.8rem;
+  padding: 3px 6px;
+}
+
 .answer-scope {
   font-size: 0.8rem;
   overflow: hidden;
@@ -2748,6 +2764,46 @@ button.chip.ranked {
   background: var(--accent-light);
   color: var(--text-2);
   line-height: 1.55;
+}
+
+.standard-profiles-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.standard-profile-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.standard-profile-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.standard-profile-add {
+  font-size: 0.85rem;
+}
+
+.standard-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.standard-profile-delete {
+  color: var(--high);
 }
 
 .standards-grid {

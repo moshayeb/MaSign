@@ -229,9 +229,12 @@ def db(database: str) -> Iterator[psycopg.Connection]:
     with get_connection(database) as connection:
         yield connection
         connection.execute("TRUNCATE contracts, vector_index CASCADE")
-        # Standards belong to workspaces, not contracts. Clear their small
-        # fixed set for every test workspace without touching user accounts.
-        for row in connection.execute("SELECT id FROM workspaces").fetchall():
+        # Standards belong to standard profiles, not contracts (MAS-185).
+        # Drop any extra profiles a test created, then clear the default
+        # profile's small fixed set for every test workspace -- without
+        # touching user accounts or deleting the default profiles themselves.
+        connection.execute("DELETE FROM standard_profiles WHERE is_default = false")
+        for row in connection.execute("SELECT id FROM standard_profiles WHERE is_default = true").fetchall():
             for term_id in STANDARD_TERM_IDS:
                 repository.delete_standard(connection, row["id"], term_id)
 

@@ -1,12 +1,20 @@
-import type { Ref } from 'react'
-import type { Contract, KeyTermValue, RiskReview } from '../api'
+import { useEffect, useState, type Ref } from 'react'
+import { toast } from 'sonner'
+import { listStandardProfiles, setContractStandardProfile, type Contract, type KeyTermValue, type RiskReview, type StandardProfile } from '../api'
 import type { SourceRef } from './PassageReader'
 import { Timeline } from './Timeline'
 
 interface Props {
   review: RiskReview
+  // The contract this card is for; its standard_profile_id drives the
+  // picker below (MAS-185). Optional only so the many existing tests that
+  // build a bare review fixture keep compiling without one.
+  contract?: Contract
   contracts?: Contract[]
   onShowSource?: (source: SourceRef) => void
+  // Called after the contract's standard profile changes, so the caller can
+  // re-read the review and refresh the contract list (new deviation counts).
+  onProfileChanged?: () => void
   // Lets a summary tile scroll to this card (MAS-124).
   ref?: Ref<HTMLElement>
 }
@@ -17,7 +25,7 @@ interface Props {
 // tile; the terms that are not stated share one line, so an absence costs a
 // few words, not a card. Absence is only called "not stated" when every
 // passage was read; otherwise it is "not checked" (honest-outcomes).
-export function KeyTermsCard({ review, contracts = [], onShowSource, ref }: Props) {
+export function KeyTermsCard({ review, contract, contracts = [], onShowSource, onProfileChanged, ref }: Props) {
   const running = review.status === 'pending' || review.status === 'running'
   const stated = review.key_terms.filter((t) => t.status === 'found' || t.status === 'conflicting')
   const notStated = review.key_terms.filter((t) => t.status === 'not_stated')
@@ -47,6 +55,7 @@ export function KeyTermsCard({ review, contracts = [], onShowSource, ref }: Prop
           )}
           {review.status === 'failed' && <span className="status warn">Not extracted</span>}
         </h2>
+        {contract && <StandardProfilePicker contract={contract} onChanged={onProfileChanged} />}
       </div>
 
       {review.status === 'done' && !review.key_terms_complete && (
@@ -168,5 +177,68 @@ function TermTile({ term, contracts, onShowSource, reviewingContractId }: { term
         )}
       </dd>
     </div>
+  )
+}
+
+// Which named standard profile (MAS-185) this contract compares against.
+// Loads the workspace's profiles once; "Workspace default" is its own
+// option (value '') rather than the first profile, since the contract's own
+// assignment can be null independently of which profile happens to be
+// is_default right now.
+function StandardProfilePicker({ contract, onChanged }: { contract: Contract; onChanged?: () => void }) {
+  const [profiles, setProfiles] = useState<StandardProfile[] | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    listStandardProfiles()
+      .then((loaded) => {
+        if (!cancelled && Array.isArray(loaded)) setProfiles(loaded)
+      })
+      .catch(() => {
+        // Non-essential control; the rest of the card still works without it.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!profiles || profiles.length <= 1) return null
+
+  async function onChange(value: string) {
+    setBusy(true)
+    try {
+      await toast
+        .promise(setContractStandardProfile(contract.contract_id, value || null), {
+          loading: 'Switching standards profile…',
+          success: () => 'Standards profile updated.',
+          error: (error: Error) => error.message,
+        })
+        .unwrap()
+      onChanged?.()
+    } catch {
+      // Already reported by the toast.
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <label className="key-terms-profile-picker">
+      <span className="muted small">Standards profile</span>
+      <select
+        aria-label="Standards profile"
+        value={contract.standard_profile_id ?? ''}
+        disabled={busy}
+        onChange={(event) => void onChange(event.target.value)}
+      >
+        <option value="">Workspace default</option>
+        {profiles.map((profile) => (
+          <option key={profile.id} value={profile.id}>
+            {profile.name}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }
