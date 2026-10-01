@@ -49,7 +49,7 @@ it('the pages map has exactly the six pages the footer links to, plus /standards
 it('the standards page renders its heading and the shared header/footer chrome', () => {
   render(<StandardsPage />)
 
-  expect(screen.getByRole('heading', { level: 1, name: 'Company standards' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: 'Contract comparison rules' })).toBeInTheDocument()
   expect(screen.getByRole('banner')).toBeInTheDocument()
   expect(screen.getByRole('contentinfo')).toBeInTheDocument()
   expect(PAGES['/standards']).toBe(StandardsPage)
