@@ -381,6 +381,21 @@ since presence has no comparable value to disagree over), `absent` (no rows,
 `key_terms_complete` already needs. `RiskReviewResponse.from_models()` only
 lists the clauses the contract's effective profile has enabled (resolved by
 `_enabled_clauses_for_contract()`, mirroring `_standards_for_contract()`).
+
+**MAS-193 fix:** a profile's enabled-clause set is read live at every
+request, but the model was only ever asked about whichever clauses were
+enabled *at review time* — switching a contract's profile (or just editing
+the one it uses) to enable a clause the review never checked used to read
+`absent` for it, because the single review-wide `clauses_complete` flag said
+nothing about *which* clauses it covered. `risk_reviews.checked_clause_ids`
+(migration 020, `TEXT[]`) now records exactly that set per review; a
+currently-enabled clause missing from it reads `cannot_tell` regardless of
+`clauses_complete`, and the response's own top-level `clauses_complete` is
+true only when every currently-enabled clause is in that set too — so the
+card's pill honestly flips to "partly checked" the moment a profile's clause
+configuration drifts from what the stored review actually covered, with no
+re-review auto-triggered (a cost decision, left to the user, same as any
+other re-review).
 `components/ClauseChecklistCard.tsx` renders it inside the Overview tab's
 "View complete analysis" fold, right after `KeyTermsCard` — same tile shape,
 same `sourceInfo()`-style document attribution for a bundle's linked

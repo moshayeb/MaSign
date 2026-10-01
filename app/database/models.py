@@ -78,6 +78,12 @@ class RiskReview:
     # The clause-checklist pass (MAS-188) runs in the same job too; same
     # meaning as key_terms_complete, for the clause catalog instead.
     clauses_complete: bool = False
+    # Exactly which clause ids were part of the check that set
+    # clauses_complete (MAS-193): the contract's standard profile can change
+    # which clauses apply *after* this review ran, so a currently-enabled
+    # clause missing from this list was never actually asked about, however
+    # old clauses_complete claims -- it must read cannot_tell, not absent.
+    checked_clause_ids: list[str] = field(default_factory=list)
     # Passage indexes (0-based) whose model reply was unreadable, and those the
     # guardrail withheld — listed, not only counted (MAS-84).
     unreadable_chunks: list["CoveragePassage"] = field(default_factory=list)

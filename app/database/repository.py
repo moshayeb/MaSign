@@ -372,7 +372,8 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = EXCLUDED.status, error = NULL, chunks_checked = 0,
                     chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE, clauses_complete = FALSE,
-                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb, redacted_chunks = '[]'::jsonb, updated_at = now()
+                    checked_clause_ids = '{}', unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
+                    redacted_chunks = '[]'::jsonb, updated_at = now()
                 RETURNING *
                 """,
                 (contract_id, status),
@@ -391,7 +392,7 @@ def claim_risk_review(connection: psycopg.Connection, contract_id: UUID) -> Risk
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = 'pending', error = NULL, chunks_checked = 0,
                     chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE, clauses_complete = FALSE,
-                    unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
+                    checked_clause_ids = '{}', unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
                     redacted_chunks = '[]'::jsonb, updated_at = now()
                 WHERE risk_reviews.status NOT IN ('pending', 'running')
                 RETURNING *
@@ -414,6 +415,7 @@ def update_risk_review(
     complete: bool | None = None,
     key_terms_complete: bool | None = None,
     clauses_complete: bool | None = None,
+    checked_clause_ids: list[str] | None = None,
     unreadable_chunks: list[CoveragePassage] | None = None,
     withheld_chunks: list[CoveragePassage] | None = None,
     redacted_chunks: list[CoveragePassage] | None = None,
@@ -432,6 +434,7 @@ def update_risk_review(
                     complete = COALESCE(%s, complete),
                     key_terms_complete = COALESCE(%s, key_terms_complete),
                     clauses_complete = COALESCE(%s, clauses_complete),
+                    checked_clause_ids = COALESCE(%s, checked_clause_ids),
                     unreadable_chunks = COALESCE(%s, unreadable_chunks),
                     withheld_chunks = COALESCE(%s, withheld_chunks),
                     redacted_chunks = COALESCE(%s, redacted_chunks),
@@ -442,6 +445,7 @@ def update_risk_review(
                 """,
                 (
                     status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete, clauses_complete,
+                    checked_clause_ids,
                     Jsonb(_coverage_json(unreadable_chunks)) if unreadable_chunks is not None else None,
                     Jsonb(_coverage_json(withheld_chunks)) if withheld_chunks is not None else None,
                     Jsonb(_coverage_json(redacted_chunks)) if redacted_chunks is not None else None,
