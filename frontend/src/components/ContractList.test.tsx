@@ -181,15 +181,17 @@ describe('ContractList row actions menu', () => {
     expect(screen.queryByRole('button', { name: 'Actions for northwind.txt' })).not.toBeInTheDocument()
   })
 
-  it('shows Export PDF/Markdown/CSV as downloads and Delete as a button', async () => {
+  it('shows Export PDF/DOCX/Markdown/CSV/XLSX as downloads and Delete as a button', async () => {
     render(<ContractList contracts={[northwind]} selectedId={null} onSelect={vi.fn()} onReload={vi.fn()} />)
 
     await userEvent.click(menuTrigger())
     const nav = screen.getByRole('navigation', { name: 'Actions for northwind.txt' })
 
     expect(within(nav).getByRole('link', { name: 'Export PDF' })).toHaveAttribute('href', '/api/contracts/nw/export.pdf')
+    expect(within(nav).getByRole('link', { name: 'Export DOCX' })).toHaveAttribute('href', '/api/contracts/nw/export.docx')
     expect(within(nav).getByRole('link', { name: 'Export Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
     expect(within(nav).getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
+    expect(within(nav).getByRole('link', { name: 'Export XLSX' })).toHaveAttribute('href', '/api/contracts/nw/export.xlsx')
     expect(within(nav).getByRole('button', { name: 'Delete' })).toBeInTheDocument()
   })
 

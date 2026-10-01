@@ -21,6 +21,9 @@ httpx>=0.27.0
 
 # Server-generated PDF review export (MAS-154).
 reportlab>=4.2.0
+# DOCX/XLSX review export (MAS-191); python-docx is already a dependency for
+# .docx ingestion (app/ingestion/parsing.py) and doubles as the writer here.
+openpyxl>=3.1.0
 # Password hashing for user accounts (MAS-143): Argon2id, OWASP's current
 # first choice -- not a fast general-purpose hash like sha256.
 argon2-cffi>=23.1.0

@@ -629,17 +629,21 @@ present absence as a fact the contract states. Pill: `n of 10 stated`
 (green, `· k deviate(s)` amber), `n of 10 stated · partly checked` (amber)
 or `Extracting…`.
 
-### Download and print (MAS-97)
+### Download and print (MAS-97, MAS-191)
 
 The contract header has plain `<a download>` links to
-`/api/contracts/{id}/export.pdf`, `.md` and `.csv` (the browser shows the download;
-no toast) and a Print button (`window.print()`). `@media print` in
-`index.css` hides the sidebar, tabs, composer, download links and action
-buttons, forces the Overview panels visible in black on white, keeps
-passage numbers as plain text, and breaks the page between cards. The
-Markdown (and so also the PDF, which renders from it) export includes a
-"Questions asked" section listing this contract's stored question history
-(MAS-102), each with its answer; the CSV export does not.
+`/api/contracts/{id}/export.pdf`, `.docx`, `.md`, `.csv` and `.xlsx` (the
+browser shows the download; no toast), in that order in the Actions menu
+(PDF/DOCX as the two document formats, Markdown between them for the plain-text
+reader, CSV/XLSX as the two tabular formats), and a Print button
+(`window.print()`). `@media print` in `index.css` hides the sidebar, tabs,
+composer, download links and action buttons, forces the Overview panels
+visible in black on white, keeps passage numbers as plain text, and breaks
+the page between cards. The Markdown (and so also the PDF and DOCX, which
+both render from it, MAS-191) export includes a "Questions asked" section
+listing this contract's stored question history (MAS-102), each with its
+answer; the CSV and XLSX exports (which share one row-building function,
+MAS-191) do not — same split as before, just two more formats on each side.
 
 ### Timeline (MAS-100 dates, MAS-110 shape)
 

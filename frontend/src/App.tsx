@@ -493,6 +493,10 @@ export default function App() {
                           <ExportIcon name="pdf" />
                           <span>Export PDF</span>
                         </a>
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.docx`} download>
+                          <ExportIcon name="document" />
+                          <span>Export DOCX</span>
+                        </a>
                         <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.md`} download>
                           <ExportIcon name="markdown" />
                           <span>Export Markdown</span>
@@ -500,6 +504,10 @@ export default function App() {
                         <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.csv`} download>
                           <ExportIcon name="csv" />
                           <span>Export CSV</span>
+                        </a>
+                        <a className="export-action" href={`/api/contracts/${selected.contract_id}/export.xlsx`} download>
+                          <ExportIcon name="csv" />
+                          <span>Export XLSX</span>
                         </a>
                         <button type="button" className="export-action" onClick={() => window.print()}>
                           <ExportIcon name="print" />

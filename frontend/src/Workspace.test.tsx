@@ -182,8 +182,10 @@ describe('contract workspace tabs (MAS-95)', () => {
 
     const nav = within(menu).getByRole('navigation', { name: 'Actions' })
     expect(within(nav).getByRole('link', { name: 'Export PDF' })).toHaveAttribute('href', '/api/contracts/nw/export.pdf')
+    expect(within(nav).getByRole('link', { name: 'Export DOCX' })).toHaveAttribute('href', '/api/contracts/nw/export.docx')
     expect(within(nav).getByRole('link', { name: 'Export Markdown' })).toHaveAttribute('href', '/api/contracts/nw/export.md')
     expect(within(nav).getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', '/api/contracts/nw/export.csv')
+    expect(within(nav).getByRole('link', { name: 'Export XLSX' })).toHaveAttribute('href', '/api/contracts/nw/export.xlsx')
     expect(within(nav).getByRole('link', { name: 'Export PDF' })).toHaveAttribute('download')
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
     await userEvent.click(within(nav).getByRole('button', { name: 'Print review' }))
