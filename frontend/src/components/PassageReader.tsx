@@ -16,6 +16,13 @@ interface Props {
   target: SourceRef | null
   // Always expanded (inside its own tab, MAS-95); default collapses until a target arrives.
   open?: boolean
+  // MAS-177: the Sources tab's reader and the wide-screen side panel's reader
+  // can both be mounted for the same contract at once (the tab stays in the
+  // DOM, just hidden). Without a distinct prefix their passage ids collide,
+  // and `document.getElementById` below -- and anything else on the page
+  // doing the same -- silently resolves to whichever one is first in the
+  // DOM, not necessarily the one actually on screen.
+  idPrefix?: string
 }
 
 // A literal `[]` default would allocate a new array every render, which
@@ -27,7 +34,7 @@ const NO_CONTRACTS: Contract[] = []
 // The contract's own text, passage by passage, so every finding, key term
 // and citation is one click from the words it came from (MAS-83). Stored
 // chunk text only — PDF page positions are a follow-up.
-export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open: alwaysOpen = false }: Props) {
+export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open: alwaysOpen = false, idPrefix = '' }: Props) {
   const [passages, setPassages] = useState<Passage[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [members, setMembers] = useState<Contract[]>([contract])
@@ -81,12 +88,12 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
   useEffect(() => {
     if (!target || (target.contract_id && target.contract_id !== active.contract_id)) return
     const id = requestAnimationFrame(() => {
-      const el = document.getElementById(`passage-${target.chunk_index}`)
+      const el = document.getElementById(`${idPrefix}passage-${target.chunk_index}`)
       el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
       el?.focus?.({ preventScroll: true })
     })
     return () => cancelAnimationFrame(id)
-  }, [active.contract_id, target, passages])
+  }, [active.contract_id, target, passages, idPrefix])
 
   return (
     <details className="card reader" open={open} onToggle={(event) => setToggled({ target, open: event.currentTarget.open })}>
@@ -116,7 +123,7 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
             return (
               <li
                 key={passage.chunk_id}
-                id={`passage-${passage.chunk_index}`}
+                id={`${idPrefix}passage-${passage.chunk_index}`}
                 tabIndex={-1}
                 className={isTarget ? 'passage highlighted' : 'passage'}
                 aria-current={isTarget ? 'true' : undefined}

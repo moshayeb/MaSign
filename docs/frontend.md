@@ -255,6 +255,27 @@ review-again cost confirmation retain their established behavior and
 prominence. The existing Ask and Sources tabs remain the navigation model;
 the side-by-side source view is a separate backlog item (MAS-177).
 
+MAS-177 adds that side-by-side view, but only on wide screens: `useIsWide.ts`
+tracks a `(max-width: 960px)` media query (the same breakpoint the MAS-126
+mobile drawer uses) and `App.tsx`'s `showSource` branches on it. At >= 960px,
+a citation (an answer's `[n]`, a risk finding, a key term, an invoice check,
+coverage, timeline — every existing `onShowSource` call site) opens
+`SourcePanel.tsx`, a slide-in panel fixed to the right edge of the viewport
+containing the same `PassageReader` the Sources tab uses, scrolled and
+focused to the target passage. It is deliberately not a modal: there is no
+backdrop and no focus trap, so the tab underneath stays mounted, visible and
+scrollable the whole time — only Escape or the panel's own close button
+dismiss it, and closing returns focus to whichever citation opened it.
+Below 960px the panel never renders at all; `showSource` falls back to the
+pre-MAS-177 tab-switch (Sources tab + "← Back" link, MAS-109) unchanged, so
+narrow screens and the Sources tab's own deep links (`#id/text`) keep working
+exactly as before. Because the Sources tab's own `PassageReader` stays
+mounted (just hidden) while the panel is open, both instances would render
+identical `passage-N` ids for the same contract; `PassageReader` takes an
+`idPrefix` prop (`"panel-"` for `SourcePanel`, unprefixed for the Sources
+tab) so the one target-scrolling effect that uses `document.getElementById`
+resolves the instance actually on screen, not whichever is first in the DOM.
+
 ### The shell (MAS-125)
 
 The permanent header carries the wordmark alone (height 26); the tagline it
