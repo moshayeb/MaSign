@@ -697,7 +697,7 @@ def list_contracts(
     # either grows a workspace filter of its own later.
     reviews = repository.list_risk_summaries(db)
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS)
-    standards = repository.get_standards(db)
+    standards = repository.get_standards(db, workspace.id)
     return [
         ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id), standards)
         for c in repository.list_contracts(db, workspace.id)
@@ -714,7 +714,7 @@ def get_contract(
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
-    standards = repository.get_standards(db)
+    standards = repository.get_standards(db, workspace.id)
     return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms, standards)
 
 
@@ -992,7 +992,7 @@ def get_contract_key_terms(
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
     coverage = _coverage_for_review(db, review, contract, workspace.id)
-    standards = repository.get_standards(db)
+    standards = repository.get_standards(db, workspace.id)
     return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage, standards)
 
 
@@ -1017,7 +1017,7 @@ def export_contract_review(
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
-    standards = repository.get_standards(db)
+    standards = repository.get_standards(db, workspace.id)
     terms_body = KeyTermsResponse.from_models(
         review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage, standards
     )
@@ -1073,7 +1073,7 @@ def _review_response(db: psycopg.Connection, review: RiskReview, workspace_id: U
     }
     contract = repository.get_contract(db, review.contract_id, workspace_id)
     coverage = _coverage_for_review(db, review, contract, workspace_id) if contract else None
-    standards = repository.get_standards(db)
+    standards = repository.get_standards(db, workspace_id)
     return RiskReviewResponse.from_models(
         review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage, standards
     )
@@ -1274,8 +1274,10 @@ class StandardUpdateRequest(BaseModel):
 
 
 @router.get("/standards", response_model=list[StandardOut])
-def list_standards(db: psycopg.Connection = Depends(get_db)) -> list[StandardOut]:
-    stored = repository.get_standards(db)
+def list_standards(
+    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[StandardOut]:
+    stored = repository.get_standards(db, workspace.id)
     return [
         StandardOut(
             id=term_id,
@@ -1289,22 +1291,27 @@ def list_standards(db: psycopg.Connection = Depends(get_db)) -> list[StandardOut
 
 
 @router.put("/standards/{term_id}", response_model=StandardOut)
-def update_standard(term_id: str, body: StandardUpdateRequest, db: psycopg.Connection = Depends(get_db)) -> StandardOut:
+def update_standard(
+    term_id: str, body: StandardUpdateRequest, db: psycopg.Connection = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+) -> StandardOut:
     if term_id not in STANDARD_TERM_IDS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
     try:
         params = validate_standard_params(term_id, body.params)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
-    repository.set_standard(db, term_id, params)
+    repository.set_standard(db, workspace.id, term_id, params)
     return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=False)
 
 
 @router.delete("/standards/{term_id}", response_model=StandardOut)
-def reset_standard(term_id: str, db: psycopg.Connection = Depends(get_db)) -> StandardOut:
+def reset_standard(
+    term_id: str, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> StandardOut:
     """Restore MaSign's built-in default for one standard."""
     if term_id not in STANDARD_TERM_IDS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
-    repository.delete_standard(db, term_id)
+    repository.delete_standard(db, workspace.id, term_id)
     params = DEFAULT_PARAMS[term_id]
     return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=True)

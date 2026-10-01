@@ -220,11 +220,11 @@ def db(database: str) -> Iterator[psycopg.Connection]:
     with get_connection(database) as connection:
         yield connection
         connection.execute("TRUNCATE contracts, vector_index CASCADE")
-        # `standards` (MAS-120) has no FK to contracts, so the statement
-        # above does not clear it; remove its rows one at a time (bounded
-        # per-row deletes) since there are only ever a handful.
-        for term_id in STANDARD_TERM_IDS:
-            repository.delete_standard(connection, term_id)
+        # Standards belong to workspaces, not contracts. Clear their small
+        # fixed set for every test workspace without touching user accounts.
+        for row in connection.execute("SELECT id FROM workspaces").fetchall():
+            for term_id in STANDARD_TERM_IDS:
+                repository.delete_standard(connection, row["id"], term_id)
 
 
 # --- auth (MAS-143) -----------------------------------------------------------
