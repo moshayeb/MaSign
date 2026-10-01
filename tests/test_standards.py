@@ -208,3 +208,30 @@ def test_termination_cost_amount_cap_is_unknown_against_a_mismatched_currency(db
     assert terms["termination_cost"]["standard"]["status"] == "unknown"
 
     client.delete("/api/standards/termination_cost")
+
+
+def test_zero_late_interest_cap_keeps_verdict_and_summary_readable(db, fake_chat_model: FakeChatModel, workspace_id) -> None:
+    from app.key_terms.standards import compare
+
+    cap = {"rate_max_per_month_percent": 0}
+    assert compare("late_payment", {"rate_percent": 0, "per": "month"}, cap).status == "meets"
+    verdict = compare("late_payment", {"rate_percent": 2, "per": "month"}, cap)
+    assert verdict.status == "deviates"
+    assert verdict.detail == "2% per month exceeds the 0% standard"
+
+    contract_id = _stored(db, workspace_id, "Late-payment interest is two percent (2%) per month.")
+    fake_chat_model.key_terms_reply = json.dumps(
+        [_item("late_payment", "2% per month", 1, "two percent (2%) per month", {"rate_percent": 2, "per": "month"})]
+    )
+    review_contract(contract_id, fake_chat_model, batch_size=1)
+    assert client.put("/api/standards/late_payment", json={"params": cap}).status_code == 200
+
+    terms = client.get(f"/api/contracts/{contract_id}/key-terms")
+    assert terms.status_code == 200
+    late = next(term for term in terms.json()["terms"] if term["id"] == "late_payment")
+    assert late["standard"]["status"] == "deviates"
+    assert terms.json()["deviations"] == 1
+    summary = client.get(f"/api/contracts/{contract_id}")
+    assert summary.status_code == 200 and summary.json()["deviations"] == 1
+    export = client.get(f"/api/contracts/{contract_id}/export.md")
+    assert export.status_code == 200 and "exceeds the 0% standard" in export.text
