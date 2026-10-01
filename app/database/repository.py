@@ -6,7 +6,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import AuditEvent, CoveragePassage, Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, InvoiceChunk, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, StandardProfile, User, VectorIndex, Workspace
+from app.database.models import AuditEvent, ClauseFindingRow, CoveragePassage, Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, InvoiceChunk, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, StandardProfile, User, VectorIndex, Workspace
 from app.ingestion.document_type import DocumentKind, classify_document
 
 # The single legacy workspace every contract that existed before MAS-143
@@ -371,7 +371,7 @@ def start_risk_review(connection: psycopg.Connection, contract_id: UUID, *, stat
                 VALUES (%s, %s)
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = EXCLUDED.status, error = NULL, chunks_checked = 0,
-                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE, clauses_complete = FALSE,
                     unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb, redacted_chunks = '[]'::jsonb, updated_at = now()
                 RETURNING *
                 """,
@@ -390,7 +390,7 @@ def claim_risk_review(connection: psycopg.Connection, contract_id: UUID) -> Risk
                 VALUES (%s, 'pending')
                 ON CONFLICT (contract_id) DO UPDATE SET
                     status = 'pending', error = NULL, chunks_checked = 0,
-                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE,
+                    chunks_withheld = 0, complete = FALSE, key_terms_complete = FALSE, clauses_complete = FALSE,
                     unreadable_chunks = '[]'::jsonb, withheld_chunks = '[]'::jsonb,
                     redacted_chunks = '[]'::jsonb, updated_at = now()
                 WHERE risk_reviews.status NOT IN ('pending', 'running')
@@ -413,6 +413,7 @@ def update_risk_review(
     chunks_withheld: int | None = None,
     complete: bool | None = None,
     key_terms_complete: bool | None = None,
+    clauses_complete: bool | None = None,
     unreadable_chunks: list[CoveragePassage] | None = None,
     withheld_chunks: list[CoveragePassage] | None = None,
     redacted_chunks: list[CoveragePassage] | None = None,
@@ -430,6 +431,7 @@ def update_risk_review(
                     chunks_withheld = COALESCE(%s, chunks_withheld),
                     complete = COALESCE(%s, complete),
                     key_terms_complete = COALESCE(%s, key_terms_complete),
+                    clauses_complete = COALESCE(%s, clauses_complete),
                     unreadable_chunks = COALESCE(%s, unreadable_chunks),
                     withheld_chunks = COALESCE(%s, withheld_chunks),
                     redacted_chunks = COALESCE(%s, redacted_chunks),
@@ -439,7 +441,7 @@ def update_risk_review(
                 RETURNING *
                 """,
                 (
-                    status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete,
+                    status, model, chunks_total, chunks_checked, chunks_withheld, complete, key_terms_complete, clauses_complete,
                     Jsonb(_coverage_json(unreadable_chunks)) if unreadable_chunks is not None else None,
                     Jsonb(_coverage_json(withheld_chunks)) if withheld_chunks is not None else None,
                     Jsonb(_coverage_json(redacted_chunks)) if redacted_chunks is not None else None,
@@ -556,6 +558,43 @@ def list_key_terms(connection: psycopg.Connection, contract_id: UUID) -> list[Ke
             (contract_id,),
         )
         return [KeyTermRow(**row) for row in cursor.fetchall()]
+
+
+def replace_clause_findings(
+    connection: psycopg.Connection,
+    contract_id: UUID,
+    findings: list[tuple[UUID, str, str]],
+) -> None:
+    """Swap the contract's stored clause findings for `(chunk_id, clause_id, quote)` rows.
+
+    Same bundle-vs-solo-review uniqueness reasoning as `replace_key_terms`
+    (MAS-138): `chunk_id` may belong to a linked document's own chunks.
+    """
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM clause_findings WHERE contract_id = %s", (contract_id,))
+            cursor.executemany(
+                """
+                INSERT INTO clause_findings (contract_id, chunk_id, clause_id, quote)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (contract_id, chunk_id, clause_id) DO NOTHING
+                """,
+                [(contract_id, *finding) for finding in findings],
+            )
+
+
+def list_clause_findings(connection: psycopg.Connection, contract_id: UUID) -> list[ClauseFindingRow]:
+    """Stored clause findings, earliest statement first per clause (see `list_key_terms`)."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT f.*, c.contract_id AS source_contract_id FROM clause_findings f JOIN chunks c ON c.id = f.chunk_id
+            WHERE f.contract_id = %s
+            ORDER BY (c.contract_id <> f.contract_id), c.contract_id, c.chunk_index, f.clause_id
+            """,
+            (contract_id,),
+        )
+        return [ClauseFindingRow(**row) for row in cursor.fetchall()]
 
 
 def list_risk_summaries(connection: psycopg.Connection) -> dict[UUID, RiskSummary]:
@@ -836,6 +875,30 @@ def delete_standard(connection: psycopg.Connection, profile_id: UUID, term_id: s
     with connection.cursor() as cursor:
         cursor.execute("DELETE FROM standards WHERE profile_id = %s AND term_id = %s", (profile_id, term_id))
         return cursor.rowcount > 0
+
+
+def get_disabled_clauses(connection: psycopg.Connection, profile_id: UUID) -> set[str]:
+    """Clauses this profile has turned off (MAS-188) -- a clause with no row
+    here is enabled, same "missing row = default" discipline as `get_standards`."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT clause_id FROM disabled_profile_clauses WHERE profile_id = %s", (profile_id,))
+        return {row["clause_id"] for row in cursor.fetchall()}
+
+
+def set_profile_clause_enabled(connection: psycopg.Connection, profile_id: UUID, clause_id: str, enabled: bool) -> None:
+    with connection.cursor() as cursor:
+        if enabled:
+            cursor.execute(
+                "DELETE FROM disabled_profile_clauses WHERE profile_id = %s AND clause_id = %s", (profile_id, clause_id)
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO disabled_profile_clauses (profile_id, clause_id) VALUES (%s, %s)
+                ON CONFLICT (profile_id, clause_id) DO NOTHING
+                """,
+                (profile_id, clause_id),
+            )
 
 
 def list_standard_profiles(connection: psycopg.Connection, workspace_id: UUID) -> list[StandardProfile]:

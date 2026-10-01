@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { ApiError, getContractRisks, listContractLinks, reviewContract, type Contract, type ContractLink, type RiskReview } from '../api'
 import { ContractLinks } from './ContractLinks'
 import { BriefCard } from './BriefCard'
+import { ClauseChecklistCard } from './ClauseChecklistCard'
 import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
@@ -405,6 +406,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
             </p>
           )}
           <KeyTermsCard review={review} contract={contract} contracts={contracts} onShowSource={onShowSource} onProfileChanged={handleProfileChanged} ref={keyTermsRef} />
+          <ClauseChecklistCard review={review} contracts={contracts} onShowSource={onShowSource} />
           <p className="muted disclaimer">Graded from the Customer's side with MaSign's rubric (docs/risk-rubric.md); a first read, not legal advice.</p>
         </details>
       )}

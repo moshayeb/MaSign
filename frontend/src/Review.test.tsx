@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
-import type { Contract, KeyTermValue, RiskReview } from './api'
+import type { ClauseResult, Contract, KeyTermValue, RiskReview } from './api'
 import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
 
 // The "Review risks"/"Review again" trigger now lives in the workspace
@@ -380,6 +380,52 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText(/Also stated in statement-of-work\.pdf, .*: “45 days”/)).toBeInTheDocument()
     await userEvent.click(otherLink)
     expect(onShowSource).toHaveBeenCalledWith({ contract_id: 'sow', chunk_index: 5, quote: 'forty-five (45) days' })
+  })
+
+  it('shows a present clause with its source, and the rest absent only for a complete pass (MAS-188)', async () => {
+    const clauses: ClauseResult[] = [
+      { id: 'liability_cap', name: 'Liability cap', status: 'present', source: { quote: 'liability shall not exceed fees paid', chunk_id: 'c3', chunk_index: 3, contract_id: 'nw' }, others: [] },
+      { id: 'data_protection', name: 'Data protection', status: 'absent', source: null, others: [] },
+      { id: 'insurance', name: 'Insurance', status: 'absent', source: null, others: [] },
+      { id: 'indemnification', name: 'Indemnification', status: 'absent', source: null, others: [] },
+    ]
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', clauses_complete: true, clauses })))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const card = (await screen.findByText('Expected clauses', { selector: 'h2' })).closest('section')!
+    expect(within(card).getByText('1 of 4 present')).toBeInTheDocument()
+    expect(within(card).getByText('passage 4')).toBeInTheDocument()
+    expect(within(card).getByText(/“liability shall not exceed fees paid”/)).toBeInTheDocument()
+    expect(within(card).getByText('Not in the reviewed text').parentElement).toHaveTextContent(
+      'Not in the reviewed textData protection, Insurance, Indemnification',
+    )
+    expect(within(card).queryByText('Not checked')).not.toBeInTheDocument()
+  })
+
+  it('reports "not checked", never "absent", when the clause-check pass is incomplete (MAS-188)', async () => {
+    const clauses: ClauseResult[] = (['liability_cap', 'data_protection', 'insurance', 'indemnification'] as const).map((id) => ({
+      id, name: id, status: 'cannot_tell', source: null, others: [],
+    }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', clauses_complete: false, clauses })))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const card = (await screen.findByText('Expected clauses', { selector: 'h2' })).closest('section')!
+    expect(within(card).getByText(/partly checked/)).toBeInTheDocument()
+    expect(within(card).queryByText('Not in the reviewed text')).not.toBeInTheDocument()
+    expect(within(card).getByText('Not checked').parentElement).toHaveTextContent(
+      'Not checkedliability_cap, data_protection, insurance, indemnification',
+    )
+  })
+
+  it('renders no expected-clauses card when no clauses are configured for the profile (MAS-188)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'done', clauses: [] })))
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    await screen.findByText('Key terms', { selector: 'h2' })
+    expect(screen.queryByText('Expected clauses')).not.toBeInTheDocument()
   })
 
   it('shows the standard verdict on a key term and counts deviations in the pill (MAS-96)', async () => {

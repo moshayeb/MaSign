@@ -637,6 +637,28 @@ present absence as a fact the contract states. Pill: `n of 10 stated`
 (green, `· k deviate(s)` amber), `n of 10 stated · partly checked` (amber)
 or `Extracting…`.
 
+## Expected clauses (MAS-188)
+
+`ClauseChecklistCard` sits right after `KeyTermsCard`, in the same fold, from
+the same `RiskReview` response (`clauses`, `clauses_complete`) — no separate
+load, no separate polling. Like key terms, only the clauses MaSign found get
+a tile (`present`); the rest share one line each: "Not in the reviewed text"
+(only shown once the clause-check pass completed) and "Not checked" (an
+incomplete pass — never shown as absent). A present clause's tile is a
+`passage n` citation plus its verbatim quote, with the same linked-document
+attribution as a key term's source (MAS-190's `sourceInfo` pattern) when it
+comes from a bundle member rather than the contract being reviewed. Unlike
+key terms, a clause stated in more than one passage has no "conflicting"
+status — presence is presence, not a comparable value — so extra passages
+just add more "Also stated in …" lines under `others`. The card renders
+nothing at all when the contract's effective standard profile has every
+clause disabled (`review.clauses` is empty), rather than an empty card.
+Which clauses a profile checks for is configured on `pages/Standards.tsx`,
+below the four-card standards grid: one checkbox per clause in the fixed
+catalog, toggled through `PUT /api/standard-profiles/{id}/clauses/{clause_id}`
+with no re-review and no model call — same instant-effect guarantee MAS-120's
+numeric standards already give.
+
 ### Download and print (MAS-97, MAS-191)
 
 The contract header has plain `<a download>` links to

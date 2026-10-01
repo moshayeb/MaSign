@@ -242,6 +242,43 @@ export interface KeyTermValue {
   standard?: StandardVerdict
 }
 
+// --- the expected-clause checklist (MAS-188) --------------------------------
+
+export type ClauseStatus = 'present' | 'absent' | 'cannot_tell'
+
+export interface ClauseSource {
+  quote: string
+  chunk_id: string
+  chunk_index: number
+  contract_id: string
+}
+
+export interface ClauseResult {
+  id: string
+  name: string
+  // "cannot_tell": the clause-check pass did not complete, so absence proves nothing.
+  status: ClauseStatus
+  source: ClauseSource | null
+  others: ClauseSource[]
+}
+
+export interface ClauseConfig {
+  id: string
+  name: string
+  enabled: boolean
+}
+
+export function listProfileClauses(profileId: string): Promise<ClauseConfig[]> {
+  return request<ClauseConfig[]>(`/api/standard-profiles/${profileId}/clauses`)
+}
+
+export function setProfileClauseEnabled(profileId: string, clauseId: string, enabled: boolean): Promise<ClauseConfig> {
+  return request<ClauseConfig>(`/api/standard-profiles/${profileId}/clauses/${clauseId}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  })
+}
+
 // --- coverage (MAS-84) ------------------------------------------------------
 
 export interface ExternalReference {
@@ -318,6 +355,9 @@ export interface RiskReview {
   key_terms_complete: boolean
   key_terms: KeyTermValue[]
   deadlines?: Deadline[]
+  // The expected-clause checklist pass of the same job (MAS-188); absent on older responses.
+  clauses_complete?: boolean
+  clauses?: ClauseResult[]
   // What was and was not read (MAS-84); absent on older responses.
   coverage?: Coverage | null
 }
