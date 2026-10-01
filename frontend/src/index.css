@@ -1746,6 +1746,74 @@ li.risk blockquote {
   padding: 0 2px;
 }
 
+/* Source side panel (MAS-177): a citation opens the same reader here on wide
+   screens, beside whichever tab was already open, rather than switching the
+   workspace to the Sources tab. JS only renders this at >= 960px (App.tsx's
+   useIsWide) -- the breakpoint is enforced there, not here, so narrower
+   screens never mount it and keep the older tab-switch unchanged. */
+.source-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -16px 0 40px -20px rgba(15, 23, 42, 0.35);
+  z-index: 45;
+  animation: source-panel-in 0.18s ease;
+}
+
+@keyframes source-panel-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.source-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.source-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex: none;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--inset);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.source-panel-close:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.source-panel .reader {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 16px 18px 24px;
+}
+
 /* Coverage (MAS-84) */
 .coverage {
   margin: 8px 0 10px;

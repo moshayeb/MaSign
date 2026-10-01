@@ -11,10 +11,12 @@ import { PreviousQuestions } from './components/PreviousQuestions'
 import { QuestionPanel, type Asked, type Compared } from './components/QuestionPanel'
 import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
 import { PassageReader, type SourceRef } from './components/PassageReader'
+import { SourcePanel } from './components/SourcePanel'
 import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
 import { formatSize, kindBadge, reviewBadge } from './reviewStatus'
 import { suggestQuestions } from './suggestions'
+import { useIsWide } from './useIsWide'
 
 type Tab = 'overview' | 'ask' | 'invoices' | 'text'
 const TABS: Tab[] = ['overview', 'ask', 'invoices', 'text']
@@ -110,6 +112,19 @@ export default function App() {
   // Where a source click came from, so Sources can offer a way back to it (MAS-109).
   // Cleared by any manual tab change so a stale "Back to" never lingers.
   const [returnTab, setReturnTab] = useState<Tab | null>(null)
+  // MAS-177: on wide screens a citation opens this side panel instead of
+  // switching to the Sources tab, so the reviewer never loses their place.
+  // Independent of `source`/`returnTab`, which stay the narrow-screen path.
+  const isWide = useIsWide(960)
+  const [panelSource, setPanelSource] = useState<SourceRef | null>(null)
+  // The element that opened the panel, so closing it returns focus there
+  // instead of dropping it back to the document body.
+  const panelTriggerRef = useRef<HTMLElement | null>(null)
+  const closeSourcePanel = useCallback(() => {
+    setPanelSource(null)
+    panelTriggerRef.current?.focus()
+    panelTriggerRef.current = null
+  }, [])
   const [draft, setDraft] = useState('')
   // The selected contract's stored review, as the Overview last read it (MAS-108).
   const [review, setReview] = useState<RiskReview | null>(null)
@@ -205,6 +220,7 @@ export default function App() {
     setCompared((current) => (current?.contract?.contract_id === contract.contract_id ? current : null))
     setSource(null)
     setReturnTab(null)
+    setPanelSource(null)
     setReview(null)
     setAskAllContracts(false)
     setCompareIds([])
@@ -212,15 +228,23 @@ export default function App() {
     setDrawerOpen(false)
   }, [setTab])
 
-  // A finding or key term was clicked: show the text at that passage (MAS-83/95),
-  // remembering where the click came from so Sources can offer a way back (MAS-109).
+  // A finding or key term was clicked: show the text at that passage
+  // (MAS-83/95). Wide screens open the side panel in place (MAS-177) and
+  // leave the current tab alone; narrower ones keep the older Sources-tab
+  // switch, remembering where the click came from so Sources can offer a
+  // way back (MAS-109).
   const showSource = useCallback(
     (ref: SourceRef) => {
+      if (isWide) {
+        panelTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        setPanelSource(ref)
+        return
+      }
       setSource(ref)
       setReturnTab((current) => (tab === 'text' ? current : tab))
       setTab('text')
     },
-    [setTab, tab],
+    [isWide, setTab, tab],
   )
   // A source clicked from the comparison view (MAS-113) selects that
   // contract and opens it there, leaving the comparison.
@@ -552,6 +576,9 @@ export default function App() {
             </>
           )}
         </main>
+        {isWide && panelSource && current && (
+          <SourcePanel contract={current} contracts={contracts ?? []} source={panelSource} onClose={closeSourcePanel} />
+        )}
       </div>
     </PageChrome>
   )
