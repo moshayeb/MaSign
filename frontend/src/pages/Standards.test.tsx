@@ -50,6 +50,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+const DEFAULT_PROFILE = { id: 'profile-default', name: 'Default', is_default: true }
+
 const DEFAULTS = [
   { id: 'payment_deadline', name: 'Payment deadline', text: 'net 30 days or longer', params: { net_days_min: 30 }, is_default: true },
   { id: 'late_payment', name: 'Late-payment interest / penalty', text: 'at most 1% per month (12% per year)', params: { rate_max_per_month_percent: 1.0 }, is_default: true },
@@ -63,31 +65,51 @@ const DEFAULTS = [
   },
 ]
 
-function mockApi(overrides: { onGet?: () => Response; onPut?: (id: string, body: unknown) => Response; onDelete?: (id: string) => Response } = {}) {
+function mockApi(
+  overrides: {
+    profiles?: typeof DEFAULT_PROFILE[]
+    onGetProfiles?: () => Response
+    onGetStandards?: (profileId: string) => Response
+    onPut?: (profileId: string, termId: string, body: unknown) => Response
+    onDelete?: (profileId: string, termId: string) => Response
+    onCreateProfile?: (name: string) => Response
+  } = {},
+) {
+  const profiles = overrides.profiles ?? [DEFAULT_PROFILE]
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input)
-    if (url === '/api/standards' && (!init || init.method === undefined)) return overrides.onGet?.() ?? json(200, DEFAULTS)
-    const match = /\/api\/standards\/(\w+)$/.exec(url)
-    if (match && init?.method === 'PUT') {
-      const id = match[1]
-      if (overrides.onPut) return overrides.onPut(id, JSON.parse(String(init.body)))
+    if (url === '/api/standard-profiles' && (!init || init.method === undefined)) {
+      return overrides.onGetProfiles?.() ?? json(200, profiles)
+    }
+    if (url === '/api/standard-profiles' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as { name: string }
+      return overrides.onCreateProfile?.(body.name) ?? json(201, { id: `profile-${body.name}`, name: body.name, is_default: false })
+    }
+    const standardsMatch = /^\/api\/standard-profiles\/([^/]+)\/standards$/.exec(url)
+    if (standardsMatch && (!init || init.method === undefined)) {
+      return overrides.onGetStandards?.(standardsMatch[1]) ?? json(200, DEFAULTS)
+    }
+    const itemMatch = /^\/api\/standard-profiles\/([^/]+)\/standards\/(\w+)$/.exec(url)
+    if (itemMatch && init?.method === 'PUT') {
+      const [, profileId, termId] = itemMatch
+      if (overrides.onPut) return overrides.onPut(profileId, termId, JSON.parse(String(init.body)))
       const body = JSON.parse(String(init.body)) as { params: Record<string, unknown> }
-      const base = DEFAULTS.find((d) => d.id === id)!
+      const base = DEFAULTS.find((d) => d.id === termId)!
       // A small stand-in for the server's `describe()`: only the shape this
       // test file's saves actually exercise (payment_deadline's days).
-      const text = id === 'payment_deadline' ? `net ${body.params.net_days_min} days or longer` : base.text
+      const text = termId === 'payment_deadline' ? `net ${body.params.net_days_min} days or longer` : base.text
       return json(200, { ...base, params: body.params, text, is_default: false })
     }
-    if (match && init?.method === 'DELETE') {
-      const id = match[1]
-      if (overrides.onDelete) return overrides.onDelete(id)
-      return json(200, DEFAULTS.find((d) => d.id === id))
+    if (itemMatch && init?.method === 'DELETE') {
+      const [profileId, termId] = [itemMatch[1], itemMatch[2]]
+      if (overrides.onDelete) return overrides.onDelete(profileId, termId)
+      return json(200, DEFAULTS.find((d) => d.id === termId))
     }
     return json(404, { detail: `unexpected ${url}` })
   })
 }
 
-describe('company standards settings screen (MAS-120)', () => {
+describe('company standards settings screen (MAS-120/185)', () => {
   it('shows every standard with its current text and default badge', async () => {
     mockApi()
     render(<StandardsPage />)
@@ -119,7 +141,9 @@ describe('company standards settings screen (MAS-120)', () => {
     expect(within(paymentCard).getByText('Deviates')).toBeInTheDocument()
     await userEvent.click(within(paymentCard).getByRole('button', { name: 'Save rule' }))
 
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standards/payment_deadline' && init?.method === 'PUT')
+    const putCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === '/api/standard-profiles/profile-default/standards/payment_deadline' && init?.method === 'PUT',
+    )
     expect(putCall).toBeTruthy()
     expect(JSON.parse(String(putCall![1]?.body))).toEqual({ params: { net_days_min: 45 } })
 
@@ -161,7 +185,9 @@ describe('company standards settings screen (MAS-120)', () => {
     const restoreButton = within(paymentCard).getByRole('button', { name: "Restore MaSign's default" })
     await userEvent.click(restoreButton)
 
-    const deleteCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standards/payment_deadline' && init?.method === 'DELETE')
+    const deleteCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === '/api/standard-profiles/profile-default/standards/payment_deadline' && init?.method === 'DELETE',
+    )
     expect(deleteCall).toBeTruthy()
     expect(await within(paymentCard).findByText('net 30 days or longer')).toBeInTheDocument()
     expect(within(paymentCard).getByLabelText('Minimum payment deadline (days)')).toHaveValue(30)
@@ -184,13 +210,15 @@ describe('company standards settings screen (MAS-120)', () => {
     await userEvent.type(within(terminationCard).getByLabelText('Maximum termination fee amount'), '25000')
     await userEvent.click(within(terminationCard).getByRole('button', { name: 'Save rule' }))
 
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standards/termination_cost' && init?.method === 'PUT')
+    const putCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === '/api/standard-profiles/profile-default/standards/termination_cost' && init?.method === 'PUT',
+    )
     expect(JSON.parse(String(putCall![1]?.body))).toEqual({ params: { mode: 'amount_cap', max_amount: 25000, currency: 'SEK' } })
   })
 
   it('shows a recoverable error instead of loading forever', async () => {
     let attempts = 0
-    mockApi({ onGet: () => (++attempts === 1 ? json(503, { detail: 'Database unavailable.' }) : json(200, DEFAULTS)) })
+    mockApi({ onGetProfiles: () => (++attempts === 1 ? json(503, { detail: 'Database unavailable.' }) : json(200, [DEFAULT_PROFILE])) })
     render(<StandardsPage />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Database unavailable.')
@@ -201,11 +229,53 @@ describe('company standards settings screen (MAS-120)', () => {
   })
 
   it('gives a sign-in path when the workspace session is missing', async () => {
-    mockApi({ onGet: () => json(401, { detail: 'Sign in to continue.' }) })
+    mockApi({ onGetProfiles: () => json(401, { detail: 'Sign in to continue.' }) })
     render(<StandardsPage />)
 
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByRole('link', { name: 'Sign in to manage rules' })).toHaveAttribute('href', '/login')
     expect(within(alert).queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+  })
+})
+
+describe('named standard profiles (MAS-185)', () => {
+  it('lists every profile as a tab, defaulting the selection to the default profile', async () => {
+    mockApi({ profiles: [DEFAULT_PROFILE, { id: 'profile-vendor', name: 'Vendor contracts', is_default: false }] })
+    render(<StandardsPage />)
+
+    const tabs = await screen.findAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['DefaultDefault', 'Vendor contracts'])
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('creates a profile and switches to editing it', async () => {
+    vi.spyOn(window, 'prompt').mockReturnValue('Vendor contracts')
+    const fetchMock = mockApi({
+      onGetStandards: (profileId) =>
+        profileId === 'profile-vendor'
+          ? json(200, DEFAULTS.map((d) => (d.id === 'notice_period' ? { ...d, text: 'at most 14 days', params: { notice_days_max: 14 }, is_default: false } : d)))
+          : json(200, DEFAULTS),
+      onCreateProfile: (name) => json(201, { id: 'profile-vendor', name, is_default: false }),
+    })
+    render(<StandardsPage />)
+
+    await screen.findByText('net 30 days or longer')
+    await userEvent.click(screen.getByRole('button', { name: '+ New profile' }))
+
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/standard-profiles' && init?.method === 'POST')).toBe(true)
+    expect(await screen.findByText('at most 14 days')).toBeInTheDocument()
+    expect(shown).toContainEqual(['success', 'Profile created.'])
+  })
+
+  it('offers to delete a non-default profile but not the default one', async () => {
+    mockApi({ profiles: [DEFAULT_PROFILE, { id: 'profile-vendor', name: 'Vendor contracts', is_default: false }] })
+    render(<StandardsPage />)
+
+    await screen.findByText('net 30 days or longer')
+    expect(screen.queryByRole('button', { name: 'Delete profile' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Vendor contracts/ }))
+    await screen.findByRole('button', { name: 'Delete profile' })
+    expect(screen.getByRole('button', { name: 'Make this the workspace default' })).toBeInTheDocument()
   })
 })

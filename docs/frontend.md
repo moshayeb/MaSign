@@ -685,6 +685,33 @@ toast. Saving takes effect immediately everywhere a standard verdict is
 shown (Overview, key terms, export) with no re-review, since the comparison
 is rule-based, not a model call.
 
+### Named standard profiles (MAS-185)
+
+Above the standards grid, a `role="tablist"` bar lists every named profile
+in the workspace as a pill (`listStandardProfiles`), the selected one
+highlighted, plus a "+ New profile" link (`window.prompt` for the name —
+no modal, matching this page's existing lightweight style). Selecting a
+profile reloads the grid below from `GET /standard-profiles/{id}/standards`
+instead of the plain `/api/standards`; saving/resetting a card now calls the
+profile-scoped `PUT`/`DELETE /standard-profiles/{id}/standards/{term_id}`.
+Below the tabs, a "Rename" link always shows for the selected profile (also
+`window.prompt`); "Make this the workspace default" and "Delete profile"
+show only for a non-default one — the one `is_default` profile can't be
+deleted (the API 400s; the button is simply absent rather than present-and-
+failing). Deleting asks for confirmation first (`window.confirm`: *"Contracts
+using it fall back to the workspace default"*), since it is the one action
+here that affects contracts the user isn't currently looking at.
+
+A contract's own assignment lives on its Overview tab: `KeyTermsCard`'s
+`StandardProfilePicker` is a `<select>` next to the "Key terms" heading
+(`"Workspace default"` plus every named profile) that only renders once a
+workspace has created a second profile — a workspace that never used this
+feature sees no new control at all. Changing it (`PUT /contracts/{id}/
+standard-profile`) re-reads that contract's review and tells the parent
+panel to refresh the contract list, so the Overview's deviation count and
+the sidebar row's badge update together, same as a direct standards edit —
+still no re-review, no model call.
+
 ## Coverage (MAS-84)
 
 `CoverageNotice` (MAS-104) renders `review.coverage` once for the whole

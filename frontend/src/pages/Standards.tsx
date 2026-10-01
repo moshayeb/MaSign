@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { listStandards, saveStandard, resetStandard, type Standard } from '../api'
+import {
+  listStandardProfiles, createStandardProfile, renameStandardProfile, setDefaultStandardProfile, deleteStandardProfile,
+  listProfileStandards, saveProfileStandard, resetProfileStandard,
+  type Standard, type StandardProfile,
+} from '../api'
 import { PageChrome } from '../components/PageChrome'
 
 const CURRENCIES = ['USD', 'EUR', 'SEK'] as const
@@ -8,15 +12,25 @@ const CURRENCIES = ['USD', 'EUR', 'SEK'] as const
 // The Customer-side positions MaSign compares contract terms against
 // (MAS-96/120). Rule-based only: saving or applying a standard never calls
 // the model, and a term MaSign could not verify as a number stays "unknown"
-// rather than guessing a verdict (honest-outcomes).
+// rather than guessing a verdict (honest-outcomes). Since MAS-185 a
+// workspace can hold more than one named set ("profile") and assign a
+// non-default one to individual contracts (contract header); this page
+// always edits whichever profile is selected below.
 export function StandardsPage() {
+  const [profiles, setProfiles] = useState<StandardProfile[] | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
   const [standards, setStandards] = useState<Standard[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [profileBusy, setProfileBusy] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  function fetchStandards() {
-    listStandards()
-      .then(setStandards)
+  function fetchProfiles(selectId?: string) {
+    listStandardProfiles()
+      .then((loaded) => {
+        setProfiles(loaded)
+        const next = selectId ?? loaded.find((p) => p.is_default)?.id ?? loaded[0]?.id ?? null
+        setSelected(next)
+      })
       .catch((error: Error) => {
         setLoadError(error.message)
         toast.error(error.message)
@@ -24,13 +38,24 @@ export function StandardsPage() {
   }
 
   useEffect(() => {
-    fetchStandards()
+    fetchProfiles()
   }, [])
+
+  useEffect(() => {
+    if (!selected) return
+    setStandards(null)
+    listProfileStandards(selected)
+      .then(setStandards)
+      .catch((error: Error) => {
+        setLoadError(error.message)
+        toast.error(error.message)
+      })
+  }, [selected])
 
   function retry() {
     setLoadError(null)
-    setStandards(null)
-    fetchStandards()
+    setProfiles(null)
+    fetchProfiles(selected ?? undefined)
   }
 
   function replace(updated: Standard) {
@@ -38,10 +63,11 @@ export function StandardsPage() {
   }
 
   async function save(id: string, params: Record<string, unknown>) {
+    if (!selected) return
     setBusyId(id)
     try {
       const updated = await toast
-        .promise(saveStandard(id, params), { loading: 'Saving…', success: () => 'Standard saved.', error: (error: Error) => error.message })
+        .promise(saveProfileStandard(selected, id, params), { loading: 'Saving…', success: () => 'Standard saved.', error: (error: Error) => error.message })
         .unwrap()
       replace(updated)
     } catch {
@@ -52,10 +78,11 @@ export function StandardsPage() {
   }
 
   async function reset(id: string) {
+    if (!selected) return
     setBusyId(id)
     try {
       const updated = await toast
-        .promise(resetStandard(id), { loading: 'Restoring default…', success: () => "Restored MaSign's default.", error: (error: Error) => error.message })
+        .promise(resetProfileStandard(selected, id), { loading: 'Restoring default…', success: () => "Restored MaSign's default.", error: (error: Error) => error.message })
         .unwrap()
       replace(updated)
     } catch {
@@ -65,6 +92,69 @@ export function StandardsPage() {
     }
   }
 
+  async function addProfile() {
+    const name = window.prompt('Name this profile (e.g. "Vendor contracts")')?.trim()
+    if (!name) return
+    setProfileBusy(true)
+    try {
+      const created = await toast
+        .promise(createStandardProfile(name), { loading: 'Creating…', success: () => 'Profile created.', error: (error: Error) => error.message })
+        .unwrap()
+      fetchProfiles(created.id)
+    } catch {
+      // Already reported.
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  async function renameProfile(id: string, currentName: string) {
+    const name = window.prompt('Rename this profile', currentName)?.trim()
+    if (!name || name === currentName) return
+    setProfileBusy(true)
+    try {
+      await toast
+        .promise(renameStandardProfile(id, name), { loading: 'Renaming…', success: () => 'Profile renamed.', error: (error: Error) => error.message })
+        .unwrap()
+      fetchProfiles(id)
+    } catch {
+      // Already reported.
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  async function makeDefault(id: string) {
+    setProfileBusy(true)
+    try {
+      await toast
+        .promise(setDefaultStandardProfile(id), { loading: 'Setting default…', success: () => 'Default profile updated.', error: (error: Error) => error.message })
+        .unwrap()
+      fetchProfiles(id)
+    } catch {
+      // Already reported.
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  async function removeProfile(id: string) {
+    if (!window.confirm('Delete this profile? Contracts using it fall back to the workspace default.')) return
+    setProfileBusy(true)
+    try {
+      await toast
+        .promise(deleteStandardProfile(id), { loading: 'Deleting…', success: () => 'Profile deleted.', error: (error: Error) => error.message })
+        .unwrap()
+      fetchProfiles()
+    } catch {
+      // Already reported.
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  const selectedProfile = profiles?.find((p) => p.id === selected) ?? null
+
   return (
     <PageChrome>
       <main className="content standards-page">
@@ -73,7 +163,8 @@ export function StandardsPage() {
           <p className="standards-eyebrow">Workspace settings</p>
           <h1>Contract comparison rules</h1>
           <p>
-            Set the four numeric positions MaSign uses to compare verified contract terms in this workspace.
+            Set the four numeric positions MaSign uses to compare verified contract terms. Create more than one named
+            profile to apply different rules to different contracts — assign a profile from a contract's Overview tab.
           </p>
         </div>
         <div className="standards-effect" role="note">
@@ -90,7 +181,45 @@ export function StandardsPage() {
             )}
           </div>
         )}
-        {!standards && !loadError && <p className="muted" role="status">Loading rules…</p>}
+        {!profiles && !loadError && <p className="muted" role="status">Loading rules…</p>}
+        {profiles && (
+          <div className="standard-profiles-bar" role="tablist" aria-label="Standard profiles">
+            {profiles.map((profile) => (
+              <button
+                key={profile.id}
+                type="button"
+                role="tab"
+                aria-selected={profile.id === selected}
+                className={profile.id === selected ? 'standard-profile-tab active' : 'standard-profile-tab'}
+                onClick={() => setSelected(profile.id)}
+                disabled={profileBusy}
+              >
+                {profile.name}
+                {profile.is_default && <span className="status none">Default</span>}
+              </button>
+            ))}
+            <button type="button" className="link standard-profile-add" onClick={addProfile} disabled={profileBusy}>
+              + New profile
+            </button>
+          </div>
+        )}
+        {selectedProfile && (
+          <div className="standard-profile-actions">
+            <button type="button" className="link" onClick={() => renameProfile(selectedProfile.id, selectedProfile.name)} disabled={profileBusy}>
+              Rename
+            </button>
+            {!selectedProfile.is_default && (
+              <>
+                <button type="button" className="link" onClick={() => makeDefault(selectedProfile.id)} disabled={profileBusy}>
+                  Make this the workspace default
+                </button>
+                <button type="button" className="link standard-profile-delete" onClick={() => removeProfile(selectedProfile.id)} disabled={profileBusy}>
+                  Delete profile
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {standards && (
           <div className="standards-grid">
             {standards.map((standard) => (
@@ -98,6 +227,7 @@ export function StandardsPage() {
             ))}
           </div>
         )}
+        {selected && !standards && !loadError && <p className="muted" role="status">Loading profile…</p>}
       </main>
     </PageChrome>
   )

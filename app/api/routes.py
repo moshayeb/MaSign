@@ -184,6 +184,9 @@ class ContractSummary(BaseModel):
     # currently be searched/asked under. Always includes "portable"; "quality"
     # only once its best-effort indexing has actually succeeded for it.
     indexed_profiles: list[str] = ["portable"]
+    # The named standard profile this contract compares against (MAS-185);
+    # None means the workspace's default profile.
+    standard_profile_id: UUID | None = None
 
     @classmethod
     def from_model(
@@ -231,6 +234,7 @@ class ContractSummary(BaseModel):
             deviations=deviations,
             key_terms_status=key_terms_status,
             indexed_profiles=list(contract.indexed_profiles),
+            standard_profile_id=contract.standard_profile_id,
         )
 
 
@@ -700,10 +704,15 @@ def list_contracts(
     # either grows a workspace filter of its own later.
     reviews = repository.list_risk_summaries(db)
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS)
-    standards = repository.get_standards(db, workspace.id)
+    contracts = repository.list_contracts(db, workspace.id)
+    default_profile_id = repository.get_or_create_default_profile(db, workspace.id).id
+    profile_ids = {c.standard_profile_id or default_profile_id for c in contracts}
+    standards_by_profile = repository.get_standards_by_profiles(db, list(profile_ids))
     return [
-        ContractSummary.from_model(c, reviews.get(c.id), key_terms.get(c.id), standards)
-        for c in repository.list_contracts(db, workspace.id)
+        ContractSummary.from_model(
+            c, reviews.get(c.id), key_terms.get(c.id), standards_by_profile.get(c.standard_profile_id or default_profile_id, {})
+        )
+        for c in contracts
     ]
 
 
@@ -717,7 +726,7 @@ def get_contract(
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
-    standards = repository.get_standards(db, workspace.id)
+    standards = _standards_for_contract(db, workspace.id, contract)
     return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms, standards)
 
 
@@ -1230,7 +1239,7 @@ def get_contract_key_terms(
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
     coverage = _coverage_for_review(db, review, contract, workspace.id)
-    standards = repository.get_standards(db, workspace.id)
+    standards = _standards_for_contract(db, workspace.id, contract)
     return KeyTermsResponse.from_models(review, repository.list_key_terms(db, contract_id), chunk_index, coverage, standards)
 
 
@@ -1255,7 +1264,7 @@ def export_contract_review(
     chunk_index = {
         c.id: c.chunk_index for cid in repository.bundle_contract_ids(db, contract_id) for c in repository.list_chunks(db, cid)
     }
-    standards = repository.get_standards(db, workspace.id)
+    standards = _standards_for_contract(db, workspace.id, contract)
     terms_body = KeyTermsResponse.from_models(
         review, repository.list_key_terms(db, contract_id), chunk_index, review_body.coverage, standards
     )
@@ -1311,10 +1320,20 @@ def _review_response(db: psycopg.Connection, review: RiskReview, workspace_id: U
     }
     contract = repository.get_contract(db, review.contract_id, workspace_id)
     coverage = _coverage_for_review(db, review, contract, workspace_id) if contract else None
-    standards = repository.get_standards(db, workspace_id)
+    standards = _standards_for_contract(db, workspace_id, contract)
     return RiskReviewResponse.from_models(
         review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage, standards
     )
+
+
+def _standards_for_contract(db: psycopg.Connection, workspace_id: UUID, contract: Contract | None) -> dict[str, dict]:
+    """The standards a contract compares against (MAS-185): its own assigned
+    profile, or the workspace's default when none is assigned -- the same
+    behaviour as before named profiles existed."""
+    profile_id = contract.standard_profile_id if contract else None
+    if profile_id is None:
+        profile_id = repository.get_or_create_default_profile(db, workspace_id).id
+    return repository.get_standards(db, profile_id)
 
 
 def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: Contract, workspace_id: UUID) -> Coverage:
@@ -1511,11 +1530,7 @@ class StandardUpdateRequest(BaseModel):
     params: dict
 
 
-@router.get("/standards", response_model=list[StandardOut])
-def list_standards(
-    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
-) -> list[StandardOut]:
-    stored = repository.get_standards(db, workspace.id)
+def _standards_out(stored: dict[str, dict]) -> list[StandardOut]:
     return [
         StandardOut(
             id=term_id,
@@ -1526,6 +1541,16 @@ def list_standards(
         )
         for term_id in STANDARD_TERM_IDS
     ]
+
+
+@router.get("/standards", response_model=list[StandardOut])
+def list_standards(
+    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[StandardOut]:
+    """The workspace's default profile's standards -- unchanged since before
+    MAS-185's named profiles existed. See /standard-profiles for others."""
+    profile = repository.get_or_create_default_profile(db, workspace.id)
+    return _standards_out(repository.get_standards(db, profile.id))
 
 
 @router.put("/standards/{term_id}", response_model=StandardOut)
@@ -1539,7 +1564,8 @@ def update_standard(
         params = validate_standard_params(term_id, body.params)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
-    repository.set_standard(db, workspace.id, term_id, params)
+    profile = repository.get_or_create_default_profile(db, workspace.id)
+    repository.set_standard(db, profile.id, term_id, params)
     return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=False)
 
 
@@ -1547,9 +1573,172 @@ def update_standard(
 def reset_standard(
     term_id: str, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
 ) -> StandardOut:
-    """Restore MaSign's built-in default for one standard."""
+    """Restore MaSign's built-in default for one standard, in the workspace's default profile."""
     if term_id not in STANDARD_TERM_IDS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
-    repository.delete_standard(db, workspace.id, term_id)
+    profile = repository.get_or_create_default_profile(db, workspace.id)
+    repository.delete_standard(db, profile.id, term_id)
     params = DEFAULT_PARAMS[term_id]
     return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=True)
+
+
+# --- named standard profiles (MAS-185) -------------------------------------------------------
+
+
+class StandardProfileOut(BaseModel):
+    id: UUID
+    name: str
+    is_default: bool
+
+    @classmethod
+    def from_model(cls, profile) -> "StandardProfileOut":
+        return cls(id=profile.id, name=profile.name, is_default=profile.is_default)
+
+
+class StandardProfileCreateRequest(BaseModel):
+    name: str
+
+
+class StandardProfileUpdateRequest(BaseModel):
+    name: str | None = None
+    is_default: bool | None = None
+
+
+@router.get("/standard-profiles", response_model=list[StandardProfileOut])
+def list_standard_profiles(
+    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[StandardProfileOut]:
+    repository.get_or_create_default_profile(db, workspace.id)  # ensure one always exists before listing
+    return [StandardProfileOut.from_model(p) for p in repository.list_standard_profiles(db, workspace.id)]
+
+
+@router.post("/standard-profiles", response_model=StandardProfileOut, status_code=status.HTTP_201_CREATED)
+def create_standard_profile(
+    body: StandardProfileCreateRequest,
+    db: psycopg.Connection = Depends(get_db),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+) -> StandardProfileOut:
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Give the profile a name.")
+    try:
+        profile = repository.create_standard_profile(db, workspace.id, name)
+    except psycopg.errors.UniqueViolation as error:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A profile with that name already exists.") from error
+    repository.create_audit_event(
+        db, workspace_id=workspace.id, user_id=user.id, event_type="standard_profile.created", target_type="standard_profile", target_id=profile.id
+    )
+    db.commit()
+    return StandardProfileOut.from_model(profile)
+
+
+@router.put("/standard-profiles/{profile_id}", response_model=StandardProfileOut)
+def update_standard_profile(
+    profile_id: UUID,
+    body: StandardProfileUpdateRequest,
+    db: psycopg.Connection = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+) -> StandardProfileOut:
+    profile = repository.get_standard_profile(db, workspace.id, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Give the profile a name.")
+        try:
+            profile = repository.rename_standard_profile(db, workspace.id, profile_id, name) or profile
+        except psycopg.errors.UniqueViolation as error:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A profile with that name already exists.") from error
+    if body.is_default is True:
+        profile = repository.set_default_standard_profile(db, workspace.id, profile_id) or profile
+    db.commit()
+    return StandardProfileOut.from_model(profile)
+
+
+@router.delete("/standard-profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_standard_profile(
+    profile_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> None:
+    try:
+        deleted = repository.delete_standard_profile(db, workspace.id, profile_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    db.commit()
+
+
+@router.get("/standard-profiles/{profile_id}/standards", response_model=list[StandardOut])
+def list_profile_standards(
+    profile_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[StandardOut]:
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    return _standards_out(repository.get_standards(db, profile_id))
+
+
+@router.put("/standard-profiles/{profile_id}/standards/{term_id}", response_model=StandardOut)
+def update_profile_standard(
+    profile_id: UUID, term_id: str, body: StandardUpdateRequest,
+    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace),
+) -> StandardOut:
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    if term_id not in STANDARD_TERM_IDS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
+    try:
+        params = validate_standard_params(term_id, body.params)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+    repository.set_standard(db, profile_id, term_id, params)
+    db.commit()
+    return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=False)
+
+
+@router.delete("/standard-profiles/{profile_id}/standards/{term_id}", response_model=StandardOut)
+def reset_profile_standard(
+    profile_id: UUID, term_id: str, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> StandardOut:
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    if term_id not in STANDARD_TERM_IDS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No editable standard with that id.")
+    repository.delete_standard(db, profile_id, term_id)
+    db.commit()
+    params = DEFAULT_PARAMS[term_id]
+    return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=True)
+
+
+class ContractStandardProfileRequest(BaseModel):
+    profile_id: UUID | None = None
+
+
+@router.put("/contracts/{contract_id}/standard-profile", response_model=ContractSummary)
+def set_contract_standard_profile(
+    contract_id: UUID,
+    body: ContractStandardProfileRequest,
+    db: psycopg.Connection = Depends(get_db),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+) -> ContractSummary:
+    """Assign which standard profile a contract compares against; null clears
+    it back to the workspace default."""
+    try:
+        assigned = repository.set_contract_standard_profile(db, workspace.id, contract_id, body.profile_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+    if not assigned:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    repository.create_audit_event(
+        db, workspace_id=workspace.id, user_id=user.id, event_type="contract.standard_profile_set",
+        target_type="contract", target_id=contract_id, metadata={"profile_id": str(body.profile_id) if body.profile_id else None},
+    )
+    db.commit()
+    contract = repository.get_contract(db, contract_id, workspace.id)
+    key_terms = repository.list_key_terms_for(db, SUMMARY_TERM_IDS).get(contract_id)
+    standards = _standards_for_contract(db, workspace.id, contract)
+    return ContractSummary.from_model(contract, repository.list_risk_summaries(db).get(contract_id), key_terms, standards)

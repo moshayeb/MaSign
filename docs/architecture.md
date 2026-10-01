@@ -273,20 +273,74 @@ position for the four numeric terms (payment deadline, late-payment
 interest, notice period, termination cost); `describe(term_id, params)`
 computes the one-line text from those numbers so it can never drift from
 what is actually stored. Since MAS-120 a `standards` row (migration 014,
-`params` JSONB) overrides a term's default; a term
-with no row uses the default, and resetting (`DELETE /api/standards/{id}`)
-removes the row rather than ever writing default values back — the default
-lives in exactly one place. MAS-181 migration 016 adds `workspace_id` and a
-`(workspace_id, term_id)` primary key: old shared overrides are assigned only
-to MAS-143's explicit legacy demo workspace; new personal workspaces use
-MaSign's built-in defaults. The standards API requires the current workspace,
-as do the contract routes that display comparisons. There are no named
-profiles or per-contract overrides.
-`app/api/routes.py` loads the saved standards once per request
-(`repository.get_standards`) and threads them into `ContractSummary`,
-`KeyTermValue` and `KeyTermsResponse`, so a saved standard changes every
-deviation shown — the Overview tab's count, the key-terms list, the export —
-immediately, with no re-review and no model call.
+`params` JSONB) overrides a term's default; a term with no row uses the
+default, and resetting removes the row rather than ever writing default
+values back — the default lives in exactly one place. `compare()`/
+`describe()`/`validate_params()` only ever take a `params` object; they have
+never known about workspaces, profiles, or anything that feeds that object
+to them — every layer below here is just about *which* `params` dict is in
+scope.
+
+### Named standard profiles (MAS-185)
+
+MAS-181 (migration 016) scoped one `standards` override set per workspace.
+MAS-185 (teacher question, 2026-10-01: *"Can the customer add standard sets
+of aspects to be evaluated for the contract(s) or category of contracts?"*)
+lets a workspace hold more than one named set and assign one per contract —
+scoped deliberately to the existing 4 numeric terms, not the 7 risk-rubric
+categories (parked as a separate, bigger decision; turning a category off
+per profile risks hiding a real finding, which cuts against honest-outcomes)
+and with no contract "category" field (v1 is manual per-contract assignment
+only, consistent with MAS-107's rule that MaSign never guesses, only states
+what is verified or user-set).
+
+Migration 018 adds `standard_profiles` (`id`, `workspace_id`, `name`,
+`is_default`, `UNIQUE(workspace_id, name)`) and repoints `standards` at it:
+the table gains a `profile_id` column, loses `workspace_id` (redundant once
+every row belongs to a profile that itself belongs to a workspace), and its
+primary key becomes `(profile_id, term_id)`. Every workspace that already
+had `standards` rows gets one profile named "Default" with `is_default =
+true`, and its existing rows are re-pointed at it in the same migration — no
+behaviour change for a workspace that upgrades. A workspace created *after*
+MAS-185 (or one that never customised anything) has no `standard_profiles`
+row at all until `repository.get_or_create_default_profile()` is called,
+which creates its "Default" profile lazily on first read rather than
+backfilling every future workspace up front.
+
+`contracts.standard_profile_id` is a nullable FK with `ON DELETE SET NULL`:
+`NULL` means "use the workspace's default profile," and deleting the
+profile a contract is using clears that contract back to `NULL`
+automatically — at the database level, so there is no app-level
+reassignment step that could be skipped or raced (honest-outcomes: never a
+dangling reference). `repository.delete_standard_profile()` separately
+refuses (`ValueError` → 400) to delete the `is_default` profile itself —
+a workspace always has exactly one to fall back to.
+
+`app/api/routes.py`'s `/api/standards*` routes are unchanged in shape and
+now operate on `get_or_create_default_profile(workspace_id)` under the
+hood — true backward compatibility, not just an equivalent-looking new
+surface: a pre-MAS-185 frontend or script calling them sees identical
+behaviour. `/api/standard-profiles*` is the new, additive surface (list/
+create/rename/set-default/delete a profile; read/write one profile's
+standards; `PUT /contracts/{id}/standard-profile` to assign one).
+`_standards_for_contract()` resolves a single contract's effective profile
+(its own, or the workspace default); `list_contracts` batches this across a
+whole page via `repository.get_standards_by_profiles()` — one query for
+every *distinct* profile a page of contracts actually uses, not one query
+per contract. Either way, the resolved `params` dict threads into
+`ContractSummary`, `KeyTermValue` and `KeyTermsResponse` exactly as before,
+so a profile switch changes every deviation shown — the Overview tab's
+count, the key-terms list, the export — immediately, with no re-review and
+no model call, the same MAS-120 guarantee extended across profiles.
+
+The UI: `pages/Standards.tsx` is now a profile picker (tabs: one per
+profile, "+ New profile", rename/make-default/delete for the selected
+non-default profile) above the same four-card standards grid, now scoped to
+whichever profile is selected. `components/KeyTermsCard.tsx` grew a
+`StandardProfilePicker` next to the "Key terms" heading — a `<select>`
+of the workspace's profiles plus "Workspace default" — that only renders
+once more than one profile exists, so a workspace that never created a
+second profile sees no new UI at all.
 
 ## Coverage (MAS-84)
 

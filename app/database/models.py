@@ -26,6 +26,9 @@ class Contract:
     # (MAS-62 compare mode); "portable" always, "quality" only once its
     # best-effort indexing has actually succeeded for it.
     indexed_profiles: list[str] = field(default_factory=lambda: ["portable"])
+    # Named standard profile this contract compares against (MAS-185); None
+    # means "use the workspace's default profile".
+    standard_profile_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -285,3 +288,17 @@ class InvoiceCheckItem:
     invoice_quote: str | None
     invoice_chunk_id: UUID | None
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class StandardProfile:
+    """A named set of the four MAS-120 numeric standards (MAS-185). Every
+    workspace has exactly one `is_default` profile; a contract with no
+    profile of its own compares against it."""
+
+    id: UUID
+    workspace_id: UUID
+    name: str
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime

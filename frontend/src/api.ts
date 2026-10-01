@@ -33,6 +33,9 @@ export interface Contract {
   // Compare mode (MAS-62): which embedding profiles this contract can
   // currently be asked under. Always includes "portable".
   indexed_profiles?: EmbeddingProfile[]
+  // Named standard profile this contract compares against (MAS-185); null
+  // means the workspace's default profile.
+  standard_profile_id?: string | null
 }
 
 export type DocumentKind = 'contract' | 'uncertain' | 'not_contract'
@@ -420,6 +423,65 @@ export function saveStandard(id: string, params: Record<string, unknown>): Promi
 
 export function resetStandard(id: string): Promise<Standard> {
   return request<Standard>(`/api/standards/${id}`, { method: 'DELETE' })
+}
+
+// --- named standard profiles (MAS-185) --------------------------------------
+
+export interface StandardProfile {
+  id: string
+  name: string
+  is_default: boolean
+}
+
+export function listStandardProfiles(): Promise<StandardProfile[]> {
+  return request<StandardProfile[]>('/api/standard-profiles')
+}
+
+export function createStandardProfile(name: string): Promise<StandardProfile> {
+  return request<StandardProfile>('/api/standard-profiles', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function renameStandardProfile(id: string, name: string): Promise<StandardProfile> {
+  return request<StandardProfile>(`/api/standard-profiles/${id}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function setDefaultStandardProfile(id: string): Promise<StandardProfile> {
+  return request<StandardProfile>(`/api/standard-profiles/${id}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ is_default: true }),
+  })
+}
+
+export function deleteStandardProfile(id: string): Promise<void> {
+  return request<void>(`/api/standard-profiles/${id}`, { method: 'DELETE' })
+}
+
+export function listProfileStandards(profileId: string): Promise<Standard[]> {
+  return request<Standard[]>(`/api/standard-profiles/${profileId}/standards`)
+}
+
+export function saveProfileStandard(profileId: string, id: string, params: Record<string, unknown>): Promise<Standard> {
+  return request<Standard>(`/api/standard-profiles/${profileId}/standards/${id}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ params }),
+  })
+}
+
+export function resetProfileStandard(profileId: string, id: string): Promise<Standard> {
+  return request<Standard>(`/api/standard-profiles/${profileId}/standards/${id}`, { method: 'DELETE' })
+}
+
+export function setContractStandardProfile(contractId: string, profileId: string | null): Promise<Contract> {
+  return request<Contract>(`/api/contracts/${contractId}/standard-profile`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ profile_id: profileId }),
+  })
 }
 
 // --- invoice verification (MAS-92) ------------------------------------------
