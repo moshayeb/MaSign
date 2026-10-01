@@ -616,16 +616,25 @@ class RiskReviewResponse(BaseModel):
             mine = [f for f in findings if f.category == category.id]
             worst = max((f.severity for f in mine), key=SEVERITIES.index, default=None)
             categories.append(ReviewCategory(id=category.id, name=category.name, worst_severity=worst, findings=len(mine)))
-        checked_clauses = review.status == "done" and review.clauses_complete
+        # The run that set clauses_complete only ever asked about
+        # checked_clause_ids (MAS-193): a profile's clause list can change
+        # after that run, so a currently-enabled clause missing from it was
+        # never actually checked, however old clauses_complete claims -- it
+        # must read cannot_tell, not absent.
+        run_complete = review.status == "done" and review.clauses_complete
+        actually_checked = set(review.checked_clause_ids)
         by_clause: dict[str, list[ClauseFindingRow]] = {cid: [] for cid in enabled_clauses}
         for row in clause_rows:
             if row.clause_id in by_clause:
                 by_clause[row.clause_id].append(row)
         clauses = [
-            ClauseResult.from_rows(clause.id, by_clause[clause.id], chunk_index, checked=checked_clauses)
+            ClauseResult.from_rows(clause.id, by_clause[clause.id], chunk_index, checked=run_complete and clause.id in actually_checked)
             for clause in CLAUSES
             if clause.id in by_clause
         ]
+        # Honest at this level too: the checklist as currently configured is
+        # only complete when every enabled clause was part of the check.
+        checked_clauses = run_complete and all(cid in actually_checked for cid in enabled_clauses)
         return cls(
             contract_id=review.contract_id,
             status=review.status,

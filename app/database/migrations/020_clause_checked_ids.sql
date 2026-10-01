@@ -1,0 +1,11 @@
+-- MAS-193: the expected-clause checklist (MAS-188) resolves which clauses
+-- apply to a contract from its CURRENT standard profile at read time, but
+-- the model was only ever asked about whichever clauses were enabled AT
+-- REVIEW TIME. Switching a contract to a profile that enables a clause the
+-- review never checked must not silently read "absent" -- it must read
+-- "cannot_tell" until a fresh review actually checks it, the same
+-- honest-outcomes discipline key_terms_complete already enforces. This
+-- records exactly which clause ids were part of the check that produced
+-- clauses_complete, so a currently-enabled clause missing from this list is
+-- known to have never been asked about, however old clauses_complete claims.
+ALTER TABLE risk_reviews ADD COLUMN checked_clause_ids TEXT[] NOT NULL DEFAULT '{}';

@@ -182,3 +182,59 @@ def test_update_profile_clause_404s_for_an_unknown_clause_or_profile(db, workspa
 
     assert client.put(f"/api/standard-profiles/{profile.id}/clauses/not_a_clause", json={"enabled": False}).status_code == 404
     assert client.put(f"/api/standard-profiles/{uuid4()}/clauses/insurance", json={"enabled": False}).status_code == 404
+
+
+# --- MAS-193: a profile's clause list can change after a review already ran ---------------------
+
+
+def test_a_clause_enabled_after_the_review_ran_reads_cannot_tell_not_absent(
+    db, workspace_id, fake_chat_model: FakeChatModel
+) -> None:
+    """Owner report (2026-10-02, live): "when choosing another comparison
+    rule it doesn't apply to the risks." Root cause: the model is only ever
+    asked about the clauses enabled on the profile AT REVIEW TIME; reading
+    the checklist later resolves the CURRENT profile's enabled clauses
+    independently. Before this fix, a clause enabled only after the review
+    ran -- never actually asked about -- silently read "absent" as long as
+    the review's one review-wide clauses_complete flag was True. It must
+    read "cannot_tell" instead, same as an incomplete pass already does."""
+    profile = repository.get_or_create_default_profile(db, workspace_id)
+    db.commit()
+    repository.set_profile_clause_enabled(db, profile.id, "insurance", False)
+    db.commit()
+
+    contract_id = _stored(db, workspace_id, LIABILITY)
+    fake_chat_model.clause_reply = json.dumps(
+        [{"clause": "liability_cap", "passage": 1, "quote": "total liability under this Agreement shall not exceed the fees paid"}]
+    )
+    review = review_contract(contract_id, fake_chat_model)
+    assert review.clauses_complete is True
+    assert "insurance" not in review.checked_clause_ids  # never asked about it this run
+
+    body = client.get(f"/api/contracts/{contract_id}/risks").json()
+    assert "insurance" not in {c["id"] for c in body["clauses"]}  # not enabled yet -- same as before this fix
+
+    # Enable insurance on the same profile with no re-review -- the exact
+    # "switch the comparison rule" step from the bug report.
+    enable = client.put(f"/api/standard-profiles/{profile.id}/clauses/insurance", json={"enabled": True})
+    assert enable.status_code == 200
+
+    body = client.get(f"/api/contracts/{contract_id}/risks").json()
+    assert body["clauses_complete"] is False  # honestly incomplete for the checklist as now configured
+    clauses = {c["id"]: c for c in body["clauses"]}
+    assert clauses["insurance"]["status"] == "cannot_tell"  # never "absent": the model was never asked
+    assert clauses["insurance"]["source"] is None
+    assert clauses["liability_cap"]["status"] == "present"  # unaffected: this one was actually checked
+
+    # Re-running the review actually checks insurance under the now-current
+    # configuration and genuinely finds it absent -- cannot_tell clears.
+    fake_chat_model.clause_reply = json.dumps(
+        [{"clause": "liability_cap", "passage": 1, "quote": "total liability under this Agreement shall not exceed the fees paid"}]
+    )
+    review2 = review_contract(contract_id, fake_chat_model)
+    assert review2.clauses_complete is True
+    assert "insurance" in review2.checked_clause_ids
+
+    body = client.get(f"/api/contracts/{contract_id}/risks").json()
+    assert body["clauses_complete"] is True
+    assert {c["id"]: c["status"] for c in body["clauses"]}["insurance"] == "absent"

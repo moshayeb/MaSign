@@ -209,6 +209,11 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             complete=complete and checked == len(chunks),
             key_terms_complete=terms_complete and withheld == 0,
             clauses_complete=clauses_complete and withheld == 0,
+            # Exactly which clauses this run actually asked the model about
+            # (MAS-193): a profile's clause list can change after this run,
+            # so a later read must know which currently-enabled clauses were
+            # genuinely part of this check, not just trust clauses_complete.
+            checked_clause_ids=list(enabled_clauses),
         )
         repository.create_audit_event(
             db, workspace_id=contract.workspace_id, user_id=None, event_type="review.completed",
