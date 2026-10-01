@@ -1,6 +1,6 @@
 import { useEffect, useState, type Ref } from 'react'
 import { toast } from 'sonner'
-import { listStandardProfiles, setContractStandardProfile, type Contract, type KeyTermValue, type RiskReview, type StandardProfile } from '../api'
+import { listStandardProfiles, setContractStandardProfile, type Contract, type KeyTermSource, type KeyTermValue, type RiskReview, type StandardProfile } from '../api'
 import type { SourceRef } from './PassageReader'
 import { Timeline } from './Timeline'
 
@@ -114,12 +114,19 @@ export function KeyTermsCard({ review, contract, contracts = [], onShowSource, o
   )
 }
 
+// Where a value (the main source, or one of `others`) came from: the
+// document it names only when that document isn't the one being reviewed
+// (MAS-190) -- the reviewed contract's own passages read exactly as before.
+function sourceInfo(item: KeyTermSource, contracts: Contract[], reviewingContractId: string) {
+  const sourceFilename = item.contract_id ? contracts.find((c) => c.contract_id === item.contract_id)?.filename : null
+  const isLinkedDocument = Boolean(item.contract_id && item.contract_id !== reviewingContractId)
+  return { sourceFilename, isLinkedDocument, passageLabel: `passage ${item.chunk_index + 1}` }
+}
+
 function TermTile({ term, contracts, onShowSource, reviewingContractId }: { term: KeyTermValue; contracts: Contract[]; onShowSource?: (source: SourceRef) => void; reviewingContractId: string }) {
   const source = term.source!
   const verdict = term.standard && term.standard.status !== 'none' ? term.standard : null
-  const sourceFilename = source.contract_id ? contracts.find((item) => item.contract_id === source.contract_id)?.filename : null
-  const isLinkedDocument = Boolean(source.contract_id && source.contract_id !== reviewingContractId)
-  const passageLabel = `passage ${source.chunk_index + 1}`
+  const { sourceFilename, isLinkedDocument, passageLabel } = sourceInfo(source, contracts, reviewingContractId)
   return (
     <div className={`term ${term.status}${verdict?.status === 'deviates' ? ' deviates' : ''}`}>
       <dt>
@@ -168,11 +175,31 @@ function TermTile({ term, contracts, onShowSource, reviewingContractId }: { term
         )}
         {term.others.length > 0 && (
           <ul className="term-others">
-            {term.others.map((other) => (
-              <li key={other.chunk_id} className="muted small">
-                Also stated in passage {other.chunk_index + 1}: “{other.value}”
-              </li>
-            ))}
+            {term.others.map((other) => {
+              const otherSource = sourceInfo(other, contracts, reviewingContractId)
+              return (
+                <li key={other.chunk_id} className="muted small">
+                  Also stated{otherSource.isLinkedDocument ? ` in ${otherSource.sourceFilename ?? 'a linked document'},` : ' in'}{' '}
+                  {onShowSource ? (
+                    <button
+                      type="button"
+                      className="link term-source-link"
+                      onClick={() => onShowSource({ contract_id: other.contract_id, chunk_index: other.chunk_index, quote: other.quote })}
+                      aria-label={
+                        otherSource.isLinkedDocument
+                          ? `Show ${term.name} also stated in ${otherSource.sourceFilename ?? 'linked document'}, ${otherSource.passageLabel}`
+                          : `Show ${term.name} also stated in contract, ${otherSource.passageLabel}`
+                      }
+                    >
+                      {otherSource.passageLabel}
+                    </button>
+                  ) : (
+                    otherSource.passageLabel
+                  )}
+                  : “{other.value}”
+                </li>
+              )
+            })}
           </ul>
         )}
       </dd>

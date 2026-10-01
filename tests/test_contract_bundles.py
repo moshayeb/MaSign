@@ -67,6 +67,35 @@ def test_bundle_review_reads_every_linked_documents_chunks(db, fake_chat_model: 
     assert fee["status"] == "found" and fee["source"]["contract_id"] == str(linked_id)  # sourced from the linked document
 
 
+def test_a_term_stated_differently_in_a_linked_document_is_a_cross_document_conflict(db, fake_chat_model: FakeChatModel) -> None:
+    """MAS-190: the bundle-wide extraction pass already compares values across
+    every document it read, with no document-identity check at all -- so a
+    genuine disagreement between the primary and a linked document already
+    came back `conflicting` before this ticket, just never regression-tested
+    across documents (the only existing conflicting test disagrees within one
+    document's own passages). This proves it, and that each side's own
+    `contract_id` is attributed correctly -- what MAS-190's "cite both sides"
+    acceptance criterion actually needs from the backend."""
+    primary_id = _upload("main.txt", "2. Fees. Customer shall pay EUR 18,500 per month, as set out in the Order Form.")
+    linked_id = _upload("order-form.txt", "1. Order Form amendment. The monthly fee is EUR 19,000.")
+    _link(primary_id, linked_id)
+
+    fake_chat_model.key_terms_reply = json.dumps(
+        [
+            {"term": "recurring_fee", "value": "EUR 18,500 per month", "passage": 1, "quote": "pay EUR 18,500 per month", "typed": None},
+            {"term": "recurring_fee", "value": "EUR 19,000", "passage": 2, "quote": "monthly fee is EUR 19,000", "typed": None},
+        ]
+    )
+    review_contract(primary_id, fake_chat_model)
+
+    fee = _terms(primary_id)["recurring_fee"]
+    assert fee["status"] == "conflicting"
+    assert fee["source"]["contract_id"] == str(primary_id) and fee["value"] == "EUR 18,500 per month"
+    assert len(fee["others"]) == 1
+    other = fee["others"][0]
+    assert other["contract_id"] == str(linked_id) and other["value"] == "EUR 19,000"
+
+
 def test_a_linked_documents_own_solo_review_stays_independent(db, fake_chat_model: FakeChatModel) -> None:
     primary_id = _upload("main.txt", PRIMARY_TEXT)
     linked_id = _upload("order-form.txt", LINKED_TEXT)
