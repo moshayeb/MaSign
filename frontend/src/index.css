@@ -2897,6 +2897,30 @@ button.chip.ranked {
   gap: 18px;
 }
 
+.clauses-settings {
+  margin-top: 18px;
+}
+
+.clauses-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clauses-list-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .clauses-list { grid-template-columns: minmax(0, 1fr); }
+}
+
 .standard-card {
   min-width: 0;
   display: flex;

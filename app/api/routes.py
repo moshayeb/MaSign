@@ -16,7 +16,7 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_current_user, get_current_workspace, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
+from app.database.models import Chunk, ClauseFindingRow, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
@@ -24,6 +24,7 @@ from app.ingestion.references import find_external_references
 from app.invoices.comparison import compare_invoice
 from app.invoices.extractor import extract_invoice_fields
 from app.invoices.parsing import ExtractedInvoice, InvoiceTextError, extract_invoice
+from app.key_terms.clauses import CLAUSES, CLAUSE_BY_ID, CLAUSE_IDS
 from app.key_terms.deadlines import compute_deadlines
 from app.key_terms.standards import STANDARD_TERM_IDS, DEFAULT_PARAMS, describe as describe_standard
 from app.key_terms.standards import compare as compare_to_standard
@@ -351,6 +352,54 @@ def _same_value(a: KeyTermSource, b: KeyTermSource) -> bool:
     return " ".join(a.value.lower().split()) == " ".join(b.value.lower().split())
 
 
+class ClauseSource(BaseModel):
+    quote: str
+    chunk_id: UUID
+    chunk_index: int
+    # The document the passage itself belongs to (MAS-138, same as KeyTermSource).
+    contract_id: UUID
+
+
+class ClauseResult(BaseModel):
+    """One expected-clause checklist entry (MAS-188)."""
+
+    id: str
+    name: str
+    # present | absent | cannot_tell. "cannot_tell" means the clause-check
+    # pass did not complete for this contract, so absence proves nothing;
+    # "absent" is only claimed when every passage was read.
+    status: str
+    # The passage the clause is stated in (the earliest statement), or None.
+    source: ClauseSource | None
+    # Further passages also stating the clause -- unlike a key term, presence
+    # has no comparable value, so there is no "conflicting" status.
+    others: list[ClauseSource]
+
+    @classmethod
+    def from_rows(
+        cls,
+        clause_id: str,
+        rows: list[ClauseFindingRow],
+        chunk_index: dict[UUID, int],
+        *,
+        checked: bool,
+    ) -> "ClauseResult":
+        clause = CLAUSE_BY_ID[clause_id]
+        sources = [
+            ClauseSource(
+                quote=r.quote,
+                chunk_id=r.chunk_id,
+                chunk_index=chunk_index.get(r.chunk_id, 0),
+                contract_id=r.source_contract_id,
+            )
+            for r in rows
+        ]
+        if not sources:
+            return cls(id=clause.id, name=clause.name, status="absent" if checked else "cannot_tell", source=None, others=[])
+        first, others = sources[0], sources[1:]
+        return cls(id=clause.id, name=clause.name, status="present", source=first, others=others)
+
+
 class ExternalReferenceOut(BaseModel):
     name: str
     passages: list["CoveragePassageOut"]
@@ -528,6 +577,11 @@ class RiskReviewResponse(BaseModel):
     key_terms_complete: bool
     key_terms: list[KeyTermValue]
     deadlines: list[DeadlineOut] = []
+    # The expected-clause checklist pass of the same job (MAS-188): the
+    # contract's effective standard profile's enabled clauses, each
+    # present/absent/cannot_tell, and whether the pass completed.
+    clauses_complete: bool = False
+    clauses: list[ClauseResult] = []
     # What was and was not read (MAS-84).
     coverage: Coverage | None = None
 
@@ -540,6 +594,8 @@ class RiskReviewResponse(BaseModel):
         terms: list[KeyTermRow] = (),
         coverage: Coverage | None = None,
         standards: dict[str, dict] | None = None,
+        clause_rows: list[ClauseFindingRow] = (),
+        enabled_clauses: tuple[str, ...] = CLAUSE_IDS,
     ) -> "RiskReviewResponse":
         findings = [
             ReviewFinding(
@@ -560,6 +616,16 @@ class RiskReviewResponse(BaseModel):
             mine = [f for f in findings if f.category == category.id]
             worst = max((f.severity for f in mine), key=SEVERITIES.index, default=None)
             categories.append(ReviewCategory(id=category.id, name=category.name, worst_severity=worst, findings=len(mine)))
+        checked_clauses = review.status == "done" and review.clauses_complete
+        by_clause: dict[str, list[ClauseFindingRow]] = {cid: [] for cid in enabled_clauses}
+        for row in clause_rows:
+            if row.clause_id in by_clause:
+                by_clause[row.clause_id].append(row)
+        clauses = [
+            ClauseResult.from_rows(clause.id, by_clause[clause.id], chunk_index, checked=checked_clauses)
+            for clause in CLAUSES
+            if clause.id in by_clause
+        ]
         return cls(
             contract_id=review.contract_id,
             status=review.status,
@@ -575,6 +641,8 @@ class RiskReviewResponse(BaseModel):
             key_terms_complete=review.status == "done" and review.key_terms_complete,
             key_terms=(key_terms := KeyTermsResponse.from_models(review, list(terms), chunk_index, standards=standards)).terms,
             deadlines=key_terms.deadlines,
+            clauses_complete=checked_clauses,
+            clauses=clauses,
             coverage=coverage,
         )
 
@@ -1328,19 +1396,30 @@ def _review_response(db: psycopg.Connection, review: RiskReview, workspace_id: U
     contract = repository.get_contract(db, review.contract_id, workspace_id)
     coverage = _coverage_for_review(db, review, contract, workspace_id) if contract else None
     standards = _standards_for_contract(db, workspace_id, contract)
+    enabled_clauses = _enabled_clauses_for_contract(db, workspace_id, contract)
     return RiskReviewResponse.from_models(
-        review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage, standards
+        review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage, standards,
+        clause_rows=repository.list_clause_findings(db, review.contract_id), enabled_clauses=enabled_clauses,
     )
 
 
-def _standards_for_contract(db: psycopg.Connection, workspace_id: UUID, contract: Contract | None) -> dict[str, dict]:
-    """The standards a contract compares against (MAS-185): its own assigned
-    profile, or the workspace's default when none is assigned -- the same
-    behaviour as before named profiles existed."""
+def _profile_id_for_contract(db: psycopg.Connection, workspace_id: UUID, contract: Contract | None) -> UUID:
+    """The standard profile a contract compares against (MAS-185): its own
+    assigned profile, or the workspace's default when none is assigned."""
     profile_id = contract.standard_profile_id if contract else None
-    if profile_id is None:
-        profile_id = repository.get_or_create_default_profile(db, workspace_id).id
-    return repository.get_standards(db, profile_id)
+    return profile_id if profile_id is not None else repository.get_or_create_default_profile(db, workspace_id).id
+
+
+def _standards_for_contract(db: psycopg.Connection, workspace_id: UUID, contract: Contract | None) -> dict[str, dict]:
+    return repository.get_standards(db, _profile_id_for_contract(db, workspace_id, contract))
+
+
+def _enabled_clauses_for_contract(db: psycopg.Connection, workspace_id: UUID, contract: Contract | None) -> tuple[str, ...]:
+    """The expected-clause checklist a contract's effective profile has
+    enabled (MAS-188) -- the same "missing row = enabled" discipline as
+    `_standards_for_contract`'s defaults."""
+    disabled = repository.get_disabled_clauses(db, _profile_id_for_contract(db, workspace_id, contract))
+    return tuple(cid for cid in CLAUSE_IDS if cid not in disabled)
 
 
 def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: Contract, workspace_id: UUID) -> Coverage:
@@ -1718,6 +1797,45 @@ def reset_profile_standard(
     db.commit()
     params = DEFAULT_PARAMS[term_id]
     return StandardOut(id=term_id, name=TERM_BY_ID[term_id].name, text=describe_standard(term_id, params), params=params, is_default=True)
+
+
+class ClauseConfigOut(BaseModel):
+    id: str
+    name: str
+    enabled: bool
+
+
+def _clauses_out(disabled: set[str]) -> list[ClauseConfigOut]:
+    return [ClauseConfigOut(id=clause.id, name=clause.name, enabled=clause.id not in disabled) for clause in CLAUSES]
+
+
+@router.get("/standard-profiles/{profile_id}/clauses", response_model=list[ClauseConfigOut])
+def list_profile_clauses(
+    profile_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[ClauseConfigOut]:
+    """The expected-clause checklist a profile checks for (MAS-188), each
+    with whether it's enabled -- every clause starts enabled."""
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    return _clauses_out(repository.get_disabled_clauses(db, profile_id))
+
+
+class ClauseConfigUpdateRequest(BaseModel):
+    enabled: bool
+
+
+@router.put("/standard-profiles/{profile_id}/clauses/{clause_id}", response_model=ClauseConfigOut)
+def update_profile_clause(
+    profile_id: UUID, clause_id: str, body: ClauseConfigUpdateRequest,
+    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace),
+) -> ClauseConfigOut:
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    if clause_id not in CLAUSE_BY_ID:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No clause with that id.")
+    repository.set_profile_clause_enabled(db, profile_id, clause_id, body.enabled)
+    db.commit()
+    return ClauseConfigOut(id=clause_id, name=CLAUSE_BY_ID[clause_id].name, enabled=body.enabled)
 
 
 class ContractStandardProfileRequest(BaseModel):

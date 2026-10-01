@@ -18,7 +18,9 @@ marking the whole review "failed" — only a risk-grading failure does that.
 Since MAS-138, when the contract has documents linked to it (MAS-137) the
 review reads every bundle member's chunks as one unit, stored under the
 primary contract — a linked document opened on its own still keeps its own
-independent review.
+independent review. Since MAS-188 the same job also checks the contract's
+effective standard profile's expected-clause checklist, a third independent
+call per batch with its own completeness flag, same pattern as key terms.
 """
 
 import logging
@@ -28,9 +30,11 @@ from app.answering.llm import ChatModel, ChatModelError
 from app.database import repository
 from app.database.models import CoveragePassage, RiskReview
 from app.database.session import get_connection
+from app.key_terms.clauses import CLAUSE_IDS
 from app.key_terms.extractor import extract_key_terms
 from app.retrieval.vector_store import ChunkHit
 from app.risk_analysis.analyzer import analyze_risks
+from app.risk_analysis.clause_checker import check_clauses
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,9 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         bundle_ids = repository.bundle_contract_ids(db, contract_id)
         filenames = {cid: c.filename for cid in bundle_ids if (c := repository.get_contract_by_id(db, cid)) is not None}
         chunks = [chunk for cid in bundle_ids for chunk in repository.list_chunks(db, cid)]
+        profile_id = contract.standard_profile_id or repository.get_or_create_default_profile(db, contract.workspace_id).id
+        disabled_clauses = repository.get_disabled_clauses(db, profile_id)
+        enabled_clauses = tuple(cid for cid in CLAUSE_IDS if cid not in disabled_clauses)
         repository.start_risk_review(db, contract_id, status="running")
         repository.update_risk_review(
             db,
@@ -77,8 +84,10 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
 
         findings: list[tuple[UUID, str, str, str, str]] = []
         terms: list[tuple[UUID, str, str, str, dict | None]] = []
+        clause_findings: list[tuple[UUID, str, str]] = []
         complete = True
         terms_complete = True
+        clauses_complete = True
         checked = 0
         withheld = 0
         unreadable_chunks: list[CoveragePassage] = []
@@ -96,6 +105,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 logger.warning("Risk review of %s failed at passage %d: %s", contract.filename, start + 1, error)
                 repository.replace_risk_findings(db, contract_id, findings)
                 repository.replace_key_terms(db, contract_id, terms)
+                repository.replace_clause_findings(db, contract_id, clause_findings)
                 result = repository.update_risk_review(
                     db,
                     contract_id,
@@ -157,6 +167,19 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             else:
                 terms_complete = terms_complete and term_report.checked and term_report.complete
                 terms.extend((t.hit.chunk_id, t.term, t.value, t.quote, t.typed) for t in term_report.findings)
+
+            # Clause checking is a third independent model call and failure
+            # domain (MAS-188, same reasoning as MAS-129 above): a bad reply
+            # here only marks the clause checklist incomplete, never discards
+            # this batch's (or any prior batch's) risk findings or key terms.
+            try:
+                clause_report = check_clauses(hits, model, enabled_clauses, filenames=filenames)
+            except ChatModelError as error:
+                logger.warning("Clause check of %s failed at passage %d: %s", contract.filename, start + 1, error)
+                clauses_complete = False
+            else:
+                clauses_complete = clauses_complete and clause_report.checked and clause_report.complete
+                clause_findings.extend((c.hit.chunk_id, c.clause_id, c.quote) for c in clause_report.findings)
             repository.update_risk_review(
                 db,
                 contract_id,
@@ -173,6 +196,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
 
         repository.replace_risk_findings(db, contract_id, findings)
         repository.replace_key_terms(db, contract_id, terms)
+        repository.replace_clause_findings(db, contract_id, clause_findings)
         review = repository.update_risk_review(
             db,
             contract_id,
@@ -184,6 +208,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             redacted_chunks=redacted_chunks,
             complete=complete and checked == len(chunks),
             key_terms_complete=terms_complete and withheld == 0,
+            clauses_complete=clauses_complete and withheld == 0,
         )
         repository.create_audit_event(
             db, workspace_id=contract.workspace_id, user_id=None, event_type="review.completed",

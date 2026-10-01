@@ -65,6 +65,13 @@ const DEFAULTS = [
   },
 ]
 
+const CLAUSES = [
+  { id: 'liability_cap', name: 'Liability cap', enabled: true },
+  { id: 'data_protection', name: 'Data protection', enabled: true },
+  { id: 'insurance', name: 'Insurance', enabled: true },
+  { id: 'indemnification', name: 'Indemnification', enabled: true },
+]
+
 function mockApi(
   overrides: {
     profiles?: typeof DEFAULT_PROFILE[]
@@ -98,6 +105,16 @@ function mockApi(
     if (standardsMatch && (!init || init.method === undefined)) {
       return overrides.onGetStandards?.(standardsMatch[1]) ?? json(200, DEFAULTS)
     }
+    const clausesMatch = /^\/api\/standard-profiles\/([^/]+)\/clauses$/.exec(url)
+    if (clausesMatch && (!init || init.method === undefined)) {
+      return json(200, CLAUSES)
+    }
+    const clauseItemMatch = /^\/api\/standard-profiles\/([^/]+)\/clauses\/(\w+)$/.exec(url)
+    if (clauseItemMatch && init?.method === 'PUT') {
+      const [, , clauseId] = clauseItemMatch
+      const { enabled } = JSON.parse(String(init.body)) as { enabled: boolean }
+      return json(200, { ...CLAUSES.find((c) => c.id === clauseId)!, enabled })
+    }
     const itemMatch = /^\/api\/standard-profiles\/([^/]+)\/standards\/(\w+)$/.exec(url)
     if (itemMatch && init?.method === 'PUT') {
       const [, profileId, termId] = itemMatch
@@ -130,6 +147,26 @@ describe('company standards settings screen (MAS-120/185)', () => {
     expect(screen.getAllByText('MaSign default')).toHaveLength(4)
     expect(screen.getByText(/Changes update existing Overview verdicts/)).toBeInTheDocument()
     expect(screen.getByText('Example · Invoice payable in 30 days')).toBeInTheDocument()
+  })
+
+  it('shows every clause enabled by default, and toggling one disables it (MAS-188)', async () => {
+    const fetchMock = mockApi()
+    render(<StandardsPage />)
+
+    expect(await screen.findByText('Expected clauses', { selector: 'h2' })).toBeInTheDocument()
+    const insurance = screen.getByLabelText('Insurance') as HTMLInputElement
+    expect(insurance.checked).toBe(true)
+    expect((screen.getByLabelText('Liability cap') as HTMLInputElement).checked).toBe(true)
+
+    await userEvent.click(insurance)
+
+    const putCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === '/api/standard-profiles/profile-default/clauses/insurance' && init?.method === 'PUT',
+    )
+    expect(putCall).toBeTruthy()
+    expect(JSON.parse(String(putCall![1]?.body))).toEqual({ enabled: false })
+    expect(await screen.findByLabelText('Insurance')).not.toBeChecked()
+    expect(shown).toContainEqual(['success', 'Clause disabled.'])
   })
 
   async function findCard(name: string): Promise<HTMLElement> {

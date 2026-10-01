@@ -75,6 +75,9 @@ class RiskReview:
     # The key-terms pass (MAS-82) runs in the same job; False while running
     # or when a batch's key-terms reply was unusable.
     key_terms_complete: bool = False
+    # The clause-checklist pass (MAS-188) runs in the same job too; same
+    # meaning as key_terms_complete, for the clause catalog instead.
+    clauses_complete: bool = False
     # Passage indexes (0-based) whose model reply was unreadable, and those the
     # guardrail withheld — listed, not only counted (MAS-84).
     unreadable_chunks: list["CoveragePassage"] = field(default_factory=list)
@@ -144,6 +147,25 @@ class KeyTermRow:
     value: str
     quote: str
     typed: dict | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ClauseFindingRow:
+    """One verified clause-checklist presence stored for a contract (MAS-188).
+
+    Same shape as `KeyTermRow` minus `value`/`typed` -- a clause has no
+    extracted value, only a quote proving it is there. `contract_id` is the
+    contract whose review stored this row; `source_contract_id` is the
+    document the passage itself belongs to (MAS-138) -- see `RiskFindingRow`.
+    """
+
+    id: UUID
+    contract_id: UUID
+    source_contract_id: UUID
+    chunk_id: UUID
+    clause_id: str
+    quote: str
     created_at: datetime
 
 

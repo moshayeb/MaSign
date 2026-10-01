@@ -3,7 +3,8 @@ import { toast } from 'sonner'
 import {
   listStandardProfiles, createStandardProfile, renameStandardProfile, setDefaultStandardProfile, deleteStandardProfile,
   listProfileStandards, saveProfileStandard, resetProfileStandard,
-  type Standard, type StandardProfile,
+  listProfileClauses, setProfileClauseEnabled,
+  type ClauseConfig, type Standard, type StandardProfile,
 } from '../api'
 import { PageChrome } from '../components/PageChrome'
 
@@ -20,7 +21,9 @@ export function StandardsPage() {
   const [profiles, setProfiles] = useState<StandardProfile[] | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [standards, setStandards] = useState<Standard[] | null>(null)
+  const [clauses, setClauses] = useState<ClauseConfig[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [clauseBusyId, setClauseBusyId] = useState<string | null>(null)
   const [profileBusy, setProfileBusy] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   // Inline create/rename/delete-confirm, in place of a native browser dialog
@@ -51,10 +54,17 @@ export function StandardsPage() {
   useEffect(() => {
     if (!selected) return
     setStandards(null)
+    setClauses(null)
     setRenaming(false)
     setConfirmingDelete(false)
     listProfileStandards(selected)
       .then(setStandards)
+      .catch((error: Error) => {
+        setLoadError(error.message)
+        toast.error(error.message)
+      })
+    listProfileClauses(selected)
+      .then(setClauses)
       .catch((error: Error) => {
         setLoadError(error.message)
         toast.error(error.message)
@@ -98,6 +108,25 @@ export function StandardsPage() {
       // Already reported by the toast.
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function toggleClause(id: string, enabled: boolean) {
+    if (!selected) return
+    setClauseBusyId(id)
+    try {
+      const updated = await toast
+        .promise(setProfileClauseEnabled(selected, id, enabled), {
+          loading: enabled ? 'Enabling…' : 'Disabling…',
+          success: () => (enabled ? 'Clause enabled.' : 'Clause disabled.'),
+          error: (error: Error) => error.message,
+        })
+        .unwrap()
+      setClauses((prev) => (prev ? prev.map((c) => (c.id === updated.id ? updated : c)) : prev))
+    } catch {
+      // Already reported by the toast.
+    } finally {
+      setClauseBusyId(null)
     }
   }
 
@@ -317,6 +346,33 @@ export function StandardsPage() {
           </div>
         )}
         {selected && !standards && !loadError && <p className="muted" role="status">Loading profile…</p>}
+
+        {clauses && (
+          <section className="card clauses-settings">
+            <div className="card-header">
+              <h2 className="card-title">Expected clauses</h2>
+            </div>
+            <p className="muted small">
+              Which clauses MaSign checks for on every reviewed contract using this profile (MAS-188). A clause counts as present only with a
+              verbatim quote from the text; disabling one here removes it from the checklist entirely, it is never reported as absent.
+            </p>
+            <ul className="clauses-list">
+              {clauses.map((clause) => (
+                <li key={clause.id} className="clauses-list-item">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={clause.enabled}
+                      disabled={clauseBusyId === clause.id}
+                      onChange={(event) => void toggleClause(clause.id, event.target.checked)}
+                    />
+                    {clause.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
     </PageChrome>
   )

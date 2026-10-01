@@ -100,7 +100,10 @@ class FakeChatModel:
         self.risk_reply: str | Callable[[str], str] = "[]"
         # The key-terms pass (MAS-82) is a third call; by default it states nothing.
         self.key_terms_reply: str | Callable[[str], str] = "[]"
-        # Invoice field extraction (MAS-92) is a fourth, independent call;
+        # The clause-checklist pass (MAS-188) is a fourth call, keyed by the
+        # enabled clause list's own system prompt; by default it finds nothing.
+        self.clause_reply: str | Callable[[str], str] = "[]"
+        # Invoice field extraction (MAS-92) is a fifth, independent call;
         # by default it states nothing.
         self.invoice_fields_reply: str | Callable[[str], str] = "[]"
         self.truncated = False
@@ -110,6 +113,9 @@ class FakeChatModel:
         # the risk call for the same batch (and every other batch) unaffected
         # (MAS-129).
         self.key_terms_error: Exception | None = None
+        # Set to an exception to make only the clause-check call fail, same
+        # independent-failure-domain reasoning (MAS-188).
+        self.clause_error: Exception | None = None
         # Set to an exception to make only the invoice-fields call fail.
         self.invoice_fields_error: Exception | None = None
 
@@ -123,13 +129,25 @@ class FakeChatModel:
         is_risk = system == RISK_PROMPT
         is_terms = system == TERMS_PROMPT
         is_invoice = system == INVOICE_PROMPT
+        # The clause checker's system prompt varies with the enabled clause
+        # list (a profile can disable entries), so it is identified by its
+        # fixed opening line rather than an exact match like the others.
+        is_clause = system.startswith("You are MaSign's contract clause checker.")
         if is_risk and self.risk_error is not None:
             raise self.risk_error
         if is_terms and self.key_terms_error is not None:
             raise self.key_terms_error
+        if is_clause and self.clause_error is not None:
+            raise self.clause_error
         if is_invoice and self.invoice_fields_error is not None:
             raise self.invoice_fields_error
-        reply = self.risk_reply if is_risk else self.key_terms_reply if is_terms else self.invoice_fields_reply if is_invoice else self.reply
+        reply = (
+            self.risk_reply if is_risk
+            else self.key_terms_reply if is_terms
+            else self.clause_reply if is_clause
+            else self.invoice_fields_reply if is_invoice
+            else self.reply
+        )
         return Completion(reply(user) if callable(reply) else reply, truncated=self.truncated)
 
 

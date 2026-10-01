@@ -342,6 +342,50 @@ of the workspace's profiles plus "Workspace default" — that only renders
 once more than one profile exists, so a workspace that never created a
 second profile sees no new UI at all.
 
+### Expected-clause checklist (MAS-188)
+
+Split from MAS-98's post-course grab-bag: for a fixed catalog of clauses
+(liability cap, data protection, insurance, indemnification —
+`app/key_terms/clauses.py`, the same shape as `key_terms/terms.py`), show
+present / absent / cannot-tell per clause, with a verbatim-quoted source
+passage when present. Which clauses apply is a property of a standard
+profile (MAS-185), the same way the 4 numeric terms are: migration 019 adds
+`disabled_profile_clauses(profile_id, clause_id)` — a missing row means
+enabled, the same "absence = default" discipline `standards` already uses,
+so every profile (existing or new) starts with the full catalog checked with
+no backfill needed. `repository.get_disabled_clauses()`/
+`set_profile_clause_enabled()` and `/api/standard-profiles/{id}/clauses*`
+mirror the standards routes exactly; `pages/Standards.tsx` renders them as a
+checkbox list below the four-card standards grid.
+
+Detection folds into the existing whole-contract review job
+(`risk_analysis/review.py`) as a **third independent model call per batch**,
+mirroring MAS-82/MAS-129 exactly: `risk_analysis/clause_checker.py`'s
+`check_clauses()` has its own try/except, its own `clauses_complete` flag,
+and its own verbatim-quote verify-or-drop gate (reusing `analyzer._normalise`
+and the salvage/parse helpers) — a clause-check failure never discards that
+batch's (or any prior batch's) already-verified risk findings or key terms,
+and never marks the whole review "failed". This was a corrected decision: an
+earlier framing of "fold into the existing pass" as zero-additional-cost was
+wrong (MAS-82 itself added a whole call per batch for key terms, so this adds
+a third — Northwind: 4 → 6 calls/upload), caught and corrected with the owner
+before implementation rather than after. Zero-cost cases still exist: a
+profile with every clause disabled, or a batch fully withheld by the
+guardrail, short-circuit `check_clauses()` before any model call.
+
+`ClauseResult.from_rows()` (`app/api/routes.py`) computes `present` (any
+verified row — `others` lists further passages, no "conflicting" status
+since presence has no comparable value to disagree over), `absent` (no rows,
+`clauses_complete` true), or `cannot_tell` (no rows, pass incomplete) —
+`clauses_complete` requires `review.status == "done"` first, same gate
+`key_terms_complete` already needs. `RiskReviewResponse.from_models()` only
+lists the clauses the contract's effective profile has enabled (resolved by
+`_enabled_clauses_for_contract()`, mirroring `_standards_for_contract()`).
+`components/ClauseChecklistCard.tsx` renders it inside the Overview tab's
+"View complete analysis" fold, right after `KeyTermsCard` — same tile shape,
+same `sourceInfo()`-style document attribution for a bundle's linked
+documents (MAS-190's pattern).
+
 ## Coverage (MAS-84)
 
 `extract_document()` in `ingestion/parsing.py` returns the text plus
