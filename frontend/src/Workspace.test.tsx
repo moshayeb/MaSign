@@ -75,7 +75,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Sources'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Invoices', 'Sources'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByText('Risk review')).toBeVisible()
     expect(screen.getByLabelText('Ask about the contract')).not.toBeVisible() // mounted, hidden
@@ -140,8 +140,8 @@ describe('contract workspace tabs (MAS-95)', () => {
 
     screen.getByRole('tab', { name: 'Ask MaSign' }).focus()
     await userEvent.keyboard('{ArrowRight}')
-    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
-    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Sources' }))
+    expect(screen.getByRole('tab', { name: 'Invoices' })).toHaveAttribute('aria-selected', 'true')
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Invoices' }))
     await userEvent.keyboard('{Home}')
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
     await userEvent.keyboard('{End}')

@@ -421,3 +421,72 @@ export function saveStandard(id: string, params: Record<string, unknown>): Promi
 export function resetStandard(id: string): Promise<Standard> {
   return request<Standard>(`/api/standards/${id}`, { method: 'DELETE' })
 }
+
+// --- invoice verification (MAS-92) ------------------------------------------
+
+export type InvoiceOutcome = 'match' | 'possible_mismatch' | 'cannot_verify'
+
+export interface InvoiceCheckItem {
+  label: string
+  outcome: InvoiceOutcome
+  reason: string
+  contract_term: string | null
+  contract_value: string | null
+  contract_quote: string | null
+  contract_chunk_id: string | null
+  contract_chunk_index: number | null
+  // The document the contract passage belongs to (MAS-137/138): the primary
+  // contract, or a linked Order Form/SOW one bundle level deep.
+  source_contract_id: string | null
+  invoice_field: string | null
+  invoice_value: string | null
+  invoice_quote: string | null
+  invoice_chunk_id: string | null
+  invoice_page: number | null
+}
+
+export interface InvoiceSummary {
+  id: string
+  contract_id: string
+  filename: string
+  size_bytes: number
+  character_count: number
+  page_count: number
+  ingestion_notes: string[]
+  created_at: string
+}
+
+export interface InvoiceCheck {
+  id: string
+  invoice: InvoiceSummary
+  contract_id: string
+  model: string | null
+  // False when the invoice's fields could not be read at all -- every item
+  // is then cannot_verify, never a false "clean" result.
+  checked: boolean
+  items: InvoiceCheckItem[]
+  created_at: string
+  matches: number
+  possible_mismatches: number
+  cannot_verify: number
+}
+
+export function uploadInvoice(contractId: string, file: File): Promise<InvoiceCheck> {
+  const form = new FormData()
+  form.append('file', file)
+  return request<InvoiceCheck>(`/api/contracts/${contractId}/invoices`, { method: 'POST', body: form })
+}
+
+export function listInvoiceChecks(contractId: string): Promise<InvoiceCheck[]> {
+  return request<InvoiceCheck[]>(`/api/contracts/${contractId}/invoice-checks`)
+}
+
+export interface InvoicePage {
+  chunk_id: string
+  page: number
+  text: string
+}
+
+export function getInvoicePages(invoiceId: string): Promise<InvoicePage[]> {
+  return request<InvoicePage[]>(`/api/invoices/${invoiceId}/pages`)
+}
