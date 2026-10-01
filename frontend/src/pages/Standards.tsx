@@ -23,6 +23,13 @@ export function StandardsPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [profileBusy, setProfileBusy] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Inline create/rename/delete-confirm, in place of a native browser dialog
+  // (this page uses styled forms everywhere else, same as the rest of MaSign).
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   function fetchProfiles(selectId?: string) {
     listStandardProfiles()
@@ -44,6 +51,8 @@ export function StandardsPage() {
   useEffect(() => {
     if (!selected) return
     setStandards(null)
+    setRenaming(false)
+    setConfirmingDelete(false)
     listProfileStandards(selected)
       .then(setStandards)
       .catch((error: Error) => {
@@ -92,14 +101,16 @@ export function StandardsPage() {
     }
   }
 
-  async function addProfile() {
-    const name = window.prompt('Name this profile (e.g. "Vendor contracts")')?.trim()
-    if (!name) return
+  async function addProfile(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
     setProfileBusy(true)
     try {
       const created = await toast
-        .promise(createStandardProfile(name), { loading: 'Creating…', success: () => 'Profile created.', error: (error: Error) => error.message })
+        .promise(createStandardProfile(trimmed), { loading: 'Creating…', success: () => 'Profile created.', error: (error: Error) => error.message })
         .unwrap()
+      setCreating(false)
+      setNewName('')
       fetchProfiles(created.id)
     } catch {
       // Already reported.
@@ -108,14 +119,15 @@ export function StandardsPage() {
     }
   }
 
-  async function renameProfile(id: string, currentName: string) {
-    const name = window.prompt('Rename this profile', currentName)?.trim()
-    if (!name || name === currentName) return
+  async function renameProfile(id: string, name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
     setProfileBusy(true)
     try {
       await toast
-        .promise(renameStandardProfile(id, name), { loading: 'Renaming…', success: () => 'Profile renamed.', error: (error: Error) => error.message })
+        .promise(renameStandardProfile(id, trimmed), { loading: 'Renaming…', success: () => 'Profile renamed.', error: (error: Error) => error.message })
         .unwrap()
+      setRenaming(false)
       fetchProfiles(id)
     } catch {
       // Already reported.
@@ -139,12 +151,12 @@ export function StandardsPage() {
   }
 
   async function removeProfile(id: string) {
-    if (!window.confirm('Delete this profile? Contracts using it fall back to the workspace default.')) return
     setProfileBusy(true)
     try {
       await toast
         .promise(deleteStandardProfile(id), { loading: 'Deleting…', success: () => 'Profile deleted.', error: (error: Error) => error.message })
         .unwrap()
+      setConfirmingDelete(false)
       fetchProfiles()
     } catch {
       // Already reported.
@@ -198,14 +210,56 @@ export function StandardsPage() {
                 {profile.is_default && <span className="status none">Default</span>}
               </button>
             ))}
-            <button type="button" className="link standard-profile-add" onClick={addProfile} disabled={profileBusy}>
-              + New profile
-            </button>
+            {creating ? (
+              <form
+                className="standard-profile-inline-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void addProfile(newName)
+                }}
+              >
+                <input
+                  autoFocus
+                  className="standard-input"
+                  aria-label="New profile name"
+                  placeholder='e.g. "Vendor contracts"'
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  disabled={profileBusy}
+                />
+                <button type="submit" className="primary" disabled={profileBusy || !newName.trim()}>
+                  Create
+                </button>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    setCreating(false)
+                    setNewName('')
+                  }}
+                  disabled={profileBusy}
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <button type="button" className="link standard-profile-add" onClick={() => setCreating(true)} disabled={profileBusy}>
+                + New profile
+              </button>
+            )}
           </div>
         )}
-        {selectedProfile && (
+        {selectedProfile && !renaming && !confirmingDelete && (
           <div className="standard-profile-actions">
-            <button type="button" className="link" onClick={() => renameProfile(selectedProfile.id, selectedProfile.name)} disabled={profileBusy}>
+            <button
+              type="button"
+              className="link"
+              onClick={() => {
+                setRenameValue(selectedProfile.name)
+                setRenaming(true)
+              }}
+              disabled={profileBusy}
+            >
               Rename
             </button>
             {!selectedProfile.is_default && (
@@ -213,11 +267,46 @@ export function StandardsPage() {
                 <button type="button" className="link" onClick={() => makeDefault(selectedProfile.id)} disabled={profileBusy}>
                   Make this the workspace default
                 </button>
-                <button type="button" className="link standard-profile-delete" onClick={() => removeProfile(selectedProfile.id)} disabled={profileBusy}>
+                <button type="button" className="link standard-profile-delete" onClick={() => setConfirmingDelete(true)} disabled={profileBusy}>
                   Delete profile
                 </button>
               </>
             )}
+          </div>
+        )}
+        {selectedProfile && renaming && (
+          <form
+            className="standard-profile-inline-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void renameProfile(selectedProfile.id, renameValue)
+            }}
+          >
+            <input
+              autoFocus
+              className="standard-input"
+              aria-label="Rename profile"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              disabled={profileBusy}
+            />
+            <button type="submit" className="primary" disabled={profileBusy || !renameValue.trim()}>
+              Save
+            </button>
+            <button type="button" className="link" onClick={() => setRenaming(false)} disabled={profileBusy}>
+              Cancel
+            </button>
+          </form>
+        )}
+        {selectedProfile && confirmingDelete && (
+          <div className="standard-profile-actions standard-profile-confirm-delete" role="alert">
+            <span>Delete “{selectedProfile.name}”? Contracts using it fall back to the workspace default.</span>
+            <button type="button" className="link standard-profile-delete" onClick={() => removeProfile(selectedProfile.id)} disabled={profileBusy}>
+              Yes, delete
+            </button>
+            <button type="button" className="link" onClick={() => setConfirmingDelete(false)} disabled={profileBusy}>
+              Cancel
+            </button>
           </div>
         )}
         {standards && (

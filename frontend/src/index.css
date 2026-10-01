@@ -2806,6 +2806,23 @@ button.chip.ranked {
   color: var(--high);
 }
 
+.standard-profile-inline-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.standard-profile-inline-form .standard-input {
+  width: 220px;
+  max-width: 100%;
+}
+
+.standard-profile-confirm-delete {
+  align-items: center;
+  color: var(--text-2);
+}
+
 .standards-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
