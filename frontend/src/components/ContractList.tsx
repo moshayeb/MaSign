@@ -151,11 +151,17 @@ function RowActionsMenu({ contract, onDelete }: { contract: Contract; onDelete: 
             <a className="export-action" href={`/api/contracts/${contract.contract_id}/export.pdf`} download onClick={() => setOpen(false)}>
               <span>Export PDF</span>
             </a>
+            <a className="export-action" href={`/api/contracts/${contract.contract_id}/export.docx`} download onClick={() => setOpen(false)}>
+              <span>Export DOCX</span>
+            </a>
             <a className="export-action" href={`/api/contracts/${contract.contract_id}/export.md`} download onClick={() => setOpen(false)}>
               <span>Export Markdown</span>
             </a>
             <a className="export-action" href={`/api/contracts/${contract.contract_id}/export.csv`} download onClick={() => setOpen(false)}>
               <span>Export CSV</span>
+            </a>
+            <a className="export-action" href={`/api/contracts/${contract.contract_id}/export.xlsx`} download onClick={() => setOpen(false)}>
+              <span>Export XLSX</span>
             </a>
             <button
               type="button"

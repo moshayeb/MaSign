@@ -1247,9 +1247,9 @@ def get_contract_key_terms(
 def export_contract_review(
     contract_id: UUID, fmt: str, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
 ) -> Response:
-    """The review as Markdown, CSV, or PDF. Same data as /risks and /key-terms."""
-    if fmt not in ("md", "csv", "pdf"):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md, csv or pdf.")
+    """The review as Markdown, CSV, PDF, DOCX or XLSX. Same data as /risks and /key-terms."""
+    if fmt not in ("md", "csv", "pdf", "docx", "xlsx"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export format must be md, csv, pdf, docx or xlsx.")
     contract = repository.get_contract(db, contract_id, workspace.id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
@@ -1278,8 +1278,15 @@ def export_contract_review(
         content, media = export.render_markdown(contract.filename, review_body, terms_body, documents, questions), "text/markdown; charset=utf-8"
     elif fmt == "csv":
         content, media = export.render_csv(review_body, terms_body, documents), "text/csv; charset=utf-8"
-    else:
+    elif fmt == "pdf":
         content, media = export.render_pdf(contract.filename, review_body, terms_body, documents, questions), "application/pdf"
+    elif fmt == "docx":
+        content, media = (
+            export.render_docx(contract.filename, review_body, terms_body, documents, questions),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    else:
+        content, media = export.render_xlsx(review_body, terms_body, documents), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return Response(
         content=content,
         media_type=media,

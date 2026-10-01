@@ -1,4 +1,4 @@
-"""Export a contract's review as PDF, Markdown or CSV (MAS-154).
+"""Export a contract's review as PDF, Markdown, CSV, DOCX or XLSX (MAS-154, MAS-191).
 
 All renderings are built from the same response models the UI reads
 (`RiskReviewResponse`, `KeyTermsResponse`), so a file can never say
@@ -15,6 +15,10 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from docx import Document as DocxDocument
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -145,6 +149,72 @@ def render_pdf(
     return output.getvalue()
 
 
+def render_docx(
+    filename: str,
+    review: RiskReviewResponse,
+    terms: KeyTermsResponse,
+    documents: dict[UUID, str] | None = None,
+    questions: list[QuestionOut] | None = None,
+) -> bytes:
+    """Render the same no-cost review data as a Word document, reusing
+    render_markdown's lines (including its pipe tables) the same way
+    render_pdf does, rather than a second, independently maintained
+    description of the review."""
+    source = render_markdown(filename, review, terms, documents, questions)
+    document = DocxDocument()
+    table_rows: list[list[str]] = []
+
+    def flush_table() -> None:
+        if not table_rows:
+            return
+        table = document.add_table(rows=0, cols=len(table_rows[0]))
+        table.style = "Table Grid"
+        for row_index, row in enumerate(table_rows):
+            cells = table.add_row().cells
+            for col_index, value in enumerate(row):
+                cells[col_index].text = value
+                if row_index == 0:
+                    for run in cells[col_index].paragraphs[0].runs:
+                        run.bold = True
+        table_rows.clear()
+
+    for raw in source.splitlines():
+        line = raw.strip()
+        if line.startswith("|"):
+            cells = [_plain(c.strip()) for c in line.strip("|").split("|")]
+            if set("".join(cells)) <= {"-"}:  # the |---|---| separator row
+                continue
+            table_rows.append(cells)
+            continue
+        flush_table()
+        if not line:
+            continue
+        if line.startswith("# "):
+            document.add_heading(_plain(line[2:]), level=0)
+        elif line.startswith("## "):
+            document.add_heading(_plain(line[3:]), level=1)
+        elif line.startswith("### "):
+            document.add_heading(_plain(line[4:]), level=2)
+        elif line.startswith("> "):
+            document.add_paragraph(_plain(line[2:]), style="Intense Quote")
+        elif line.startswith("- "):
+            document.add_paragraph(_plain(line[2:]), style="List Bullet")
+        elif line.startswith("_") and line.endswith("_") and len(line) > 1:
+            paragraph = document.add_paragraph()
+            paragraph.add_run(_plain(line.strip("_"))).italic = True
+        else:
+            document.add_paragraph(_plain(line))
+    flush_table()
+
+    output = io.BytesIO()
+    document.save(output)
+    return output.getvalue()
+
+
+def _plain(text: str) -> str:
+    return text.replace("**", "").replace("*", "").replace("`", "")
+
+
 _FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")
 
 
@@ -163,23 +233,54 @@ def _safe_row(writer, values: list) -> None:
     writer.writerow([_escape_formula(v) if isinstance(v, str) else v for v in values])
 
 
-def render_csv(review: RiskReviewResponse, terms: KeyTermsResponse, documents: dict[UUID, str] | None = None) -> str:
-    documents = documents or {}
-    out = io.StringIO()
-    writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(["kind", "name", "severity_or_status", "value_or_reason", "standard", "source_document", "passage", "quote"])
+_EXPORT_COLUMNS = ["kind", "name", "severity_or_status", "value_or_reason", "standard", "source_document", "passage", "quote"]
+
+
+def _export_rows(review: RiskReviewResponse, terms: KeyTermsResponse, documents: dict[UUID, str]) -> list[list]:
+    """The row data CSV and XLSX both render -- one source so the two tabular
+    formats can never silently drift apart."""
+    rows: list[list] = []
     for f in review.findings:
-        _safe_row(writer, ["finding", f.category_name, f.severity, f.reason, "", documents.get(f.contract_id, "Contract"), f.chunk_index + 1, f.quote])
+        rows.append(["finding", f.category_name, f.severity, f.reason, "", documents.get(f.contract_id, "Contract"), f.chunk_index + 1, f.quote])
     for term in terms.terms:
         if term.source:
-            _safe_row(writer, ["key_term", term.name, term.status, term.value, _standard_cell(term), documents.get(term.source.contract_id, "Contract"), term.source.chunk_index + 1, term.source.quote])
+            rows.append(["key_term", term.name, term.status, term.value, _standard_cell(term), documents.get(term.source.contract_id, "Contract"), term.source.chunk_index + 1, term.source.quote])
             for other in term.others:
-                _safe_row(writer, ["key_term", term.name, "also_stated", other.value, "", documents.get(other.contract_id, "Contract"), other.chunk_index + 1, other.quote])
+                rows.append(["key_term", term.name, "also_stated", other.value, "", documents.get(other.contract_id, "Contract"), other.chunk_index + 1, other.quote])
         else:
-            _safe_row(writer, ["key_term", term.name, term.status, term.value, "", "", "", ""])
+            rows.append(["key_term", term.name, term.status, term.value, "", "", "", ""])
     for deadline in terms.deadlines:
-        _safe_row(writer, ["deadline", deadline.name, "stated" if deadline.date else "cannot_compute", deadline.date.isoformat() if deadline.date else deadline.reason or "", "", _deadline_document(deadline, terms, documents), "", deadline.how or ""])
+        rows.append(["deadline", deadline.name, "stated" if deadline.date else "cannot_compute", deadline.date.isoformat() if deadline.date else deadline.reason or "", "", _deadline_document(deadline, terms, documents), "", deadline.how or ""])
+    return rows
+
+
+def render_csv(review: RiskReviewResponse, terms: KeyTermsResponse, documents: dict[UUID, str] | None = None) -> str:
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(_EXPORT_COLUMNS)
+    for values in _export_rows(review, terms, documents or {}):
+        _safe_row(writer, values)
     return out.getvalue()
+
+
+def render_xlsx(review: RiskReviewResponse, terms: KeyTermsResponse, documents: dict[UUID, str] | None = None) -> bytes:
+    """The same rows as render_csv, as a real workbook. MAS-131's
+    formula-injection escaping applies identically here -- a cell is read as
+    a formula by Excel, Google Sheets and LibreOffice if it begins with one
+    of `_FORMULA_TRIGGER_CHARS` regardless of which code wrote the file."""
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Review"
+    sheet.append(_EXPORT_COLUMNS)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for values in _export_rows(review, terms, documents or {}):
+        sheet.append([_escape_formula(v) if isinstance(v, str) else v for v in values])
+    for column_index in range(1, len(_EXPORT_COLUMNS) + 1):
+        sheet.column_dimensions[get_column_letter(column_index)].width = 22
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
 
 
 def _standard_cell(term) -> str:

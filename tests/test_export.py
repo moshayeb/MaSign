@@ -11,7 +11,7 @@ import io
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.api.export import render_csv, render_markdown, render_pdf
+from app.api.export import render_csv, render_docx, render_markdown, render_pdf, render_xlsx
 from app.api.routes import (
     KeyTermSource,
     KeyTermsResponse,
@@ -173,3 +173,76 @@ def test_pdf_export_is_a_searchable_pdf_with_contract_and_bundle_sources() -> No
     assert "Review of main-agreement.pdf" in extracted
     assert "statement-of-work.docx" in extracted
     assert "Liability is uncapped." in extracted
+
+
+def test_docx_export_is_a_readable_document_with_contract_and_bundle_sources() -> None:
+    """MAS-191."""
+    from docx import Document
+
+    finding = _finding(reason="Liability is uncapped.", quote="shall be unlimited")
+    term = _term_with_source(value="EUR 18,500 per month", quote="pay EUR 18,500 per month")
+    terms = _terms([term])
+    data = render_docx(
+        "main-agreement.pdf", _review([finding]), terms,
+        {finding.contract_id: "main-agreement.pdf", term.source.contract_id: "statement-of-work.docx"},
+    )
+
+    document = Document(io.BytesIO(data))
+    text = "\n".join(p.text for p in document.paragraphs)
+    table_text = "\n".join(cell.text for table in document.tables for row in table.rows for cell in row.cells)
+    assert "Review of main-agreement.pdf" in text
+    assert "statement-of-work.docx" in text
+    assert "Liability is uncapped." in text
+    assert "shall be unlimited" in text
+    # The key-terms pipe table becomes a real docx table, not flattened text.
+    assert "EUR 18,500 per month" in table_text
+    assert document.tables, "expected at least the key-terms table"
+
+
+def test_docx_export_with_no_findings_says_so_plainly() -> None:
+    """honest-outcomes: an empty review states that plainly rather than
+    silently omitting the Risk findings section (MAS-191)."""
+    from docx import Document
+
+    data = render_docx("main-agreement.pdf", _review([]), _terms([]))
+    text = "\n".join(p.text for p in Document(io.BytesIO(data)).paragraphs)
+    assert "Nothing was flagged in the graded passages." in text
+
+
+def test_xlsx_export_is_a_readable_workbook_with_contract_and_bundle_sources() -> None:
+    """MAS-191."""
+    from openpyxl import load_workbook
+
+    finding = _finding(reason="Liability is uncapped.", quote="shall be unlimited")
+    term = _term_with_source(value="EUR 18,500 per month", quote="pay EUR 18,500 per month")
+    terms = _terms([term])
+    documents = {finding.contract_id: "main-agreement.pdf", term.source.contract_id: "statement-of-work.docx"}
+    data = render_xlsx(_review([finding]), terms, documents)
+
+    rows = list(load_workbook(io.BytesIO(data)).active.iter_rows(values_only=True))
+    assert rows[0] == ("kind", "name", "severity_or_status", "value_or_reason", "standard", "source_document", "passage", "quote")
+    finding_row = next(r for r in rows[1:] if r[0] == "finding")
+    assert finding_row[5] == "main-agreement.pdf"
+    term_row = next(r for r in rows[1:] if r[0] == "key_term")
+    assert term_row[5] == "statement-of-work.docx"
+
+
+def test_xlsx_export_escapes_a_formula_trigger_the_same_as_csv() -> None:
+    """MAS-131's formula-injection concern applies to the workbook exactly
+    the same as the CSV it shares row data with (MAS-191)."""
+    from openpyxl import load_workbook
+
+    review = _review([_finding(reason="=cmd|' /c calc'!A1", quote="+1; a payout clause")])
+    rows = list(load_workbook(io.BytesIO(render_xlsx(review, _terms([])))).active.iter_rows(values_only=True))
+
+    finding_row = rows[1]
+    assert finding_row[3] == "'=cmd|' /c calc'!A1"
+    assert finding_row[7] == "'+1; a payout clause"
+
+
+def test_xlsx_export_with_no_findings_has_only_the_header_row() -> None:
+    """honest-outcomes: nothing fabricated for an empty review (MAS-191)."""
+    from openpyxl import load_workbook
+
+    rows = list(load_workbook(io.BytesIO(render_xlsx(_review([]), _terms([])))).active.iter_rows(values_only=True))
+    assert len(rows) == 1
