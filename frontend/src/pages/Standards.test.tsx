@@ -85,6 +85,15 @@ function mockApi(
       const body = JSON.parse(String(init.body)) as { name: string }
       return overrides.onCreateProfile?.(body.name) ?? json(201, { id: `profile-${body.name}`, name: body.name, is_default: false })
     }
+    const profileMatch = /^\/api\/standard-profiles\/([^/]+)$/.exec(url)
+    if (profileMatch && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as { name?: string; is_default?: boolean }
+      const base = profiles.find((p) => p.id === profileMatch[1])!
+      return json(200, { ...base, ...(body.name !== undefined ? { name: body.name } : {}), ...(body.is_default !== undefined ? { is_default: body.is_default } : {}) })
+    }
+    if (profileMatch && init?.method === 'DELETE') {
+      return new Response(null, { status: 204 })
+    }
     const standardsMatch = /^\/api\/standard-profiles\/([^/]+)\/standards$/.exec(url)
     if (standardsMatch && (!init || init.method === undefined)) {
       return overrides.onGetStandards?.(standardsMatch[1]) ?? json(200, DEFAULTS)
@@ -248,8 +257,7 @@ describe('named standard profiles (MAS-185)', () => {
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('creates a profile and switches to editing it', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue('Vendor contracts')
+  it('creates a profile via the inline form (no native dialog) and switches to editing it', async () => {
     const fetchMock = mockApi({
       onGetStandards: (profileId) =>
         profileId === 'profile-vendor'
@@ -261,14 +269,31 @@ describe('named standard profiles (MAS-185)', () => {
 
     await screen.findByText('net 30 days or longer')
     await userEvent.click(screen.getByRole('button', { name: '+ New profile' }))
+    await userEvent.type(screen.getByLabelText('New profile name'), 'Vendor contracts')
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }))
 
-    expect(fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/standard-profiles' && init?.method === 'POST')).toBe(true)
+    const postCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standard-profiles' && init?.method === 'POST')
+    expect(postCall).toBeTruthy()
+    expect(JSON.parse(String(postCall![1]?.body))).toEqual({ name: 'Vendor contracts' })
     expect(await screen.findByText('at most 14 days')).toBeInTheDocument()
     expect(shown).toContainEqual(['success', 'Profile created.'])
   })
 
-  it('offers to delete a non-default profile but not the default one', async () => {
-    mockApi({ profiles: [DEFAULT_PROFILE, { id: 'profile-vendor', name: 'Vendor contracts', is_default: false }] })
+  it('cancelling the new-profile form makes no request', async () => {
+    const fetchMock = mockApi()
+    render(<StandardsPage />)
+
+    await screen.findByText('net 30 days or longer')
+    await userEvent.click(screen.getByRole('button', { name: '+ New profile' }))
+    await userEvent.type(screen.getByLabelText('New profile name'), 'Discarded')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByLabelText('New profile name')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/standard-profiles' && init?.method === 'POST')).toBe(false)
+  })
+
+  it('offers to delete a non-default profile but not the default one, with an inline confirm step', async () => {
+    const fetchMock = mockApi({ profiles: [DEFAULT_PROFILE, { id: 'profile-vendor', name: 'Vendor contracts', is_default: false }] })
     render(<StandardsPage />)
 
     await screen.findByText('net 30 days or longer')
@@ -277,5 +302,31 @@ describe('named standard profiles (MAS-185)', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Vendor contracts/ }))
     await screen.findByRole('button', { name: 'Delete profile' })
     expect(screen.getByRole('button', { name: 'Make this the workspace default' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete profile' }))
+    expect(screen.getByText(/Delete .Vendor contracts/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete profile' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, delete' }))
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/standard-profiles/profile-vendor' && init?.method === 'DELETE')).toBe(true)
+    expect(shown).toContainEqual(['success', 'Profile deleted.'])
+  })
+
+  it('renames a profile via the inline form', async () => {
+    const fetchMock = mockApi()
+    render(<StandardsPage />)
+
+    await screen.findByText('net 30 days or longer')
+    await userEvent.click(screen.getByRole('button', { name: 'Rename' }))
+    const input = screen.getByLabelText('Rename profile')
+    expect(input).toHaveValue('Default')
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Renamed default')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standard-profiles/profile-default' && init?.method === 'PUT')
+    expect(putCall).toBeTruthy()
+    expect(JSON.parse(String(putCall![1]?.body))).toEqual({ name: 'Renamed default' })
+    expect(shown).toContainEqual(['success', 'Profile renamed.'])
   })
 })

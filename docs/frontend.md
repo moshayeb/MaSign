@@ -689,18 +689,22 @@ is rule-based, not a model call.
 
 Above the standards grid, a `role="tablist"` bar lists every named profile
 in the workspace as a pill (`listStandardProfiles`), the selected one
-highlighted, plus a "+ New profile" link (`window.prompt` for the name —
-no modal, matching this page's existing lightweight style). Selecting a
-profile reloads the grid below from `GET /standard-profiles/{id}/standards`
-instead of the plain `/api/standards`; saving/resetting a card now calls the
-profile-scoped `PUT`/`DELETE /standard-profiles/{id}/standards/{term_id}`.
-Below the tabs, a "Rename" link always shows for the selected profile (also
-`window.prompt`); "Make this the workspace default" and "Delete profile"
-show only for a non-default one — the one `is_default` profile can't be
-deleted (the API 400s; the button is simply absent rather than present-and-
-failing). Deleting asks for confirmation first (`window.confirm`: *"Contracts
-using it fall back to the workspace default"*), since it is the one action
-here that affects contracts the user isn't currently looking at.
+highlighted, plus a "+ New profile" link. Selecting a profile reloads the
+grid below from `GET /standard-profiles/{id}/standards` instead of the plain
+`/api/standards`; saving/resetting a card now calls the profile-scoped
+`PUT`/`DELETE /standard-profiles/{id}/standards/{term_id}`. Below the tabs,
+a "Rename" link always shows for the selected profile; "Make this the
+workspace default" and "Delete profile" show only for a non-default one —
+the one `is_default` profile can't be deleted (the API 400s; the button is
+simply absent rather than present-and-failing). Create, rename and delete
+are all inline styled forms, not a native browser dialog (MAS-186, fixed the
+same day it shipped: MaSign has no `window.prompt`/`window.confirm` anywhere
+else, and one briefly slipped in here) — the same `.standard-input` field
+the four standard cards already use, a Create/Save/Yes-delete button, and a
+Cancel link. Deleting is a two-step inline confirm, swapping the action row
+for the warning text (*"Contracts using it fall back to the workspace
+default"*) plus Yes/Cancel, since it is the one action here that affects
+contracts the user isn't currently looking at.
 
 A contract's own assignment lives on its Overview tab: `KeyTermsCard`'s
 `StandardProfilePicker` is a `<select>` next to the "Key terms" heading
