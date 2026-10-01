@@ -61,7 +61,7 @@ describe('the shell', () => {
   it('makes the marketing claim on the home page, where it belongs (MAS-133)', () => {
     render(<HomePage />)
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Understand your contract before you sign/)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Understand your contract before you sign/i)
     // The CTA appears both in the header nav and the hero.
     const workspaceLinks = screen.getAllByRole('link', { name: /Open workspace/ })
     expect(workspaceLinks.length).toBeGreaterThan(0)

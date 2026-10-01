@@ -117,8 +117,8 @@ export function HomePage() {
           <div className="hero home-hero">
             <p className="home-eyebrow">AI-assisted contract analysis</p>
             <h1>
-              Understand <br />your contract <br />
-              <span className="home-headline-highlight">before you sign.
+              UNDERSTAND <br />YOUR CONTRACT <br />
+              <span className="home-headline-highlight">BEFORE YOU SIGN.
                 <svg viewBox="0 0 300 15" preserveAspectRatio="none" aria-hidden="true">
                   <path d="M2 12C52 5 110 2 151 3c53-1 100 1 139 5 5 1 7 3 5 4-42-3-97-4-144-3C100 9 49 12 2 15Z" fill="#0caded" opacity=".75" />
                 </svg>
