@@ -371,7 +371,7 @@ export default function App() {
             onDeleted={deleted}
           />
           <a className="link sidebar-standards-link" href="/standards">
-            Company standards
+            Comparison rules
           </a>
         </aside>
 

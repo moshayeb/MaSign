@@ -643,17 +643,28 @@ Deviations tile of the summary strip.
 
 ### Editable standards (MAS-120)
 
-"Company standards" in the sidebar footer (`App.tsx`, below the contract
+"Comparison rules" in the sidebar footer (`App.tsx`, below the contract
 list) opens `/standards` (`pages/Standards.tsx`, registered in `pages/index.ts`
 like the public static pages, but reached from the workspace rather than the
-footer). One `.card` per standard (`GET /api/standards`): the current text,
+footer). The page is titled "Contract comparison rules" to reflect its four
+fixed numeric comparisons, scoped to the signed-in workspace (MAS-181). It
+states that edits immediately update existing Overview verdicts, checklists
+and exports without re-reading the contract or calling AI; unverifiable values
+remain "Can't compare". A two-column desktop grid becomes one column on
+phones. Each card shows the saved rule separately from editable values, an
+example verdict calculated from the draft, and an unsaved-change indicator.
+One `.card` per standard (`GET /api/standards`): the current text,
 a "MaSign default" / "Customised" pill, a small form matched to that term's
 shape (a days number for payment deadline/notice period, a percent for late
 payment, a mode selector plus the matching field for termination cost —
 no-fee / percent-of-remaining-fees / a fixed amount in USD, EUR or SEK), and
 a "Restore MaSign's default" link, disabled once the standard already is the
 default. Saving (`PUT`) or resetting (`DELETE`) replaces just that card's row
-in local state from the response — no full reload — and a save the API
+in local state from the response — no full reload — and remounts that card's
+form so its inputs match the saved value. Save is disabled for unchanged
+values. A failed initial load shows the API reason and a Try again button
+rather than an indefinite loading message; a missing session links to Sign in
+instead. A save the API
 rejects (422) is never applied: the card keeps showing its last-saved value
 and the toast carries the API's `detail` verbatim, same as every other error
 toast. Saving takes effect immediately everywhere a standard verdict is

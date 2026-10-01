@@ -12,12 +12,26 @@ const CURRENCIES = ['USD', 'EUR', 'SEK'] as const
 export function StandardsPage() {
   const [standards, setStandards] = useState<Standard[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-  useEffect(() => {
+  function fetchStandards() {
     listStandards()
       .then(setStandards)
-      .catch((error: Error) => toast.error(error.message))
+      .catch((error: Error) => {
+        setLoadError(error.message)
+        toast.error(error.message)
+      })
+  }
+
+  useEffect(() => {
+    fetchStandards()
   }, [])
+
+  function retry() {
+    setLoadError(null)
+    setStandards(null)
+    fetchStandards()
+  }
 
   function replace(updated: Standard) {
     setStandards((prev) => (prev ? prev.map((s) => (s.id === updated.id ? updated : s)) : prev))
@@ -55,17 +69,35 @@ export function StandardsPage() {
     <PageChrome>
       <main className="content standards-page">
         <div className="standards-intro">
-          <h1>Company standards</h1>
-          <p className="muted">
-            What MaSign compares a contract's key terms against to flag a deviation on the Overview tab and in the "Before you
-            sign" checklist. Every comparison is a fixed rule over a verified number — saving or applying a standard never
-            calls the model.
+          <a className="link standards-back" href="/workspace">← Back to workspace</a>
+          <p className="standards-eyebrow">Workspace settings</p>
+          <h1>Contract comparison rules</h1>
+          <p>
+            Set the four numeric positions MaSign uses to compare verified contract terms in this workspace.
           </p>
         </div>
-        {!standards && <p className="muted">Loading…</p>}
-        {standards?.map((standard) => (
-          <StandardCard key={standard.id} standard={standard} busy={busyId === standard.id} onSave={(params) => save(standard.id, params)} onReset={() => reset(standard.id)} />
-        ))}
+        <div className="standards-effect" role="note">
+          Changes update existing Overview verdicts, checklists and exports immediately. Contracts are not reread, and no AI call is made.
+          If MaSign cannot verify a value, it shows “Can’t compare” instead of a verdict.
+        </div>
+        {loadError && (
+          <div className="card standards-load-error" role="alert">
+            <p>Could not load your rules: {loadError}</p>
+            {loadError === 'Sign in to continue.' ? (
+              <a className="link" href="/login">Sign in to manage rules</a>
+            ) : (
+              <button type="button" onClick={retry}>Try again</button>
+            )}
+          </div>
+        )}
+        {!standards && !loadError && <p className="muted" role="status">Loading rules…</p>}
+        {standards && (
+          <div className="standards-grid">
+            {standards.map((standard) => (
+              <StandardCard key={standard.id} standard={standard} busy={busyId === standard.id} onSave={(params) => save(standard.id, params)} onReset={() => reset(standard.id)} />
+            ))}
+          </div>
+        )}
       </main>
     </PageChrome>
   )
@@ -85,12 +117,21 @@ function StandardCard({ standard, busy, onSave, onReset }: CardProps) {
         <h2 className="card-title">{standard.name}</h2>
         <span className={standard.is_default ? 'status none' : 'status ok'}>{standard.is_default ? 'MaSign default' : 'Customised'}</span>
       </div>
-      <p className="standard-current">{standard.text}</p>
-      <StandardForm standard={standard} busy={busy} onSave={onSave} />
+      <p className="standard-current"><span>Saved rule</span><strong>{standard.text}</strong></p>
+      <StandardForm key={JSON.stringify(standard.params)} standard={standard} busy={busy} onSave={onSave} />
       <button type="button" className="link standard-reset" onClick={onReset} disabled={busy || standard.is_default}>
         Restore MaSign's default
       </button>
     </section>
+  )
+}
+
+function RuleExample({ clause, meets }: { clause: string; meets: boolean }) {
+  return (
+    <p className="standard-example">
+      <span>Example · {clause}</span>
+      <strong className={meets ? 'standard-example-meets' : 'standard-example-deviates'}>{meets ? 'Meets rule' : 'Deviates'}</strong>
+    </p>
   )
 }
 
@@ -105,7 +146,9 @@ function StandardForm({ standard, busy, onSave }: { standard: Standard; busy: bo
 function DaysField({ standard, busy, onSave, paramKey, label }: { standard: Standard; busy: boolean; onSave: (params: Record<string, unknown>) => void; paramKey: string; label: string }) {
   const initial = standard.params[paramKey]
   const [value, setValue] = useState(typeof initial === 'number' ? String(initial) : '')
+  const dirty = value !== String(initial)
   const inputId = `standard-${standard.id}-days`
+  const isPayment = standard.id === 'payment_deadline'
   return (
     <form
       className="standard-form"
@@ -119,10 +162,12 @@ function DaysField({ standard, busy, onSave, paramKey, label }: { standard: Stan
       </label>
       <div className="standard-form-row">
         <input id={inputId} className="standard-input" type="number" min={0} max={3650} step={1} value={value} onChange={(event) => setValue(event.target.value)} disabled={busy} required />
-        <button type="submit" className="primary" disabled={busy || value === ''}>
-          Save
+        <button type="submit" className="primary" disabled={busy || !dirty || value === ''}>
+          Save rule
         </button>
       </div>
+      {dirty && <span className="standard-unsaved">Unsaved change</span>}
+      {value !== '' && <RuleExample clause={isPayment ? 'Invoice payable in 30 days' : '60 days’ termination notice'} meets={isPayment ? 30 >= Number(value) : 60 <= Number(value)} />}
     </form>
   )
 }
@@ -130,6 +175,7 @@ function DaysField({ standard, busy, onSave, paramKey, label }: { standard: Stan
 function PercentField({ standard, busy, onSave }: { standard: Standard; busy: boolean; onSave: (params: Record<string, unknown>) => void }) {
   const initial = standard.params.rate_max_per_month_percent
   const [value, setValue] = useState(typeof initial === 'number' ? String(initial) : '')
+  const dirty = value !== String(initial)
   const inputId = `standard-${standard.id}-percent`
   return (
     <form
@@ -144,10 +190,12 @@ function PercentField({ standard, busy, onSave }: { standard: Standard; busy: bo
       </label>
       <div className="standard-form-row">
         <input id={inputId} className="standard-input" type="number" min={0} max={100} step={0.1} value={value} onChange={(event) => setValue(event.target.value)} disabled={busy} required />
-        <button type="submit" className="primary" disabled={busy || value === ''}>
-          Save
+        <button type="submit" className="primary" disabled={busy || !dirty || value === ''}>
+          Save rule
         </button>
       </div>
+      {dirty && <span className="standard-unsaved">Unsaved change</span>}
+      {value !== '' && <RuleExample clause="1% interest per month" meets={1 <= Number(value)} />}
     </form>
   )
 }
@@ -159,6 +207,8 @@ function TerminationCostFields({ standard, busy, onSave }: { standard: Standard;
   const [maxAmount, setMaxAmount] = useState(typeof params.max_amount === 'number' ? String(params.max_amount) : '')
   const [currency, setCurrency] = useState(typeof params.currency === 'string' ? params.currency : CURRENCIES[0])
   const prefix = `standard-${standard.id}`
+  const dirty = mode !== params.mode || (mode === 'percent_cap' && maxPercent !== String(params.max_percent)) ||
+    (mode === 'amount_cap' && (maxAmount !== String(params.max_amount) || currency !== params.currency))
 
   function submit() {
     if (mode === 'no_fee') return onSave({ mode })
@@ -224,9 +274,13 @@ function TerminationCostFields({ standard, busy, onSave }: { standard: Standard;
         </div>
       )}
 
-      <button type="submit" className="primary" disabled={busy || (mode === 'percent_cap' && maxPercent === '') || (mode === 'amount_cap' && maxAmount === '')}>
-        Save
+      <button type="submit" className="primary" disabled={busy || !dirty || (mode === 'percent_cap' && maxPercent === '') || (mode === 'amount_cap' && maxAmount === '')}>
+        Save rule
       </button>
+      {dirty && <span className="standard-unsaved">Unsaved change</span>}
+      {mode === 'no_fee' && <RuleExample clause="5% early-termination fee" meets={false} />}
+      {mode === 'percent_cap' && maxPercent !== '' && <RuleExample clause="5% of remaining fees" meets={5 <= Number(maxPercent)} />}
+      {mode === 'amount_cap' && maxAmount !== '' && <RuleExample clause={`${currency} 2,000 early-termination fee`} meets={2000 <= Number(maxAmount)} />}
     </form>
   )
 }

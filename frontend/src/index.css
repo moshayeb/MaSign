@@ -2643,28 +2643,93 @@ button.chip.ranked {
    marketing-page look of .pubpage. */
 .standards-page {
   flex: 1 0 auto;
-  max-width: 640px;
+  max-width: 1050px;
   margin: 0 auto;
   width: 100%;
-  padding: 40px 28px 60px;
+  padding: 48px 28px 72px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 24px;
+}
+
+.standards-back {
+  display: inline-block;
+  margin-bottom: 28px;
+  font-size: 0.9rem;
+}
+
+.standards-eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .standards-intro h1 {
-  margin-bottom: 8px;
+  margin: 0 0 10px;
+  letter-spacing: -0.035em;
+}
+
+.standards-intro > p:last-child {
+  max-width: 65ch;
+  margin: 0;
+  color: var(--text-2);
+}
+
+.standards-effect {
+  max-width: 78ch;
+  padding: 16px 20px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-light);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.standards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.standard-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: none;
+}
+
+.standard-card .card-header {
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .standard-current {
-  margin: 0 0 14px;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 20px;
+}
+
+.standard-current span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.standard-current strong {
+  color: var(--text);
+  font-size: 1rem;
 }
 
 .standard-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .standard-label {
@@ -2676,6 +2741,7 @@ button.chip.ranked {
 .standard-form-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -2698,7 +2764,46 @@ select.standard-input {
 }
 
 .standard-reset {
-  margin-top: 14px;
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.standard-reset:disabled {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.standard-unsaved {
+  color: var(--warn);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.standard-example {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 5px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 0.84rem;
+}
+
+.standard-example strong { white-space: nowrap; }
+.standard-example-meets { color: var(--ok); }
+.standard-example-deviates { color: var(--warn); }
+
+.standards-load-error p { margin-top: 0; }
+
+@media (max-width: 720px) {
+  .standards-page { padding: 32px 16px 56px; }
+  .standards-grid { grid-template-columns: minmax(0, 1fr); }
+  .standard-input { max-width: 100%; }
 }
 
 /* Public content pages (MAS-142): the shared layout for How it works, What

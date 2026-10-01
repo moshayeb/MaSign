@@ -63,10 +63,10 @@ const DEFAULTS = [
   },
 ]
 
-function mockApi(overrides: { onPut?: (id: string, body: unknown) => Response; onDelete?: (id: string) => Response } = {}) {
+function mockApi(overrides: { onGet?: () => Response; onPut?: (id: string, body: unknown) => Response; onDelete?: (id: string) => Response } = {}) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input)
-    if (url === '/api/standards' && (!init || init.method === undefined)) return json(200, DEFAULTS)
+    if (url === '/api/standards' && (!init || init.method === undefined)) return overrides.onGet?.() ?? json(200, DEFAULTS)
     const match = /\/api\/standards\/(\w+)$/.exec(url)
     if (match && init?.method === 'PUT') {
       const id = match[1]
@@ -97,6 +97,8 @@ describe('company standards settings screen (MAS-120)', () => {
     expect(screen.getByText('at most 60 days')).toBeInTheDocument()
     expect(screen.getByText('no early-termination fee')).toBeInTheDocument()
     expect(screen.getAllByText('MaSign default')).toHaveLength(4)
+    expect(screen.getByText(/Changes update existing Overview verdicts/)).toBeInTheDocument()
+    expect(screen.getByText('Example · Invoice payable in 30 days')).toBeInTheDocument()
   })
 
   async function findCard(name: string): Promise<HTMLElement> {
@@ -112,13 +114,18 @@ describe('company standards settings screen (MAS-120)', () => {
     const input = within(paymentCard).getByLabelText('Minimum payment deadline (days)')
     await userEvent.clear(input)
     await userEvent.type(input, '45')
-    await userEvent.click(within(paymentCard).getByRole('button', { name: 'Save' }))
+    expect(within(paymentCard).getByRole('button', { name: 'Save rule' })).toBeEnabled()
+    expect(within(paymentCard).getByText('Unsaved change')).toBeInTheDocument()
+    expect(within(paymentCard).getByText('Deviates')).toBeInTheDocument()
+    await userEvent.click(within(paymentCard).getByRole('button', { name: 'Save rule' }))
 
     const putCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standards/payment_deadline' && init?.method === 'PUT')
     expect(putCall).toBeTruthy()
     expect(JSON.parse(String(putCall![1]?.body))).toEqual({ params: { net_days_min: 45 } })
 
     expect(await within(paymentCard).findByText('net 45 days or longer')).toBeInTheDocument()
+    expect(within(paymentCard).getByLabelText('Minimum payment deadline (days)')).toHaveValue(45)
+    expect(within(paymentCard).getByRole('button', { name: 'Save rule' })).toBeDisabled()
     expect(shown).toContainEqual(['success', 'Standard saved.'])
   })
 
@@ -133,7 +140,7 @@ describe('company standards settings screen (MAS-120)', () => {
     const input = within(paymentCard).getByLabelText('Minimum payment deadline (days)')
     await userEvent.clear(input)
     await userEvent.type(input, '50')
-    await userEvent.click(within(paymentCard).getByRole('button', { name: 'Save' }))
+    await userEvent.click(within(paymentCard).getByRole('button', { name: 'Save rule' }))
 
     await vi.waitFor(() => expect(shown).toContainEqual(['error', 'Payment deadline must be between 0 and 3650 days.']))
     // The card still shows the un-saved default -- a rejected save is never applied.
@@ -148,7 +155,7 @@ describe('company standards settings screen (MAS-120)', () => {
     const input = within(paymentCard).getByLabelText('Minimum payment deadline (days)')
     await userEvent.clear(input)
     await userEvent.type(input, '45')
-    await userEvent.click(within(paymentCard).getByRole('button', { name: 'Save' }))
+    await userEvent.click(within(paymentCard).getByRole('button', { name: 'Save rule' }))
     await within(paymentCard).findByText('net 45 days or longer')
 
     const restoreButton = within(paymentCard).getByRole('button', { name: "Restore MaSign's default" })
@@ -157,6 +164,7 @@ describe('company standards settings screen (MAS-120)', () => {
     const deleteCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standards/payment_deadline' && init?.method === 'DELETE')
     expect(deleteCall).toBeTruthy()
     expect(await within(paymentCard).findByText('net 30 days or longer')).toBeInTheDocument()
+    expect(within(paymentCard).getByLabelText('Minimum payment deadline (days)')).toHaveValue(30)
     expect(restoreButton).toBeDisabled()
   })
 
@@ -174,9 +182,30 @@ describe('company standards settings screen (MAS-120)', () => {
 
     await userEvent.selectOptions(within(terminationCard).getByLabelText('Currency'), 'SEK')
     await userEvent.type(within(terminationCard).getByLabelText('Maximum termination fee amount'), '25000')
-    await userEvent.click(within(terminationCard).getByRole('button', { name: 'Save' }))
+    await userEvent.click(within(terminationCard).getByRole('button', { name: 'Save rule' }))
 
     const putCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/standards/termination_cost' && init?.method === 'PUT')
     expect(JSON.parse(String(putCall![1]?.body))).toEqual({ params: { mode: 'amount_cap', max_amount: 25000, currency: 'SEK' } })
+  })
+
+  it('shows a recoverable error instead of loading forever', async () => {
+    let attempts = 0
+    mockApi({ onGet: () => (++attempts === 1 ? json(503, { detail: 'Database unavailable.' }) : json(200, DEFAULTS)) })
+    render(<StandardsPage />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Database unavailable.')
+    expect(screen.queryByText('Loading rules…')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('net 30 days or longer')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('gives a sign-in path when the workspace session is missing', async () => {
+    mockApi({ onGet: () => json(401, { detail: 'Sign in to continue.' }) })
+    render(<StandardsPage />)
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByRole('link', { name: 'Sign in to manage rules' })).toHaveAttribute('href', '/login')
+    expect(within(alert).queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
   })
 })
