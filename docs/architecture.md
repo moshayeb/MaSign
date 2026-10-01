@@ -401,6 +401,67 @@ other re-review).
 same `sourceInfo()`-style document attribution for a bundle's linked
 documents (MAS-190's pattern).
 
+## Drafted clarifying questions (MAS-189)
+
+Split from MAS-98's post-course grab-bag (idea #2: "suggested redlines/
+RFIs"). The first MaSign output the model *generates* rather than extracts
+or quotes — every other result (findings, key terms, clauses, coverage) is
+grounded in a verbatim quote from the contract itself, so this needed its
+own `decide-carefully` confirm/attack/conclude pass (see the ticket's
+comments) rather than just a cost estimate. Scoped deliberately narrow after
+that pass: one drafted clarifying question (an RFI — request for
+information) per finding, on explicit user request only. A replacement
+clause ("redline") is explicitly out of scope, split to its own
+not-yet-started ticket pending a legal-content-review decision the owner,
+not engineering, needs to make — a question can't really be "wrong" the way
+proposed contract wording can, so bundling the two together risked shipping
+the riskier one under cover of the safer one.
+
+`app/risk_analysis/rfi.py`'s `generate_rfi(category, reason, quote, model)`
+is the one-call generation, built only from a finding's own already-stored,
+already-guardrail-clean `category`/`reason`/`quote` — never a live,
+re-fetched passage, so no new guardrail logic is needed: `GuardedChatModel`
+(`app/guardrails/prompt_injection.py`) already wraps every model obtained
+through `get_chat_model()` transparently, and will refuse the call
+(`PromptInjectionError`, handled globally in `app/main.py`) if a finding's
+own text still trips an injection pattern a second time. Reply validation is
+a plain JSON-object parse (`{"question": "..."}`, code fences stripped with
+the same `_FENCE` regex the risk analyzer uses) — there is no verify-or-drop
+quote check here, because unlike every other extraction in this codebase
+there is no source text a generated question could be checked against; the
+`checked` flag only distinguishes a usable reply from an unreadable one.
+
+A finding's `risk_findings.id` is **not** a safe reference to build on:
+`replace_risk_findings()` deletes and re-inserts every row on every
+re-review, with a fresh id each time. `rfi_suggestions` (migration 021)
+therefore has no FK to `risk_findings` at all — it identifies a finding by
+its stable `(chunk_id, category)` pair (the table's own unique constraint,
+migration 011) and stores a **snapshot** of `category`/`reason`/`quote` at
+generation time, the same precedent `questions.response` already sets
+(store the full content, not a pointer back to state that can churn). A
+stored suggestion is therefore self-contained and survives a re-review even
+if that exact finding stops recurring — `chunk_id` itself is kept (chunks,
+unlike findings, do not churn on re-review) only so a future "show source"
+affordance could still work, not relied on for the suggestion's own
+integrity.
+
+`POST /api/contracts/{id}/rfi-suggestions` takes `{chunk_id, category}`,
+looks up the *currently* flagged finding (404 if it is not currently
+flagged — e.g. a stale id from before a re-review), generates, and stores;
+`GET` lists everything stored for the contract. A malformed/unreadable
+reply is a request failure (503) with nothing stored — never a blank
+suggestion. `components/RfiSuggestions.tsx` renders inside each finding's
+detail disclosure in `RiskReviewPanel.tsx`, right after "Open source
+passage": cost shown before the one-call request (`cost.ts`'s
+`CALLS_PER_RFI`, same MAS-122 confirm-before-spend pattern as Review again),
+and every rendered question sits in its own `.rfi-suggestion` box —
+deliberately never a `.card`, never reusing a finding's styling — with a
+persistent "AI-drafted · Unverified · Not legal advice" label and a Copy
+button (no apply/accept action). Not included in any export format
+(MAS-191): exports represent the verified record, and mixing in generated
+content there is exactly the confusability risk the ticket's acceptance
+criteria flag.
+
 ## Coverage (MAS-84)
 
 `extract_document()` in `ingestion/parsing.py` returns the text plus

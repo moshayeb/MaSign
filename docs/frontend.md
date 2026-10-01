@@ -915,6 +915,32 @@ When a review settles after being seen running, the panel calls `onSettled`
 so the contract list refreshes its coloured dot (worst severity, pulsing
 while running, green when reviewed clean).
 
+### Drafted clarifying questions (MAS-189)
+
+Inside each finding's detail disclosure, below "Open source passage":
+`components/RfiSuggestions.tsx` offers "Ask MaSign to draft a clarifying
+question" with its cost (`≈ 1 model call`, `cost.ts`'s `CALLS_PER_RFI`) shown
+before the button, the same confirm-before-spend pattern as Review again
+(MAS-122) but scoped to one finding rather than the whole panel. This is the
+first MaSign output the model *generates* instead of extracting — a
+materially different trust level than a finding's verbatim quote — so a
+drafted question is never a `.card` and never reuses a finding's styling: a
+persistent, uppercase "AI-drafted · Unverified · Not legal advice" label sits
+on every rendered question inside its own dashed-border `.rfi-suggestion`
+box, with a Copy button (`navigator.clipboard`, same pattern as a citation
+copy in `AnswerView.tsx`) and no apply/accept action at all. A malformed or
+unreadable model reply is a failed request (toast error, API detail
+verbatim) — nothing is rendered and nothing is stored, never a blank
+suggestion. Drafted questions are stored (`GET/POST
+/api/contracts/{id}/rfi-suggestions`, read once the review is done, appended
+to local state as new ones are drafted) as a snapshot of the finding's
+category/reason/quote at generation time, not a live reference — they
+survive a re-review even if that finding stops recurring. Deliberately out
+of scope for v1: a replacement-clause ("redline") suggestion, one-click
+apply, and inclusion in any export format (MAS-191) — exports represent the
+verified record, and mixing in generated content there is exactly the
+confusability risk the ticket's own decide-carefully pass flagged.
+
 ## Query results
 
 `blocked_passages` (MAS-90) names passages the prompt-injection guardrail

@@ -176,6 +176,28 @@ class ClauseFindingRow:
 
 
 @dataclass(frozen=True)
+class RfiSuggestion:
+    """One drafted clarifying question for a flagged risk finding (MAS-189).
+
+    `category`/`reason`/`quote` are a snapshot of the finding at generation
+    time, not a live reference -- `risk_findings` rows churn (fresh ids) on
+    every re-review, so this is self-contained and survives one, same
+    precedent `Question.response` already sets (MAS-102).
+    """
+
+    id: UUID
+    workspace_id: UUID
+    contract_id: UUID
+    chunk_id: UUID
+    category: str
+    reason: str
+    quote: str
+    question: str
+    model: str | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class ContractLink:
     """An uploaded contract explicitly linked as the resolution of a named
     external reference on another contract (MAS-137). Directional and one
