@@ -191,6 +191,11 @@ export default function App() {
           setSelected(match)
           setTabState(wanted.tab)
         }
+      } else {
+        // Keep the selected contract's own fields (e.g. its standard_profile_id,
+        // MAS-200) in step with the refreshed list on every later load, not
+        // only the first-mount deep-link match above.
+        setSelected((current) => (current ? (loaded.find((c) => c.contract_id === current.contract_id) ?? current) : current))
       }
     }
     return loaded
