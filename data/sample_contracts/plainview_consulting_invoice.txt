@@ -1,0 +1,33 @@
+INVOICE
+
+Plainview Consulting LLC
+88 Market Street, Suite 400
+San Francisco, CA 94103
+
+Invoice Number: INV-2026-04157
+Invoice Date: 7 April 2026
+Payment Reference: PLV-4157
+
+Bill To:
+Harborview Retail Group
+200 Dock Street
+Boston, MA 02110
+
+Description                                       Quantity    Unit Price     Line Total
+Market research — Q1 competitive analysis             1       $8,500.00      $8,500.00
+On-site workshop facilitation (2 days)                2       $1,200.00      $2,400.00
+Report design and formatting                          1         $650.00        $650.00
+
+                                                                   Subtotal:  $11,550.00
+                                                           Sales Tax (8.5%):     $981.75
+                                                                 Amount Due: $12,531.75
+
+Please remit payment by 7 May 2026 to the account listed below. A late fee of
+1.5% per month applies to any balance unpaid after the due date.
+
+Bank: First Pacific Bank
+Account Name: Plainview Consulting LLC
+Account Number: 4471 0098 2231
+Routing Number: 121000358
+
+Thank you for your business.
