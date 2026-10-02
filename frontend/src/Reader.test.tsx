@@ -169,3 +169,59 @@ describe('click-to-source (MAS-83)', () => {
     expect(document.getElementById('passage-2')).toHaveClass('highlighted')
   })
 })
+
+describe('in-document search (MAS-194)', () => {
+  it('filters to matching passages and highlights every occurrence', async () => {
+    mockApi()
+    render(<Harness />)
+    await screen.findByText('Half the remaining fees.')
+
+    const reader = screen.getByText('Contract text').closest('details')!
+    await userEvent.click(within(reader).getByText('Contract text'))
+
+    const search = screen.getByRole('searchbox', { name: 'Search text in document' })
+    await userEvent.type(search, 'Fees')
+
+    // Only the two passages that mention "Fees" remain; "Parties" does not.
+    expect(document.getElementById('passage-1')).toBeInTheDocument()
+    expect(document.getElementById('passage-2')).toBeInTheDocument()
+    expect(document.getElementById('passage-0')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reader-search-status')).toHaveTextContent('2 passages match')
+    expect(within(reader).getAllByTestId('search-hit').length).toBeGreaterThan(0)
+  })
+
+  it('shows an honest no-matches state for a phrase that is not in the document', async () => {
+    mockApi()
+    render(<Harness />)
+    await screen.findByText('Half the remaining fees.')
+    await userEvent.click(screen.getByText('Contract text'))
+
+    const search = screen.getByRole('searchbox', { name: 'Search text in document' })
+    await userEvent.type(search, 'nonexistent clause xyz')
+
+    expect(screen.getByTestId('reader-search-status')).toHaveTextContent('No matches for "nonexistent clause xyz"')
+    expect(document.getElementById('passage-0')).not.toBeInTheDocument()
+    expect(document.getElementById('passage-1')).not.toBeInTheDocument()
+    expect(document.getElementById('passage-2')).not.toBeInTheDocument()
+  })
+
+  it('clearing the search restores the full passage list and the normal quote highlight', async () => {
+    mockApi()
+    render(<Harness />)
+    await screen.findByText('Half the remaining fees.')
+    await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
+    expect(document.getElementById('passage-2')).toHaveClass('highlighted')
+
+    const search = screen.getByRole('searchbox', { name: 'Search text in document' })
+    await userEvent.type(search, 'Parties')
+    expect(document.getElementById('passage-2')).not.toBeInTheDocument()
+
+    await userEvent.clear(search)
+    expect(document.getElementById('passage-0')).toBeInTheDocument()
+    expect(document.getElementById('passage-1')).toBeInTheDocument()
+    const target = document.getElementById('passage-2')!
+    expect(target).toBeInTheDocument()
+    expect(target).toHaveClass('highlighted')
+    expect(within(target).getByTestId('quote')).toHaveTextContent('fifty percent (50%) of the remaining Fees')
+  })
+})

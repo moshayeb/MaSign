@@ -1388,6 +1388,49 @@ li.risk.severity-low {
   margin: 22px 0 12px;
 }
 
+/* Severity filter (MAS-194): display-only — never changes the counts in
+   SummaryStrip or the fold's own "N findings" summary, only which rows of
+   this one list render. */
+.finding-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 12px;
+}
+
+.finding-section-head h3 {
+  margin: 0;
+}
+
+.finding-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+}
+
+.filter-chip:hover:not(:disabled) {
+  border-color: var(--accent-bright);
+  color: var(--accent);
+}
+
+.filter-chip-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
 .finding-summary::-webkit-details-marker { display: none; }
 
 .finding-summary:hover {
@@ -1864,6 +1907,62 @@ li.risk blockquote {
   box-shadow: none;
   border-radius: 0;
   padding: 16px 18px 24px;
+}
+
+/* Ask MaSign slide-in drawer (MAS-194) -- same mechanics as .source-panel
+   above, just its own class so the two can be styled independently. */
+.ask-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -16px 0 40px -20px rgba(15, 23, 42, 0.35);
+  z-index: 45;
+  animation: source-panel-in 0.18s ease;
+}
+
+.ask-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ask-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex: none;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--inset);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ask-panel-close:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.ask-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* Coverage (MAS-84) */
@@ -4614,6 +4713,39 @@ select.standard-input {
   background: var(--accent-bright);
   border-color: var(--accent-bright);
   color: #fff;
+}
+
+/* In-document search (MAS-194) */
+.reader-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0 0;
+}
+
+.reader-search-input {
+  flex: 1;
+  min-width: 160px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 0.85rem;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.reader-search-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.passage mark.search-hit {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 0 1px;
 }
 
 @media (max-width: 760px) {

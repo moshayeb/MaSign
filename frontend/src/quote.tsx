@@ -42,6 +42,32 @@ export function markSpans(text: string, withheld: number[][], offset = 0) {
   return parts
 }
 
+// In-document search (MAS-194): highlight every case-insensitive literal
+// occurrence of `term` in `text`. Pure client-side string matching over text
+// already loaded from the API -- no new extraction, no new claim beyond
+// "this text is in what you're already reading".
+export function markSearch(text: string, term: string) {
+  const trimmed = term.trim()
+  if (!trimmed) return text
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(escaped, 'gi')
+  const parts: React.ReactNode[] = []
+  let last = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = regex.exec(text))) {
+    parts.push(text.slice(last, match.index))
+    parts.push(
+      <mark key={key++} className="search-hit" data-testid="search-hit">
+        {match[0]}
+      </mark>,
+    )
+    last = match.index + match[0].length
+  }
+  parts.push(text.slice(last))
+  return parts
+}
+
 export function findQuote(text: string, quote: string): [number, number] | null {
   const trimmed = quote.trim()
   if (!trimmed) return null

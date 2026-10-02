@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getContractPassages, listContractLinks, type Contract, type Passage } from '../api'
-import { markQuote, markSpans } from '../quote'
+import { markQuote, markSearch, markSpans } from '../quote'
 
 // Where a value came from: the passage and, when known, the exact words.
 export interface SourceRef {
@@ -42,6 +42,13 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
   // Open whenever a new target arrives; the user's own toggle wins until the next target.
   const [toggled, setToggled] = useState<{ target: SourceRef | null; open: boolean } | null>(null)
   const open = alwaysOpen || (toggled && toggled.target === target ? toggled.open : target !== null)
+  // In-document search (MAS-194): pure client-side substring match over the
+  // already-loaded passage text -- filters which passages render and
+  // highlights every occurrence, never a new extraction or a new claim.
+  const [searchTerm, setSearchTerm] = useState('')
+  const searching = searchTerm.trim().length > 0
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const matches = searching ? (passages ?? []).filter((p) => p.text.toLowerCase().includes(searchTerm.trim().toLowerCase())) : (passages ?? [])
 
   useEffect(() => {
     setActiveId(target?.contract_id ?? contract.contract_id)
@@ -90,10 +97,32 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
     const id = requestAnimationFrame(() => {
       const el = document.getElementById(`${idPrefix}passage-${target.chunk_index}`)
       el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
-      el?.focus?.({ preventScroll: true })
+      // A slow scheduler can delay this past the click that triggered it,
+      // long enough for the user to have moved on to typing a search --
+      // stealing focus back mid-keystroke would silently eat characters
+      // (reproduced in CI: MAS-194 PR #144, Reader.test.tsx#L217).
+      if (document.activeElement !== searchInputRef.current) el?.focus?.({ preventScroll: true })
     })
     return () => cancelAnimationFrame(id)
   }, [active.contract_id, target, passages, idPrefix])
+
+  // A search term scrolls to its first match, same as a target does.
+  useEffect(() => {
+    const term = searchTerm.trim()
+    if (!term || !passages) return
+    const first = passages.find((p) => p.text.toLowerCase().includes(term.toLowerCase()))
+    if (!first) return
+    const id = requestAnimationFrame(() => {
+      document.getElementById(`${idPrefix}passage-${first.chunk_index}`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [searchTerm, passages, idPrefix])
+
+  // Switching to a different bundle document starts the search over, same
+  // as the target-scroll state already does implicitly via `active`.
+  useEffect(() => {
+    setSearchTerm('')
+  }, [active.contract_id])
 
   return (
     <details className="card reader" open={open} onToggle={(event) => setToggled({ target, open: event.currentTarget.open })}>
@@ -117,24 +146,44 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
       {failed && <p className="muted">The passages could not be loaded. Refresh, or check that the API is running.</p>}
       {passages && passages.length === 0 && <p className="muted">This contract has no stored passages.</p>}
       {passages && passages.length > 0 && (
+        <div className="reader-search">
+          <input
+            ref={searchInputRef}
+            type="search"
+            className="reader-search-input"
+            placeholder="Search text in this document…"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            aria-label="Search text in document"
+          />
+          {searching && (
+            <span className="muted small" data-testid="reader-search-status">
+              {matches.length === 0 ? `No matches for "${searchTerm.trim()}"` : `${matches.length} passage${matches.length === 1 ? '' : 's'} match`}
+            </span>
+          )}
+        </div>
+      )}
+      {passages && passages.length > 0 && (
         <ol className="passages">
-          {passages.map((passage) => {
+          {matches.map((passage) => {
             const isTarget = target?.chunk_index === passage.chunk_index
             return (
               <li
                 key={passage.chunk_id}
                 id={`${idPrefix}passage-${passage.chunk_index}`}
                 tabIndex={-1}
-                className={isTarget ? 'passage highlighted' : 'passage'}
-                aria-current={isTarget ? 'true' : undefined}
+                className={isTarget && !searching ? 'passage highlighted' : 'passage'}
+                aria-current={isTarget && !searching ? 'true' : undefined}
               >
                 <span className="passage-label muted small">Passage {passage.chunk_index + 1}</span>
                 <p>
-                  {isTarget && target?.quote
-                    ? markQuote(passage.text, target.quote, passage.withheld_spans)
-                    : markSpans(passage.text, passage.withheld_spans ?? [])}
+                  {searching
+                    ? markSearch(passage.text, searchTerm)
+                    : isTarget && target?.quote
+                      ? markQuote(passage.text, target.quote, passage.withheld_spans)
+                      : markSpans(passage.text, passage.withheld_spans ?? [])}
                 </p>
-                {(passage.withheld_spans?.length ?? 0) > 0 && (
+                {!searching && (passage.withheld_spans?.length ?? 0) > 0 && (
                   <span className="muted small withheld-note">
                     {passage.withheld_spans!.length === 1 ? 'The underlined sentence was' : 'The underlined sentences were'} withheld from the model
                     (instructions addressed to the AI).

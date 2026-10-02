@@ -725,3 +725,34 @@ describe('progressive disclosure never hides a reason to doubt the review (MAS-1
     expect(screen.getByText('No survival period stated.')).toBeVisible()
   })
 })
+
+describe('severity filter (MAS-194)', () => {
+  it('filters which findings render without ever touching the real counts', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, done))
+    render(<RiskReviewPanel contract={northwind} />)
+    await screen.findByText('Uncapped liability for the Customer.')
+
+    await userEvent.click(screen.getByText('View complete analysis'))
+    // Default "All": both findings render, and the fold's own count is the
+    // real total -- this must never change as the filter below is clicked.
+    expect(screen.getByText('Uncapped liability for the Customer.')).toBeVisible()
+    expect(screen.getByText('Late interest at 1.5% per month.')).toBeVisible()
+    const foldCount = screen.getByText(/2 findings across 7 categories/)
+    expect(foldCount).toBeVisible()
+
+    const group = screen.getByRole('group', { name: 'Filter findings by severity' })
+    await userEvent.click(within(group).getByRole('button', { name: 'High' }))
+    expect(screen.getByText('Uncapped liability for the Customer.')).toBeVisible()
+    expect(screen.queryByText('Late interest at 1.5% per month.')).not.toBeInTheDocument()
+    // The real total stays visible and correct while the filter is active.
+    expect(screen.getByText(/2 findings across 7 categories/)).toBeVisible()
+
+    await userEvent.click(within(group).getByRole('button', { name: 'Low' }))
+    expect(screen.queryByText('Uncapped liability for the Customer.')).not.toBeInTheDocument()
+    expect(screen.getByTestId('findings-filter-empty')).toHaveTextContent('No Low findings (of 2 total).')
+
+    await userEvent.click(within(group).getByRole('button', { name: 'All' }))
+    expect(screen.getByText('Uncapped liability for the Customer.')).toBeVisible()
+    expect(screen.getByText('Late interest at 1.5% per month.')).toBeVisible()
+  })
+})
