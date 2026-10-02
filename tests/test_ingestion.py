@@ -49,6 +49,27 @@ def test_extract_text_from_pdf(make_pdf) -> None:
     assert "capped" in text
 
 
+def test_extract_text_from_pdf_collapses_tabs_from_justified_text(monkeypatch, make_pdf) -> None:
+    # MAS-198: on justified-text PDFs, pypdf sometimes emits a literal tab for
+    # a wide inter-word gap instead of a space. A tab copied verbatim into a
+    # model's quoted JSON reply is an unescaped control character that breaks
+    # json.loads() downstream, silently losing real findings.
+    class FakePage:
+        def extract_text(self) -> str:
+            return "Overdue\tamounts\tbear\tinterest\tat\t1%\tper\tmonth."
+
+    class FakeReader:
+        def __init__(self, _stream) -> None:
+            self.pages = [FakePage()]
+
+    monkeypatch.setattr("app.ingestion.parsing.pypdf.PdfReader", FakeReader)
+
+    text = extract_text(make_pdf(["placeholder"]), "pdf")
+
+    assert "\t" not in text
+    assert text == "Overdue amounts bear interest at 1% per month."
+
+
 def test_extract_text_from_docx(make_docx) -> None:
     docx = make_docx(["4. Termination", "Either party may terminate for breach."])
 
