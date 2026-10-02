@@ -118,7 +118,7 @@ def _extract_txt(content: bytes) -> str:
 def _extract_pdf(content: bytes, notes: list[str] | None = None) -> str:
     try:
         reader = pypdf.PdfReader(BytesIO(content))
-        pages = [page.extract_text() or "" for page in reader.pages]
+        pages = [_normalize_pdf_text(page.extract_text() or "") for page in reader.pages]
     except Exception as error:  # pypdf raises a wide range of parse errors
         raise DocumentParseError(
             "The PDF could not be read. It may be corrupted or password protected."
@@ -133,6 +133,18 @@ def _extract_pdf(content: bytes, notes: list[str] | None = None) -> str:
             "(scanned or image-only) and could not be read."
         )
     return "\n\n".join(page for page in pages if page.strip())
+
+
+def _normalize_pdf_text(text: str) -> str:
+    """Collapse pypdf's inter-word gap artefacts to a single space (MAS-198).
+
+    On justified-text PDFs pypdf's extract_text() sometimes emits a literal
+    tab for a wide inter-word gap instead of a space. A raw tab copied
+    verbatim into a model's quoted JSON reply is an unescaped control
+    character, which breaks json.loads() and loses real findings. Newlines
+    (paragraph/line breaks) are left alone.
+    """
+    return re.sub(r"[^\S\n]+", " ", text)
 
 
 def _page_list(numbers: list[int]) -> str:
