@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { ApiError, getCurrentUser, listContracts, logout as apiLogout, type Contract, type CurrentUser, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
+import { AskDrawer } from './components/AskDrawer'
 import { CompareView } from './components/CompareView'
 import { ContractList } from './components/ContractList'
 import { InvoiceCheckPanel } from './components/InvoiceCheckPanel'
@@ -125,6 +126,18 @@ export default function App() {
     panelTriggerRef.current?.focus()
     panelTriggerRef.current = null
   }, [])
+  // MAS-194: Ask MaSign as a slide-in drawer on wide screens, same pattern as
+  // the source panel above. Only ever triggered while `tab` is something
+  // other than 'ask' (the trigger handlers below guarantee this), so the
+  // drawer and the plain "ask" TabPanel are never both mounted at once --
+  // no duplicate QuestionPanel, no id collisions on the composer.
+  const [askDrawerOpen, setAskDrawerOpen] = useState(false)
+  const askTriggerRef = useRef<HTMLElement | null>(null)
+  const closeAskDrawer = useCallback(() => {
+    setAskDrawerOpen(false)
+    askTriggerRef.current?.focus()
+    askTriggerRef.current = null
+  }, [])
   const [draft, setDraft] = useState('')
   // The selected contract's stored review, as the Overview last read it (MAS-108).
   const [review, setReview] = useState<RiskReview | null>(null)
@@ -147,6 +160,12 @@ export default function App() {
     setReturnTab(null)
     setTab(next)
   }, [setTab])
+  // A deep link or the back button can land directly on the Ask tab while
+  // the drawer happens to be open; the TabPanel is then the live mount, so
+  // the drawer must close rather than render `askContent` a second time.
+  useEffect(() => {
+    if (tab === 'ask') setAskDrawerOpen(false)
+  }, [tab])
   // Keep the hash in step with the view; clear it when nothing is selected.
   useEffect(() => {
     const next = selected ? `#${selected.contract_id}/${tab}` : ''
@@ -226,6 +245,7 @@ export default function App() {
     setCompareIds([])
     setComparePicking(false)
     setDrawerOpen(false)
+    setAskDrawerOpen(false)
   }, [setTab])
 
   // A finding or key term was clicked: show the text at that passage
@@ -238,6 +258,10 @@ export default function App() {
       if (isWide) {
         panelTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
         setPanelSource(ref)
+        // The two slide-in panels anchor to the same edge (MAS-194): an
+        // explicit "show in contract" click is the more specific intent, so
+        // it takes over from an open Ask drawer rather than stacking on it.
+        setAskDrawerOpen(false)
         return
       }
       setSource(ref)
@@ -281,11 +305,25 @@ export default function App() {
     setAsked((current) => (current?.contract?.contract_id === contractId ? null : current))
     setCompareIds((current) => current.filter((id) => id !== contractId))
   }, [])
-  // The header's CTA (MAS-104): open the Ask tab with the cursor in the composer.
-  const askAbout = useCallback(() => {
+  // The header's CTA (MAS-104) and the Tabs bar's own "Ask MaSign" entry both
+  // route through this (MAS-194): on a wide screen, while looking at
+  // anything other than the Ask tab itself, open the slide-in drawer instead
+  // of navigating away, so the tab underneath is never lost. Already on the
+  // Ask tab, or a narrow screen where the drawer never renders: unchanged,
+  // plain tab-switch.
+  const openAsk = useCallback(() => {
+    if (isWide && tab !== 'ask') {
+      askTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      setPanelSource(null) // the two panels share an edge; an explicit Ask takes over from an open source panel too
+      setAskDrawerOpen(true)
+      // AskDrawer focuses its own close button on mount; stealing focus to
+      // the composer here would race it (and did -- MAS-194 review).
+      return
+    }
     changeTab('ask')
     requestAnimationFrame(() => document.getElementById('question-text')?.focus())
-  }, [changeTab])
+  }, [isWide, tab, changeTab])
+  const askAbout = openAsk
   // After a selection the workspace must be where the reader is looking: the
   // heading takes focus (so the keyboard follows the eye). Before MAS-126 the
   // sidebar stacked above the workspace on a phone, so the heading was also
@@ -315,12 +353,15 @@ export default function App() {
     (next: Asked | null) => {
       setAsked(next)
       if (next) {
-        setTab('ask')
+        // Already showing the composer in the slide-in drawer (MAS-194): stay
+        // there, don't yank the tab underneath to 'ask' too (that would also
+        // close the drawer, via the deep-link effect above).
+        if (!askDrawerOpen) setTab('ask')
         // A live ask just stored a new question (MAS-102); refetch the list.
         setQuestionsVersion((v) => v + 1)
       }
     },
-    [setTab],
+    [setTab, askDrawerOpen],
   )
   // Compare mode (MAS-62): each side is a full, independent /api/query call,
   // so both are stored as ordinary questions (MAS-102) -- refetch the list
@@ -328,10 +369,10 @@ export default function App() {
   const compareAnswered = useCallback(
     (next: Compared) => {
       setCompared(next)
-      setTab('ask')
+      if (!askDrawerOpen) setTab('ask')
       setQuestionsVersion((v) => v + 1)
     },
-    [setTab],
+    [setTab, askDrawerOpen],
   )
   const closeCompared = useCallback(() => setCompared(null), [])
   // Selecting a previous question (MAS-102) shows its stored answer the same
@@ -340,9 +381,43 @@ export default function App() {
   const selectStoredQuestion = useCallback(
     (next: Asked) => {
       setAsked(next)
-      setTab('ask')
+      if (!askDrawerOpen) setTab('ask')
     },
-    [setTab],
+    [setTab, askDrawerOpen],
+  )
+  // Shared by the plain "ask" TabPanel (narrow screens, or already on the Ask
+  // tab) and AskDrawer (MAS-194, wide screens, triggered from elsewhere) --
+  // openAsk guarantees only one of the two is ever mounted at a time, so
+  // rendering this twice in the JSX below never means two live instances.
+  const askContent = selected && (
+    <>
+      <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} onCompared={compareAnswered} />
+      <PreviousQuestions contract={selected} contracts={contracts ?? []} version={questionsVersion} onSelect={selectStoredQuestion} />
+      {!asked && !compared && (
+        <div className="examples" aria-label="Suggested questions">
+          <span className="muted">Try:</span>
+          {suggestQuestions(review).map((suggestion) => (
+            <button
+              key={suggestion.text}
+              type="button"
+              className={suggestion.reason ? 'chip ranked' : 'chip'}
+              title={suggestion.reason ?? undefined}
+              onClick={() => {
+                setDraft(suggestion.text)
+                document.getElementById('question-text')?.focus()
+              }}
+            >
+              {suggestion.text}
+            </button>
+          ))}
+        </div>
+      )}
+      {compared ? (
+        <ModelCompareView compared={compared} contracts={contracts ?? []} onShowSource={showSource} onClose={closeCompared} />
+      ) : (
+        asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />
+      )}
+    </>
   )
 
   return (
@@ -520,7 +595,7 @@ export default function App() {
                 <Tabs
                   label="Contract workspace"
                   active={tab}
-                  onChange={changeTab}
+                  onChange={(next) => (next === 'ask' ? openAsk() : changeTab(next))}
                   tabs={[
                     { id: 'overview', label: 'Overview' },
                     { id: 'ask', label: 'Ask MaSign', hint: asked || compared ? '· answered' : undefined },
@@ -541,35 +616,7 @@ export default function App() {
                   ref={reviewPanelRef}
                 />
               </TabPanel>
-              <TabPanel id="ask" active={tab}>
-                <QuestionPanel selected={selected} draft={draft} onDraftChange={setDraft} onAnswered={answered} onCompared={compareAnswered} />
-                <PreviousQuestions contract={selected} contracts={contracts ?? []} version={questionsVersion} onSelect={selectStoredQuestion} />
-                {/* Suggested questions, ranked by the review (MAS-108); a click fills the composer, Ask sends it. */}
-                {!asked && !compared && (
-                  <div className="examples" aria-label="Suggested questions">
-                    <span className="muted">Try:</span>
-                    {suggestQuestions(review).map((suggestion) => (
-                      <button
-                        key={suggestion.text}
-                        type="button"
-                        className={suggestion.reason ? 'chip ranked' : 'chip'}
-                        title={suggestion.reason ?? undefined}
-                        onClick={() => {
-                          setDraft(suggestion.text)
-                          document.getElementById('question-text')?.focus()
-                        }}
-                      >
-                        {suggestion.text}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {compared ? (
-                  <ModelCompareView compared={compared} contracts={contracts ?? []} onShowSource={showSource} onClose={closeCompared} />
-                ) : (
-                  asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />
-                )}
-              </TabPanel>
+              <TabPanel id="ask" active={tab}>{!(isWide && askDrawerOpen) && askContent}</TabPanel>
               <TabPanel id="invoices" active={tab}>
                 <InvoiceCheckPanel key={selected.contract_id} contract={selected} onShowSource={showSource} />
               </TabPanel>
@@ -587,6 +634,7 @@ export default function App() {
         {isWide && panelSource && current && (
           <SourcePanel contract={current} contracts={contracts ?? []} source={panelSource} onClose={closeSourcePanel} />
         )}
+        {isWide && askDrawerOpen && selected && <AskDrawer onClose={closeAskDrawer}>{askContent}</AskDrawer>}
       </div>
     </PageChrome>
   )

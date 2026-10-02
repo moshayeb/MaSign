@@ -76,6 +76,11 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const detailRef = useRef<HTMLDetailsElement>(null)
   const [links, setLinks] = useState<ContractLink[]>([])
   const [rfiSuggestions, setRfiSuggestions] = useState<RfiSuggestion[]>([])
+  // Findings list filter (MAS-194): display-only, never touches the real
+  // counts above (SummaryStrip, the fold's own "N findings" summary, the
+  // clean-categories line) -- those stay computed from every finding so an
+  // active filter can never read as "fewer findings than there really are".
+  const [findingFilter, setFindingFilter] = useState<'all' | 'High' | 'Medium' | 'Low'>('all')
 
   const load = useCallback(async () => {
     try {
@@ -199,6 +204,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   const settledClean = review !== null && review.status === 'done' && review.complete
 
   const findings = review ? [...review.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.chunk_index - b.chunk_index) : []
+  const visibleFindings = findingFilter === 'all' ? findings : findings.filter((f) => f.severity === findingFilter)
   const clean = review ? review.categories.filter((c) => !c.worst_severity) : []
   const flagged = review ? review.categories.length - clean.length : 0
   // An invoice graded with the contract rubric: say so, and never read a clean review as reassurance (MAS-107).
@@ -361,9 +367,29 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
 
           {findings.length > 0 && (
             <div className="finding-section">
-              <h3>Findings to review</h3>
+              <div className="finding-section-head">
+                <h3>Findings to review</h3>
+                <div className="finding-filter" role="group" aria-label="Filter findings by severity">
+                  {(['all', 'High', 'Medium', 'Low'] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      className={`filter-chip${findingFilter === level ? ' filter-chip-active' : ''}`}
+                      aria-pressed={findingFilter === level}
+                      onClick={() => setFindingFilter(level)}
+                    >
+                      {level === 'all' ? 'All' : level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {visibleFindings.length === 0 && (
+                <p className="muted small" data-testid="findings-filter-empty">
+                  No {findingFilter} findings (of {findings.length} total).
+                </p>
+              )}
               <ul className="risks" aria-label="Findings">
-                {findings.map((finding) => (
+                {visibleFindings.map((finding) => (
                   <li key={`${finding.category}-${finding.chunk_id}`} className={`risk severity-${finding.severity.toLowerCase()}`}>
                     <details className="finding-detail">
                       <summary className="finding-summary">
