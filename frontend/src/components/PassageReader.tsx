@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getContractPassages, listContractLinks, type Contract, type Passage } from '../api'
 import { markQuote, markSearch, markSpans } from '../quote'
 
@@ -47,6 +47,7 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
   // highlights every occurrence, never a new extraction or a new claim.
   const [searchTerm, setSearchTerm] = useState('')
   const searching = searchTerm.trim().length > 0
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const matches = searching ? (passages ?? []).filter((p) => p.text.toLowerCase().includes(searchTerm.trim().toLowerCase())) : (passages ?? [])
 
   useEffect(() => {
@@ -96,7 +97,11 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
     const id = requestAnimationFrame(() => {
       const el = document.getElementById(`${idPrefix}passage-${target.chunk_index}`)
       el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
-      el?.focus?.({ preventScroll: true })
+      // A slow scheduler can delay this past the click that triggered it,
+      // long enough for the user to have moved on to typing a search --
+      // stealing focus back mid-keystroke would silently eat characters
+      // (reproduced in CI: MAS-194 PR #144, Reader.test.tsx#L217).
+      if (document.activeElement !== searchInputRef.current) el?.focus?.({ preventScroll: true })
     })
     return () => cancelAnimationFrame(id)
   }, [active.contract_id, target, passages, idPrefix])
@@ -143,6 +148,7 @@ export function PassageReader({ contract, contracts = NO_CONTRACTS, target, open
       {passages && passages.length > 0 && (
         <div className="reader-search">
           <input
+            ref={searchInputRef}
             type="search"
             className="reader-search-input"
             placeholder="Search text in this document…"
