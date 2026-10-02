@@ -72,6 +72,13 @@ const CLAUSES = [
   { id: 'indemnification', name: 'Indemnification', enabled: true },
 ]
 
+const POLICY_RULES = [
+  { id: 'liability_cap', name: 'Liability cap', rule_text: null },
+  { id: 'data_protection', name: 'Data protection', rule_text: null },
+  { id: 'insurance', name: 'Insurance', rule_text: null },
+  { id: 'indemnification', name: 'Indemnification', rule_text: null },
+]
+
 function mockApi(
   overrides: {
     profiles?: typeof DEFAULT_PROFILE[]
@@ -114,6 +121,20 @@ function mockApi(
       const [, , clauseId] = clauseItemMatch
       const { enabled } = JSON.parse(String(init.body)) as { enabled: boolean }
       return json(200, { ...CLAUSES.find((c) => c.id === clauseId)!, enabled })
+    }
+    const policyRulesMatch = /^\/api\/standard-profiles\/([^/]+)\/policy-rules$/.exec(url)
+    if (policyRulesMatch && (!init || init.method === undefined)) {
+      return json(200, POLICY_RULES)
+    }
+    const policyRuleItemMatch = /^\/api\/standard-profiles\/([^/]+)\/policy-rules\/(\w+)$/.exec(url)
+    if (policyRuleItemMatch && init?.method === 'PUT') {
+      const [, , clauseId] = policyRuleItemMatch
+      const { rule_text } = JSON.parse(String(init.body)) as { rule_text: string }
+      return json(200, { ...POLICY_RULES.find((r) => r.id === clauseId)!, rule_text: rule_text.trim() || null })
+    }
+    if (policyRuleItemMatch && init?.method === 'DELETE') {
+      const [, , clauseId] = policyRuleItemMatch
+      return json(200, { ...POLICY_RULES.find((r) => r.id === clauseId)!, rule_text: null })
     }
     const itemMatch = /^\/api\/standard-profiles\/([^/]+)\/standards\/(\w+)$/.exec(url)
     if (itemMatch && init?.method === 'PUT') {
@@ -167,6 +188,35 @@ describe('company standards settings screen (MAS-120/185)', () => {
     expect(JSON.parse(String(putCall![1]?.body))).toEqual({ enabled: false })
     expect(await screen.findByLabelText('Insurance')).not.toBeChecked()
     expect(shown).toContainEqual(['success', 'Clause disabled.'])
+  })
+
+  it('every clause starts with no policy rule, and setting then clearing one round-trips (MAS-192)', async () => {
+    const fetchMock = mockApi()
+    render(<StandardsPage />)
+
+    expect(await screen.findByText('Clause content rules', { selector: 'h2' })).toBeInTheDocument()
+    const input = screen.getByLabelText('Liability cap content rule') as HTMLInputElement
+    expect(input.value).toBe('')
+    expect(screen.queryByRole('button', { name: 'Clear Liability cap rule' })).not.toBeInTheDocument()
+
+    await userEvent.type(input, 'must not exceed 12 months of fees')
+    await userEvent.click(screen.getByRole('button', { name: 'Save Liability cap rule' }))
+
+    const putCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === '/api/standard-profiles/profile-default/policy-rules/liability_cap' && init?.method === 'PUT',
+    )
+    expect(JSON.parse(String(putCall![1]?.body))).toEqual({ rule_text: 'must not exceed 12 months of fees' })
+    expect(shown).toContainEqual(['success', 'Rule saved.'])
+    expect(await screen.findByRole('button', { name: 'Clear Liability cap rule' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Liability cap rule' }))
+
+    const deleteCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === '/api/standard-profiles/profile-default/policy-rules/liability_cap' && init?.method === 'DELETE',
+    )
+    expect(deleteCall).toBeTruthy()
+    expect(shown).toContainEqual(['success', 'Rule cleared.'])
+    expect(screen.queryByRole('button', { name: 'Clear Liability cap rule' })).not.toBeInTheDocument()
   })
 
   async function findCard(name: string): Promise<HTMLElement> {

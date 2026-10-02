@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
-import type { ClauseResult, Contract, KeyTermValue, RiskReview } from './api'
+import type { ClauseResult, Contract, KeyTermValue, PolicyResult, RiskReview } from './api'
 import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
 
 // The "Review risks"/"Review again" trigger now lives in the workspace
@@ -417,6 +417,52 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(within(card).getByText('Not checked').parentElement).toHaveTextContent(
       'Not checkedliability_cap, data_protection, insurance, indemnification',
     )
+  })
+
+  it('shows a policy verdict next to a present clause with a configured rule (MAS-192)', async () => {
+    const clauses: ClauseResult[] = [
+      { id: 'liability_cap', name: 'Liability cap', status: 'present', source: { quote: 'liability shall not exceed fees paid', chunk_id: 'c3', chunk_index: 3, contract_id: 'nw' }, others: [] },
+      { id: 'data_protection', name: 'Data protection', status: 'absent', source: null, others: [] },
+      { id: 'insurance', name: 'Insurance', status: 'absent', source: null, others: [] },
+      { id: 'indemnification', name: 'Indemnification', status: 'absent', source: null, others: [] },
+    ]
+    const policy: PolicyResult[] = [
+      {
+        id: 'liability_cap', name: 'Liability cap', rule_text: 'must not exceed 12 months of fees', status: 'violated',
+        source: { quote: 'liability shall not exceed fees paid', chunk_id: 'c3', chunk_index: 3, contract_id: 'nw' }, others: [],
+      },
+    ]
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json(200, review({ status: 'done', clauses_complete: true, clauses, policy_complete: true, policy })),
+    )
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const card = (await screen.findByText('Expected clauses', { selector: 'h2' })).closest('section')!
+    expect(within(card).getByText('Policy violation')).toBeInTheDocument()
+    expect(within(card).getByText('Policy violation')).toHaveAttribute('title', 'must not exceed 12 months of fees')
+  })
+
+  it('shows "not applicable" implicitly (no pill) for a configured rule whose clause is absent (MAS-192)', async () => {
+    const clauses: ClauseResult[] = [
+      { id: 'liability_cap', name: 'Liability cap', status: 'absent', source: null, others: [] },
+      { id: 'data_protection', name: 'Data protection', status: 'absent', source: null, others: [] },
+      { id: 'insurance', name: 'Insurance', status: 'absent', source: null, others: [] },
+      { id: 'indemnification', name: 'Indemnification', status: 'absent', source: null, others: [] },
+    ]
+    const policy: PolicyResult[] = [
+      { id: 'liability_cap', name: 'Liability cap', rule_text: 'must not exceed 12 months of fees', status: 'not_applicable', source: null, others: [] },
+    ]
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json(200, review({ status: 'done', clauses_complete: true, clauses, policy_complete: true, policy })),
+    )
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    await screen.findByText('Expected clauses', { selector: 'h2' })
+    expect(screen.queryByText('Policy violation')).not.toBeInTheDocument()
+    expect(screen.queryByText('Meets policy')).not.toBeInTheDocument()
+    expect(screen.queryByText('Policy not checked')).not.toBeInTheDocument()
   })
 
   it('renders no expected-clauses card when no clauses are configured for the profile (MAS-188)', async () => {

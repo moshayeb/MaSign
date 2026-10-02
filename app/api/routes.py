@@ -16,7 +16,7 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_current_user, get_current_workspace, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Chunk, ClauseFindingRow, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, KeyTermRow, Question, RfiSuggestion, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
+from app.database.models import Chunk, ClauseFindingRow, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, KeyTermRow, PolicyFindingRow, Question, RfiSuggestion, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
@@ -401,6 +401,57 @@ class ClauseResult(BaseModel):
         return cls(id=clause.id, name=clause.name, status="present", source=first, others=others)
 
 
+class PolicyResult(BaseModel):
+    """One policy-content verdict for a clause (MAS-192): what a present
+    clause's own text says, judged against a configured rule. Builds on
+    MAS-188's `ClauseResult` -- a rule only ever judges a clause that is
+    itself `present`."""
+
+    id: str  # clause id
+    name: str
+    rule_text: str
+    # not_applicable | cannot_tell | compliant | violated. not_applicable
+    # means the clause itself is absent/cannot_tell (nothing to judge) --
+    # never confused with "compliant". cannot_tell covers both an incomplete
+    # pass and a rule whose text changed since the stored verdict was judged.
+    status: str
+    source: ClauseSource | None
+    others: list[ClauseSource]
+
+    @classmethod
+    def from_rows(
+        cls,
+        clause_id: str,
+        rule_text: str,
+        rows: list["PolicyFindingRow"],
+        chunk_index: dict[UUID, int],
+        *,
+        clause_present: bool,
+        checked: bool,
+    ) -> "PolicyResult":
+        clause = CLAUSE_BY_ID[clause_id]
+        if not clause_present:
+            return cls(id=clause.id, name=clause.name, rule_text=rule_text, status="not_applicable", source=None, others=[])
+        # A stored verdict only counts when this run actually checked this
+        # clause's rule AND it was judged against the rule's current text --
+        # a row from before the rule text changed is stale, not current.
+        current_rows = [r for r in rows if r.rule_text_checked == rule_text] if checked else []
+        if not current_rows:
+            return cls(id=clause.id, name=clause.name, rule_text=rule_text, status="cannot_tell", source=None, others=[])
+        sources = [
+            ClauseSource(quote=r.quote, chunk_id=r.chunk_id, chunk_index=chunk_index.get(r.chunk_id, 0), contract_id=r.source_contract_id)
+            for r in current_rows
+        ]
+        # The most cautious verdict wins when a clause is restated with a
+        # different outcome across passages -- never let a later "compliant"
+        # statement quietly outrank an earlier "violated" one.
+        verdict_priority = {"violated": 0, "cannot_tell": 1, "compliant": 2}
+        primary_row = min(current_rows, key=lambda r: verdict_priority[r.verdict])
+        primary_index = current_rows.index(primary_row)
+        first, others = sources[primary_index], sources[:primary_index] + sources[primary_index + 1 :]
+        return cls(id=clause.id, name=clause.name, rule_text=rule_text, status=primary_row.verdict, source=first, others=others)
+
+
 class ExternalReferenceOut(BaseModel):
     name: str
     passages: list["CoveragePassageOut"]
@@ -583,6 +634,10 @@ class RiskReviewResponse(BaseModel):
     # present/absent/cannot_tell, and whether the pass completed.
     clauses_complete: bool = False
     clauses: list[ClauseResult] = []
+    # The policy-content pass of the same job (MAS-192): a verdict for each
+    # clause that has a configured rule, and whether the pass completed.
+    policy_complete: bool = False
+    policy: list[PolicyResult] = []
     # What was and was not read (MAS-84).
     coverage: Coverage | None = None
 
@@ -597,6 +652,8 @@ class RiskReviewResponse(BaseModel):
         standards: dict[str, dict] | None = None,
         clause_rows: list[ClauseFindingRow] = (),
         enabled_clauses: tuple[str, ...] = CLAUSE_IDS,
+        policy_rows: list["PolicyFindingRow"] = (),
+        policy_rules: dict[str, str] | None = None,
     ) -> "RiskReviewResponse":
         findings = [
             ReviewFinding(
@@ -636,6 +693,30 @@ class RiskReviewResponse(BaseModel):
         # Honest at this level too: the checklist as currently configured is
         # only complete when every enabled clause was part of the check.
         checked_clauses = run_complete and all(cid in actually_checked for cid in enabled_clauses)
+
+        # Same MAS-193-style discipline, for policy rules (MAS-192): only
+        # trust a stored verdict when this run's policy pass actually
+        # checked that clause's rule.
+        policy_rules = policy_rules or {}
+        run_policy_complete = review.status == "done" and review.policy_complete
+        actually_checked_policy = set(review.checked_policy_clause_ids)
+        by_policy: dict[str, list["PolicyFindingRow"]] = {cid: [] for cid in policy_rules}
+        for row in policy_rows:
+            if row.clause_id in by_policy:
+                by_policy[row.clause_id].append(row)
+        present_clause_ids = {c.id for c in clauses if c.status == "present"}
+        policy = [
+            PolicyResult.from_rows(
+                clause_id,
+                policy_rules[clause_id],
+                by_policy[clause_id],
+                chunk_index,
+                clause_present=clause_id in present_clause_ids,
+                checked=run_policy_complete and clause_id in actually_checked_policy,
+            )
+            for clause_id in policy_rules
+        ]
+        checked_policy = run_policy_complete and all(cid in actually_checked_policy for cid in policy_rules)
         return cls(
             contract_id=review.contract_id,
             status=review.status,
@@ -653,6 +734,8 @@ class RiskReviewResponse(BaseModel):
             deadlines=key_terms.deadlines,
             clauses_complete=checked_clauses,
             clauses=clauses,
+            policy_complete=checked_policy,
+            policy=policy,
             coverage=coverage,
         )
 
@@ -1407,9 +1490,11 @@ def _review_response(db: psycopg.Connection, review: RiskReview, workspace_id: U
     coverage = _coverage_for_review(db, review, contract, workspace_id) if contract else None
     standards = _standards_for_contract(db, workspace_id, contract)
     enabled_clauses = _enabled_clauses_for_contract(db, workspace_id, contract)
+    policy_rules = repository.get_profile_policy_rules(db, _profile_id_for_contract(db, workspace_id, contract))
     return RiskReviewResponse.from_models(
         review, rows, chunk_index, repository.list_key_terms(db, review.contract_id), coverage, standards,
         clause_rows=repository.list_clause_findings(db, review.contract_id), enabled_clauses=enabled_clauses,
+        policy_rows=repository.list_policy_findings(db, review.contract_id), policy_rules=policy_rules,
     )
 
 
@@ -1942,6 +2027,60 @@ def update_profile_clause(
     repository.set_profile_clause_enabled(db, profile_id, clause_id, body.enabled)
     db.commit()
     return ClauseConfigOut(id=clause_id, name=CLAUSE_BY_ID[clause_id].name, enabled=body.enabled)
+
+
+class PolicyRuleOut(BaseModel):
+    id: str  # clause id
+    name: str
+    rule_text: str | None  # None means no rule configured for this clause
+
+
+def _policy_rules_out(rules: dict[str, str]) -> list[PolicyRuleOut]:
+    return [PolicyRuleOut(id=clause.id, name=clause.name, rule_text=rules.get(clause.id)) for clause in CLAUSES]
+
+
+@router.get("/standard-profiles/{profile_id}/policy-rules", response_model=list[PolicyRuleOut])
+def list_profile_policy_rules(
+    profile_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[PolicyRuleOut]:
+    """This profile's configured policy content rules (MAS-192), one per
+    clause in the catalog -- `rule_text` is None where nothing is configured."""
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    return _policy_rules_out(repository.get_profile_policy_rules(db, profile_id))
+
+
+class PolicyRuleUpdateRequest(BaseModel):
+    # Empty/whitespace-only clears the rule, same as DELETE.
+    rule_text: str
+
+
+@router.put("/standard-profiles/{profile_id}/policy-rules/{clause_id}", response_model=PolicyRuleOut)
+def update_profile_policy_rule(
+    profile_id: UUID, clause_id: str, body: PolicyRuleUpdateRequest,
+    db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace),
+) -> PolicyRuleOut:
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    if clause_id not in CLAUSE_BY_ID:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No clause with that id.")
+    rule_text = body.rule_text.strip() or None
+    repository.set_profile_policy_rule(db, profile_id, clause_id, rule_text)
+    db.commit()
+    return PolicyRuleOut(id=clause_id, name=CLAUSE_BY_ID[clause_id].name, rule_text=rule_text)
+
+
+@router.delete("/standard-profiles/{profile_id}/policy-rules/{clause_id}", response_model=PolicyRuleOut)
+def delete_profile_policy_rule(
+    profile_id: UUID, clause_id: str, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> PolicyRuleOut:
+    if repository.get_standard_profile(db, workspace.id, profile_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No standard profile with that id.")
+    if clause_id not in CLAUSE_BY_ID:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No clause with that id.")
+    repository.set_profile_policy_rule(db, profile_id, clause_id, None)
+    db.commit()
+    return PolicyRuleOut(id=clause_id, name=CLAUSE_BY_ID[clause_id].name, rule_text=None)
 
 
 class ContractStandardProfileRequest(BaseModel):

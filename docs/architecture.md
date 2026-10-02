@@ -401,6 +401,57 @@ other re-review).
 same `sourceInfo()`-style document attribution for a bundle's linked
 documents (MAS-190's pattern).
 
+## Policy content rules on a present clause (MAS-192)
+
+Split from MAS-98's post-course grab-bag (idea #5: "broader policy
+profiles/playbooks"), scoped down after a `decide-carefully` pass (see
+MAS-192's ticket comments): not a parallel clause list or an
+organisation-wide playbook, but a free-text rule on top of MAS-188's
+existing catalog — "the liability cap must not exceed 12 months of fees" —
+judged against a clause MAS-188's own pass already found present, never
+against an absent or unchecked one. `profile_policy_rules(profile_id,
+clause_id, rule_text)` (migration 022) holds the configured text, one row
+per (profile, clause); no row means no rule, which reads `not_applicable`
+regardless of whether the clause itself is present.
+
+`app/risk_analysis/policy_checker.py`'s `check_policy_rules()` is a fourth
+independent model call and failure domain in `review_contract()`
+(`app/risk_analysis/review.py`), same MAS-129/MAS-188 pattern — but unlike
+the risk, key-terms and clause passes, it is not a call on every batch
+regardless: it only runs when a batch's own clause-check pass found a
+clause with a configured rule, and it is fed that finding's own
+already-verified quote directly rather than re-sending full passages, so a
+profile with zero rules configured costs nothing extra at all. It does not
+re-run the prompt-injection guardrail on its own — the quote it judges is
+already a verbatim substring of a passage the clause pass validated in the
+same batch, which already went through the guardrail once (see the
+module's own docstring for the full reasoning).
+
+The verdict vocabulary is `compliant` / `violated` / `cannot_tell` /
+`not_applicable` — not reused from MAS-188's present/absent/cannot_tell,
+since presence and compliance answer different questions (a present clause
+can still violate its rule). `policy_findings` (migration 022) stores one
+verified verdict per (contract, chunk, clause), including a
+`rule_text_checked` snapshot of the exact wording it was judged against:
+`PolicyResult.from_rows()` (`app/api/routes.py`) compares that snapshot to
+the profile's *current* rule text at read time, and a mismatch — the rule
+was edited since the stored verdict was judged — reads `cannot_tell`, never
+the stale verdict under new wording. Combined with `checked_policy_clause_ids`
+(mirroring MAS-193's `checked_clause_ids` fix for the same reason, applied
+here before the same bug could recur): a rule configured after the review
+ran, or a profile's rule dropped and re-added, reads `cannot_tell` until a
+fresh review actually checks it — never a fabricated or leftover verdict.
+
+`components/ClauseChecklistCard.tsx` renders the verdict as a small pill
+next to a present clause's name when that clause has a configured rule
+(`compliant` → the existing "ok" green, anything else → the existing "warn"
+amber — no new colour token, per CLAUDE.md's "do not change the palette").
+`pages/Standards.tsx` adds a "Clause content rules" card below the existing
+clause checklist, one text input per clause in the catalog, saved/cleared
+through `PUT`/`DELETE /api/standard-profiles/{id}/policy-rules/{clause_id}`
+— the same instant-effect, no-model-call-on-save pattern as every other
+profile setting (the model call only happens on the next review).
+
 ## Drafted clarifying questions (MAS-189)
 
 Split from MAS-98's post-course grab-bag (idea #2: "suggested redlines/

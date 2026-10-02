@@ -4,7 +4,8 @@ import {
   listStandardProfiles, createStandardProfile, renameStandardProfile, setDefaultStandardProfile, deleteStandardProfile,
   listProfileStandards, saveProfileStandard, resetProfileStandard,
   listProfileClauses, setProfileClauseEnabled,
-  type ClauseConfig, type Standard, type StandardProfile,
+  listProfilePolicyRules, setProfilePolicyRule, deleteProfilePolicyRule,
+  type ClauseConfig, type PolicyRule, type Standard, type StandardProfile,
 } from '../api'
 import { PageChrome } from '../components/PageChrome'
 
@@ -22,8 +23,10 @@ export function StandardsPage() {
   const [selected, setSelected] = useState<string | null>(null)
   const [standards, setStandards] = useState<Standard[] | null>(null)
   const [clauses, setClauses] = useState<ClauseConfig[] | null>(null)
+  const [policyRules, setPolicyRules] = useState<PolicyRule[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [clauseBusyId, setClauseBusyId] = useState<string | null>(null)
+  const [policyBusyId, setPolicyBusyId] = useState<string | null>(null)
   const [profileBusy, setProfileBusy] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   // Inline create/rename/delete-confirm, in place of a native browser dialog
@@ -55,6 +58,7 @@ export function StandardsPage() {
     if (!selected) return
     setStandards(null)
     setClauses(null)
+    setPolicyRules(null)
     setRenaming(false)
     setConfirmingDelete(false)
     listProfileStandards(selected)
@@ -65,6 +69,12 @@ export function StandardsPage() {
       })
     listProfileClauses(selected)
       .then(setClauses)
+      .catch((error: Error) => {
+        setLoadError(error.message)
+        toast.error(error.message)
+      })
+    listProfilePolicyRules(selected)
+      .then(setPolicyRules)
       .catch((error: Error) => {
         setLoadError(error.message)
         toast.error(error.message)
@@ -127,6 +137,36 @@ export function StandardsPage() {
       // Already reported by the toast.
     } finally {
       setClauseBusyId(null)
+    }
+  }
+
+  async function savePolicyRule(id: string, ruleText: string) {
+    if (!selected) return
+    setPolicyBusyId(id)
+    try {
+      const updated = await toast
+        .promise(setProfilePolicyRule(selected, id, ruleText), { loading: 'Saving…', success: () => 'Rule saved.', error: (error: Error) => error.message })
+        .unwrap()
+      setPolicyRules((prev) => (prev ? prev.map((r) => (r.id === updated.id ? updated : r)) : prev))
+    } catch {
+      // Already reported by the toast.
+    } finally {
+      setPolicyBusyId(null)
+    }
+  }
+
+  async function clearPolicyRule(id: string) {
+    if (!selected) return
+    setPolicyBusyId(id)
+    try {
+      const updated = await toast
+        .promise(deleteProfilePolicyRule(selected, id), { loading: 'Clearing…', success: () => 'Rule cleared.', error: (error: Error) => error.message })
+        .unwrap()
+      setPolicyRules((prev) => (prev ? prev.map((r) => (r.id === updated.id ? updated : r)) : prev))
+    } catch {
+      // Already reported by the toast.
+    } finally {
+      setPolicyBusyId(null)
     }
   }
 
@@ -373,8 +413,79 @@ export function StandardsPage() {
             </ul>
           </section>
         )}
+
+        {policyRules && (
+          <section className="card policy-rules-settings">
+            <div className="card-header">
+              <h2 className="card-title">Clause content rules</h2>
+            </div>
+            <p className="muted small">
+              What a present clause must actually say, beyond just being there (MAS-192) — for example "the liability cap must not exceed 12
+              months of fees". A rule only ever judges a clause the checklist above found present; it has nothing to say about a clause that
+              is absent or not checked.
+            </p>
+            <ul className="policy-rules-list">
+              {policyRules.map((rule) => (
+                <PolicyRuleRow
+                  key={rule.id}
+                  rule={rule}
+                  busy={policyBusyId === rule.id}
+                  onSave={(text) => void savePolicyRule(rule.id, text)}
+                  onClear={() => void clearPolicyRule(rule.id)}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
     </PageChrome>
+  )
+}
+
+function PolicyRuleRow({
+  rule,
+  busy,
+  onSave,
+  onClear,
+}: {
+  rule: PolicyRule
+  busy: boolean
+  onSave: (text: string) => void
+  onClear: () => void
+}) {
+  const [text, setText] = useState(rule.rule_text ?? '')
+  const dirty = text.trim() !== (rule.rule_text ?? '')
+  return (
+    <li className="policy-rules-list-item">
+      <label htmlFor={`policy-rule-${rule.id}`}>{rule.name} content rule</label>
+      <div className="policy-rule-row">
+        <input
+          id={`policy-rule-${rule.id}`}
+          type="text"
+          value={text}
+          placeholder="No rule configured — this clause is only checked for presence"
+          disabled={busy}
+          onChange={(event) => setText(event.target.value)}
+        />
+        <button type="button" className="primary" disabled={busy || !dirty} onClick={() => onSave(text)} aria-label={`Save ${rule.name} rule`}>
+          Save
+        </button>
+        {rule.rule_text && (
+          <button
+            type="button"
+            className="link"
+            disabled={busy}
+            aria-label={`Clear ${rule.name} rule`}
+            onClick={() => {
+              setText('')
+              onClear()
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+    </li>
   )
 }
 

@@ -1,4 +1,4 @@
-import type { ClauseResult, ClauseSource, Contract, RiskReview } from '../api'
+import type { ClauseResult, ClauseSource, Contract, PolicyResult, RiskReview } from '../api'
 import type { SourceRef } from './PassageReader'
 
 interface Props {
@@ -19,6 +19,12 @@ export function ClauseChecklistCard({ review, contracts = [], onShowSource }: Pr
   const present = clauses.filter((c) => c.status === 'present')
   const absent = clauses.filter((c) => c.status === 'absent')
   const cannotTell = clauses.filter((c) => c.status === 'cannot_tell')
+  // Policy-content rules (MAS-192): a verdict on what a present clause
+  // actually says, keyed by clause id. Only clauses with a configured rule
+  // appear here at all -- `not_applicable` (clause absent/cannot_tell) is
+  // still possible but never shown, since there is nothing to show for a
+  // clause this card doesn't render as present.
+  const policyByClause = new Map((review.policy ?? []).map((p) => [p.id, p]))
 
   return (
     <section className="card clause-checklist" aria-live="polite">
@@ -40,7 +46,14 @@ export function ClauseChecklistCard({ review, contracts = [], onShowSource }: Pr
       {present.length > 0 && (
         <dl className="terms">
           {present.map((clause) => (
-            <ClauseTile key={clause.id} clause={clause} contracts={contracts} onShowSource={onShowSource} reviewingContractId={review.contract_id} />
+            <ClauseTile
+              key={clause.id}
+              clause={clause}
+              policy={policyByClause.get(clause.id)}
+              contracts={contracts}
+              onShowSource={onShowSource}
+              reviewingContractId={review.contract_id}
+            />
           ))}
         </dl>
       )}
@@ -78,22 +91,40 @@ function sourceInfo(item: ClauseSource, contracts: Contract[], reviewingContract
   return { sourceFilename, isLinkedDocument, passageLabel: `passage ${item.chunk_index + 1}` }
 }
 
+const POLICY_STATUS_LABEL: Record<string, string> = {
+  compliant: 'Meets policy',
+  violated: 'Policy violation',
+  cannot_tell: 'Policy not checked',
+}
+
 function ClauseTile({
   clause,
+  policy,
   contracts,
   onShowSource,
   reviewingContractId,
 }: {
   clause: ClauseResult
+  policy?: PolicyResult
   contracts: Contract[]
   onShowSource?: (source: SourceRef) => void
   reviewingContractId: string
 }) {
   const source = clause.source!
   const { sourceFilename, isLinkedDocument, passageLabel } = sourceInfo(source, contracts, reviewingContractId)
+  // not_applicable shouldn't reach here (the clause this tile renders is
+  // always present), but guard anyway rather than show a misleading pill.
+  const showPolicy = policy && policy.status !== 'not_applicable'
   return (
     <div className="term present">
-      <dt>{clause.name}</dt>
+      <dt>
+        {clause.name}
+        {showPolicy && (
+          <span className={`status ${policy!.status === 'compliant' ? 'ok' : 'warn'}`} title={policy!.rule_text}>
+            {POLICY_STATUS_LABEL[policy!.status]}
+          </span>
+        )}
+      </dt>
       <dd>
         <span className="term-meta muted small">
           {onShowSource ? (

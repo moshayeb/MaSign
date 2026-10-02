@@ -84,6 +84,15 @@ class RiskReview:
     # clause missing from this list was never actually asked about, however
     # old clauses_complete claims -- it must read cannot_tell, not absent.
     checked_clause_ids: list[str] = field(default_factory=list)
+    # The policy-content pass (MAS-192) runs in the same job too, judging
+    # only clauses this run found present AND that have a configured rule;
+    # same meaning as key_terms_complete/clauses_complete.
+    policy_complete: bool = False
+    # Same MAS-193-style discipline as checked_clause_ids, for policy rules:
+    # which clause ids had an active rule this run actually checked. A
+    # clause missing here was never asked about this run, whatever
+    # policy_complete claims — it must read cannot_tell, never a stale verdict.
+    checked_policy_clause_ids: list[str] = field(default_factory=list)
     # Passage indexes (0-based) whose model reply was unreadable, and those the
     # guardrail withheld — listed, not only counted (MAS-84).
     unreadable_chunks: list["CoveragePassage"] = field(default_factory=list)
@@ -173,6 +182,39 @@ class ClauseFindingRow:
     clause_id: str
     quote: str
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class PolicyFindingRow:
+    """One verified policy-content verdict stored for a contract (MAS-192).
+
+    Judges what a clause MAS-188 already found present actually says, against
+    a free-text rule configured per (standard profile, clause). `rule_text_checked`
+    is the rule text this verdict was judged against — compared at read time
+    to the profile's current rule text for staleness, same reasoning as
+    `RiskReview.checked_clause_ids` (MAS-193). `contract_id`/`source_contract_id`
+    follow `ClauseFindingRow`.
+    """
+
+    id: UUID
+    contract_id: UUID
+    source_contract_id: UUID
+    chunk_id: UUID
+    clause_id: str
+    verdict: str  # compliant | violated | cannot_tell
+    quote: str
+    rule_text_checked: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ProfilePolicyRule:
+    """A workspace's configured policy rule for one (profile, clause) pair (MAS-192)."""
+
+    profile_id: UUID
+    clause_id: str
+    rule_text: str
+    updated_at: datetime
 
 
 @dataclass(frozen=True)
