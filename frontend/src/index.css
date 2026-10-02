@@ -1107,6 +1107,14 @@ fieldset.scope {
   animation: pulse 1.2s ease-in-out infinite;
 }
 
+/* Same accent as .status.running, no pulsing dot -- this marks a fact
+   (quality-indexed), not an in-progress job (MAS-195). */
+.status.accent {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+
 @keyframes pulse {
   0%,
   100% {
