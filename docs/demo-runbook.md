@@ -48,6 +48,18 @@ ticket) — their facts below are read directly from the file, not measured.
 | `globex_data_processing_addendum.txt` | The prompt-injection guardrail (MAS-90) and sentence-level redaction (MAS-99). Section 2.2 carries one injected sentence inside an otherwise normal clause. | Ask about the payment term: the answer should still name 30 days, cite Section 2.2, and the Sources tab should show only the injected sentence underlined/withheld — the rest of the clause stays readable. The injected sentence never reaches the model. |
 | `plainview_consulting_invoice.txt` | Document-kind detection (MAS-107), by rule, no model call. | On upload, the header should read **"Likely not a contract — invoice"**, naming its markers (Invoice number, Amount due, Bill to, Subtotal, VAT, Remittance). A review still runs if requested, but the Overview should say the rubric may not apply — never present a clean result as reassurance. |
 
+### Invoice verification fixture (MAS-199, added 2026-10-02)
+
+`harbor_onboarding_invoice.txt` is not uploaded as a contract — it is uploaded
+**under Harbor's Invoices tab** (`POST /contracts/{contract_id}/invoices`),
+checked against Harbor's own already-verified key terms
+(`one_off_fee` EUR 12,000, `payment_deadline` 45 net days, `late_payment` 1%
+per month): the invoice total (EUR 12,000) **matches** the one-off onboarding
+fee; its 30-day payment window and its stated 1.5%/month late fee both
+**possible-mismatch** against Harbor's 45-day term and 1% rate — a realistic
+"billing used the wrong template" case, not a worst-case fabrication. Not yet
+rehearsed live.
+
 Also worth showing, all shipped after this runbook's 2026-09-30 version and
 **not yet rehearsed live** (say so if asked, don't claim they were verified
 in the two recorded rehearsals below):
@@ -101,8 +113,9 @@ in the two recorded rehearsals below):
 | 6 | Upload `globex_data_processing_addendum.txt`; ask it about the payment term | The answer should still name 30 days with a citation; open the Sources tab and show only the injected sentence underlined as withheld, the rest of the clause readable. The guardrail acted before any model call. *(New in MAS-197 — not yet in a recorded rehearsal.)* |
 | 7 | Upload `plainview_consulting_invoice.txt` | Header reads "Likely not a contract — invoice", by rule, no model call; a review (if run) says the rubric may not apply rather than presenting a clean result as reassurance. *(New in MAS-197 — not yet in a recorded rehearsal.)* |
 | 8 | Select Harbor → **Overview**, then ask `hb-08` | Compare its no-auto-renewal clause with Northwind's automatic renewal. Inspect the source citation. |
-| 9 | Open **Actions** → **Export PDF** | The export reflects the stored review; it does not perform a new review. |
-| 10 | Show [measured evaluation results](evaluation/README.md) | On 2026-09-28, quality-profile retrieval hit@1 was 0.80 over 35 questions and hit@5 was 1.00; a separate six-answer judged sample scored 0.88 faithfulness and 0.59 factual correctness. Those are small-sample measurements, not a general accuracy promise. |
+| 9 | On Harbor, open the **Invoices** tab and upload `harbor_onboarding_invoice.txt` | Fee amount should show **Match** (EUR 12,000 both sides); payment deadline and late-payment rate should both show **Possible mismatch**, each citing the invoice's own wording next to Harbor's verified term. *(New in MAS-199 — not yet in a recorded rehearsal.)* |
+| 10 | Open **Actions** → **Export PDF** | The export reflects the stored review; it does not perform a new review. |
+| 11 | Show [measured evaluation results](evaluation/README.md) | On 2026-09-28, quality-profile retrieval hit@1 was 0.80 over 35 questions and hit@5 was 1.00; a separate six-answer judged sample scored 0.88 faithfulness and 0.59 factual correctness. Those are small-sample measurements, not a general accuracy promise. |
 
 Optional, time permitting: on a quality-indexed contract, point out the
 profile pill in the header (MAS-195) and the Portable/Quality picker next to
