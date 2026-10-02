@@ -15,7 +15,7 @@ import { PassageReader, type SourceRef } from './components/PassageReader'
 import { SourcePanel } from './components/SourcePanel'
 import { Tabs, TabPanel } from './components/Tabs'
 import { UploadForm } from './components/UploadForm'
-import { formatSize, kindBadge, reviewBadge } from './reviewStatus'
+import { formatSize, kindBadge, profileBadge, reviewBadge } from './reviewStatus'
 import { suggestQuestions } from './suggestions'
 import { useIsWide } from './useIsWide'
 
@@ -534,6 +534,7 @@ export default function App() {
                           {kindBadge(current!)!.label}
                         </span>
                       )}
+                      {profileBadge(current!) && <span className={`status ${profileBadge(current!)!.tone}`}>{profileBadge(current!)!.label}</span>}
                     </p>
                   </div>
                   <div className="contract-head-actions">

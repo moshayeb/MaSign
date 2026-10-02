@@ -44,6 +44,27 @@ export function kindBadge(contract: Contract): ReviewBadge | null {
   }
 }
 
+export interface ProfileBadge {
+  label: string
+  tone: 'none' | 'accent'
+}
+
+// Which embedding profile(s) this contract was actually indexed with (MAS-62
+// compare mode, MAS-169 made it reachable live). Quiet info, not a status --
+// both profiles are a fine answer, quality is just the pricier opt-in one
+// worth calling out. An empty/missing value means "don't know", never
+// "portable": honest-outcomes, same as the review and kind badges (the
+// backend always reports at least ["portable"] -- migration 014 -- but the
+// UI should never assume that on its own).
+export function profileBadge(contract: Pick<Contract, 'indexed_profiles'>): ProfileBadge | null {
+  const profiles = contract.indexed_profiles
+  if (!profiles || profiles.length === 0) return null
+  if (profiles.includes('quality')) {
+    return { label: profiles.includes('portable') ? 'Portable + Quality indexed' : 'Quality indexed', tone: 'accent' }
+  }
+  return { label: 'Portable indexed', tone: 'none' }
+}
+
 // True when the contract rubric's verdicts may not mean much for this file.
 export function rubricMayNotApply(contract: Pick<Contract, 'document_kind'>): boolean {
   return contract.document_kind === 'uncertain' || contract.document_kind === 'not_contract'
