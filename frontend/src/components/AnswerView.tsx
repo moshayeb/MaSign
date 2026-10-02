@@ -74,6 +74,10 @@ export function AnswerView({ asked, contracts, onShowSource }: Props) {
         <span className="muted answer-scope">
           {contract ? contract.filename : 'all contracts'}
           {response.answer_model ? ` · ${response.answer_model}` : ''}
+          {/* Quiet unless notable (MAS-196): portable is the default everyone
+              gets, so only say so when quality actually answered -- honest
+              about what ran, not just what was asked for. */}
+          {response.profile === 'quality' ? ' · Quality embeddings' : ''}
         </span>
       </div>
       <p className="answer-question muted">“{question}”</p>
