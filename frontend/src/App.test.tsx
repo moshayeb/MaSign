@@ -154,6 +154,62 @@ describe('contract list', () => {
   })
 })
 
+describe('standards profile picker (MAS-200)', () => {
+  it('keeps showing the chosen profile after it saves, instead of reverting to Workspace default', async () => {
+    const baseReview = {
+      contract_id: 'c1',
+      status: 'done',
+      model: 'claude-sonnet-5',
+      chunks_total: 1,
+      chunks_checked: 1,
+      chunks_withheld: 0,
+      complete: true,
+      key_terms_complete: true,
+      key_terms: [],
+      error: null,
+      updated_at: '2026-10-02T09:00:00Z',
+      findings: [],
+      categories: [],
+    }
+    const profiles = [
+      { id: 'p-default', name: 'Default', is_default: true },
+      { id: 'p-ncc', name: 'NCC Contracts', is_default: false },
+    ]
+    let currentProfileId: string | null = null
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/auth/me')) return json(200, { id: 'test-user', email: 'test@example.com' })
+      if (url.endsWith('/risks')) return json(200, baseReview)
+      if (url.endsWith('/rfi-suggestions')) return json(200, [])
+      if (url.endsWith('/passages')) return json(200, [])
+      if (url.endsWith('/standard-profile')) {
+        const body = JSON.parse(String(init?.body))
+        currentProfileId = body.profile_id
+        return json(200, contract({ standard_profile_id: currentProfileId }))
+      }
+      if (url === '/api/standard-profiles') return json(200, profiles)
+      if (url === '/api/contracts') return json(200, [contract({ standard_profile_id: currentProfileId })])
+      return json(404, { detail: `unexpected ${url}` })
+    })
+
+    render(<App />)
+
+    await userEvent.click(await screen.findByText('msa.txt'))
+    const picker = await screen.findByRole('combobox', { name: 'Standards profile' })
+    expect(picker).toHaveValue('')
+
+    await userEvent.selectOptions(picker, 'NCC Contracts')
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Standards profile' })).toHaveValue('p-ncc'))
+    // The regression: a second render pass after the reload settles must not
+    // snap the picker back to "Workspace default" (App.tsx's `load()` used to
+    // refresh `contracts` without resyncing `selected`, MAS-200).
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(screen.getByRole('combobox', { name: 'Standards profile' })).toHaveValue('p-ncc')
+  })
+})
+
 describe('refresh', () => {
   it('reports the refresh through a toast (MAS-68)', async () => {
     vi.spyOn(globalThis, 'fetch')
