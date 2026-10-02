@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { askQuestion, type Contract, type QueryResponse } from '../api'
+import { askQuestion, type Contract, type EmbeddingProfile, type QueryResponse } from '../api'
 import { CALLS_PER_QUESTION, COMPARE_CALLS_PER_QUESTION, formatCalls } from '../cost'
 
 // Matches the backend's QueryRequest.question max_length (app/api/routes.py,
@@ -36,10 +36,21 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered, onCo
   const [scope, setScope] = useState<'selected' | 'all'>('selected')
   const [busy, setBusy] = useState(false)
   const [comparing, setComparing] = useState(false)
+  // MAS-196: which profile the plain "Ask" (not Compare) should use. Kept as
+  // the user's last pick, but only ever honored through `effectiveProfile`
+  // below -- derived from the *current* contract on every render, so it can
+  // never fire "quality" against a contract that doesn't support it (no
+  // reset effect needed: switching to an unindexed contract or to "all
+  // contracts" falls back to portable automatically, and switching back to
+  // the same quality-indexed contract remembers the choice).
+  const [profile, setProfile] = useState<EmbeddingProfile>('portable')
   const contract = scope === 'selected' ? selected : null
+  // Same gating Compare already used -- never offer a profile that will 409.
+  const canChooseProfile = scope === 'selected' && Boolean(selected?.indexed_profiles?.includes('quality'))
+  const effectiveProfile: EmbeddingProfile = canChooseProfile ? profile : 'portable'
   // Comparing is only offered for one specific, already quality-indexed
   // contract -- "all contracts" scope has no single indexed-profile set to check.
-  const canCompare = Boolean(onCompared && scope === 'selected' && selected?.indexed_profiles?.includes('quality'))
+  const canCompare = Boolean(onCompared && canChooseProfile)
 
   async function submit() {
     const text = draft.trim()
@@ -50,7 +61,7 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered, onCo
       // (with the API's detail) are toasted; sonner dismisses the toast on
       // success when no success message is given (docs/frontend.md rule 3).
       const response = await toast
-        .promise(askQuestion(text, contract?.contract_id ?? null), {
+        .promise(askQuestion(text, contract?.contract_id ?? null, 5, effectiveProfile), {
           loading: 'Reading the contract…',
           error: (e: Error) => e.message,
         })
@@ -125,6 +136,22 @@ export function QuestionPanel({ selected, draft, onDraftChange, onAnswered, onCo
             All contracts
           </label>
         </fieldset>
+        {canChooseProfile && (
+          <fieldset className="scope">
+            <legend className="visually-hidden">Answer with</legend>
+            <span className="scope-label" aria-hidden="true">
+              Answer with
+            </span>
+            <label className={effectiveProfile === 'portable' ? 'pill active' : 'pill'}>
+              <input type="radio" name="profile" checked={effectiveProfile === 'portable'} onChange={() => setProfile('portable')} />
+              Portable
+            </label>
+            <label className={effectiveProfile === 'quality' ? 'pill active' : 'pill'}>
+              <input type="radio" name="profile" checked={effectiveProfile === 'quality'} onChange={() => setProfile('quality')} />
+              Quality
+            </label>
+          </fieldset>
+        )}
         <span className="muted small cost-hint ask-cost">Each question uses about {CALLS_PER_QUESTION} model calls</span>
         {canCompare && (
           <button
