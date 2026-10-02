@@ -1,0 +1,39 @@
+STATEMENT OF WORK NO. 1
+
+This Statement of Work No. 1 ("SOW") is entered into as of 15 March 2026 under, and is incorporated by reference into, the Master Services Agreement dated 1 March 2026 (the "Agreement") between Northwind Analytics AB ("Customer") and Contoso Cloud Services GmbH ("Vendor"). Terms used but not defined in this SOW have the meanings given to them in the Agreement.
+
+1. Scope of Services
+
+1.1 Vendor shall perform the implementation and onboarding services described in this SOW (the "Project"), comprising: data migration from Customer's existing systems to the platform; configuration of the platform's reporting modules to Customer's specification; and training of up to twenty (20) Customer personnel.
+
+1.2 The Project shall be performed substantially in accordance with the milestone schedule in Section 3.
+
+2. Personnel and Fees
+
+2.1 Vendor shall assign a dedicated project team consisting of one project manager and up to three (3) consultants, each billed at the daily rate of EUR 1,250 per consultant day set out in Section 2.1 of the Agreement.
+
+2.2 Vendor's good-faith estimate of the total Project fees is EUR 95,000, based on an estimated seventy-six (76) consultant days. Fees are payable against the milestones in Section 3, on actual days worked.
+
+2.3 Invoices issued under this SOW are payable within forty-five (45) days of the invoice date, notwithstanding the payment term in Section 2.2 of the Agreement, in recognition of the Project's milestone-based billing cycle.
+
+3. Milestones and Acceptance
+
+3.1 Milestone 1 — Data migration complete: eight (8) weeks after the SOW effective date.
+
+3.2 Milestone 2 — Reporting configuration complete: twelve (12) weeks after the SOW effective date.
+
+3.3 Milestone 3 — Training complete and Project sign-off: sixteen (16) weeks after the SOW effective date.
+
+3.4 Customer shall notify Vendor in writing within ten (10) business days of a milestone deliverable whether it is accepted or rejected with reasons; a deliverable not rejected within that period is deemed accepted.
+
+4. Term
+
+4.1 This SOW commences on its effective date and continues until Project sign-off under Section 3.3, unless terminated earlier in accordance with the Agreement.
+
+5. Change Control
+
+5.1 Any change to the scope, fees or milestones in this SOW must be agreed in writing by both Parties' project managers before it takes effect.
+
+Signed for and on behalf of Northwind Analytics AB: ______________________ Name: Anna Lindqvist Title: Chief Operating Officer
+
+Signed for and on behalf of Contoso Cloud Services GmbH: ______________________ Name: Markus Weber Title: Managing Director
