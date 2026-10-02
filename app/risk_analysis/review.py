@@ -21,6 +21,10 @@ primary contract — a linked document opened on its own still keeps its own
 independent review. Since MAS-188 the same job also checks the contract's
 effective standard profile's expected-clause checklist, a third independent
 call per batch with its own completeness flag, same pattern as key terms.
+Since MAS-192 a fourth independent call judges a present clause's CONTENT
+against a free-text policy rule configured per (profile, clause) — only when
+this batch's clause pass found that clause present AND a rule is configured
+for it, so it is not a call on every batch regardless.
 """
 
 import logging
@@ -35,6 +39,7 @@ from app.key_terms.extractor import extract_key_terms
 from app.retrieval.vector_store import ChunkHit
 from app.risk_analysis.analyzer import analyze_risks
 from app.risk_analysis.clause_checker import check_clauses
+from app.risk_analysis.policy_checker import check_policy_rules
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +72,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         profile_id = contract.standard_profile_id or repository.get_or_create_default_profile(db, contract.workspace_id).id
         disabled_clauses = repository.get_disabled_clauses(db, profile_id)
         enabled_clauses = tuple(cid for cid in CLAUSE_IDS if cid not in disabled_clauses)
+        policy_rules = repository.get_profile_policy_rules(db, profile_id)
         repository.start_risk_review(db, contract_id, status="running")
         repository.update_risk_review(
             db,
@@ -85,9 +91,11 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         findings: list[tuple[UUID, str, str, str, str]] = []
         terms: list[tuple[UUID, str, str, str, dict | None]] = []
         clause_findings: list[tuple[UUID, str, str]] = []
+        policy_findings: list[tuple[UUID, str, str, str, str]] = []
         complete = True
         terms_complete = True
         clauses_complete = True
+        policy_complete = True
         checked = 0
         withheld = 0
         unreadable_chunks: list[CoveragePassage] = []
@@ -106,6 +114,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
                 repository.replace_risk_findings(db, contract_id, findings)
                 repository.replace_key_terms(db, contract_id, terms)
                 repository.replace_clause_findings(db, contract_id, clause_findings)
+                repository.replace_policy_findings(db, contract_id, policy_findings)
                 result = repository.update_risk_review(
                     db,
                     contract_id,
@@ -172,6 +181,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             # domain (MAS-188, same reasoning as MAS-129 above): a bad reply
             # here only marks the clause checklist incomplete, never discards
             # this batch's (or any prior batch's) risk findings or key terms.
+            batch_clause_findings: list = []
             try:
                 clause_report = check_clauses(hits, model, enabled_clauses, filenames=filenames)
             except ChatModelError as error:
@@ -180,6 +190,29 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             else:
                 clauses_complete = clauses_complete and clause_report.checked and clause_report.complete
                 clause_findings.extend((c.hit.chunk_id, c.clause_id, c.quote) for c in clause_report.findings)
+                if clause_report.checked:
+                    batch_clause_findings = clause_report.findings
+
+            # Policy-content checking is a fourth independent model call and
+            # failure domain (MAS-192, same reasoning as MAS-129/MAS-188
+            # above): a bad reply here only marks the policy pass incomplete,
+            # never discards this batch's (or any prior batch's) risk
+            # findings, key terms, or clause presence. Only runs the model
+            # when this batch actually found a clause with a configured rule
+            # — otherwise it is a zero-cost no-op, same as an empty hits list.
+            # Uses batch_clause_findings (not clause_report directly) so a
+            # clause-check failure above — where clause_report is never
+            # assigned — still safely means "nothing to judge this batch".
+            try:
+                policy_report = check_policy_rules(batch_clause_findings, policy_rules, model)
+            except ChatModelError as error:
+                logger.warning("Policy check of %s failed at passage %d: %s", contract.filename, start + 1, error)
+                policy_complete = False
+            else:
+                policy_complete = policy_complete and policy_report.checked and policy_report.complete
+                policy_findings.extend(
+                    (p.source.hit.chunk_id, p.clause_id, p.verdict, p.quote, policy_rules[p.clause_id]) for p in policy_report.findings
+                )
             repository.update_risk_review(
                 db,
                 contract_id,
@@ -197,6 +230,7 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
         repository.replace_risk_findings(db, contract_id, findings)
         repository.replace_key_terms(db, contract_id, terms)
         repository.replace_clause_findings(db, contract_id, clause_findings)
+        repository.replace_policy_findings(db, contract_id, policy_findings)
         review = repository.update_risk_review(
             db,
             contract_id,
@@ -214,6 +248,10 @@ def review_contract(contract_id: UUID, model: ChatModel, *, batch_size: int = BA
             # so a later read must know which currently-enabled clauses were
             # genuinely part of this check, not just trust clauses_complete.
             checked_clause_ids=list(enabled_clauses),
+            policy_complete=policy_complete and withheld == 0,
+            # Same MAS-193-style discipline, for policy rules (MAS-192): a
+            # profile's rule set can change after this run too.
+            checked_policy_clause_ids=list(policy_rules.keys()),
         )
         repository.create_audit_event(
             db, workspace_id=contract.workspace_id, user_id=None, event_type="review.completed",

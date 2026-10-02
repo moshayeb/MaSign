@@ -659,6 +659,27 @@ catalog, toggled through `PUT /api/standard-profiles/{id}/clauses/{clause_id}`
 with no re-review and no model call — same instant-effect guarantee MAS-120's
 numeric standards already give.
 
+### Clause content rules (MAS-192)
+
+A small pill next to a present clause's name in `ClauseChecklistCard`, read
+from the same `RiskReview` response (`policy`, `policy_complete`) — no
+separate load. Only shown when that clause has a configured rule: "Meets
+policy" (green `status ok`) or "Policy violation"/"Policy not checked" (amber
+`status warn` — reusing the existing two-colour palette rather than adding a
+third, per CLAUDE.md's "do not change the palette without the owner's
+decision"). The pill's `title` attribute carries the rule text itself, so
+hovering explains what was checked. `not_applicable` (the clause itself is
+absent or not checked) renders no pill at all — there is nothing to show for
+a clause this card doesn't already render as present.
+
+Configuring a rule is a second card on `pages/Standards.tsx`, "Clause content
+rules", below the expected-clause checklist: one text input per clause in the
+fixed catalog, with Save (disabled until the text actually changes) and
+Clear (only shown once a rule is set). Saved/cleared through
+`PUT`/`DELETE /api/standard-profiles/{id}/policy-rules/{clause_id}` — no
+re-review and no model call on save, same as every other profile setting;
+the model only judges the rule on the contract's next review.
+
 ### Download and print (MAS-97, MAS-191)
 
 The contract header has plain `<a download>` links to

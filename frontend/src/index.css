@@ -3080,6 +3080,36 @@ button.chip.ranked {
   .clauses-list { grid-template-columns: minmax(0, 1fr); }
 }
 
+.policy-rules-settings {
+  margin-top: 18px;
+}
+
+.policy-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.policy-rules-list-item label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.policy-rule-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.policy-rule-row input[type='text'] {
+  flex: 1;
+  min-width: 0;
+}
+
 .standard-card {
   min-width: 0;
   display: flex;

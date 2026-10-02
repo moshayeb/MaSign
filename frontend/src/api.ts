@@ -306,6 +306,40 @@ export function setProfileClauseEnabled(profileId: string, clauseId: string, ena
   })
 }
 
+// --- policy content rules on a present clause (MAS-192) ---------------------
+
+export type PolicyStatus = 'not_applicable' | 'cannot_tell' | 'compliant' | 'violated'
+
+export interface PolicyResult {
+  id: string // clause id
+  name: string
+  rule_text: string
+  status: PolicyStatus
+  source: ClauseSource | null
+  others: ClauseSource[]
+}
+
+export interface PolicyRule {
+  id: string // clause id
+  name: string
+  rule_text: string | null // null means no rule configured for this clause
+}
+
+export function listProfilePolicyRules(profileId: string): Promise<PolicyRule[]> {
+  return request<PolicyRule[]>(`/api/standard-profiles/${profileId}/policy-rules`)
+}
+
+export function setProfilePolicyRule(profileId: string, clauseId: string, ruleText: string): Promise<PolicyRule> {
+  return request<PolicyRule>(`/api/standard-profiles/${profileId}/policy-rules/${clauseId}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ rule_text: ruleText }),
+  })
+}
+
+export function deleteProfilePolicyRule(profileId: string, clauseId: string): Promise<PolicyRule> {
+  return request<PolicyRule>(`/api/standard-profiles/${profileId}/policy-rules/${clauseId}`, { method: 'DELETE' })
+}
+
 // --- coverage (MAS-84) ------------------------------------------------------
 
 export interface ExternalReference {
@@ -385,6 +419,9 @@ export interface RiskReview {
   // The expected-clause checklist pass of the same job (MAS-188); absent on older responses.
   clauses_complete?: boolean
   clauses?: ClauseResult[]
+  // The policy-content pass of the same job (MAS-192); absent on older responses.
+  policy_complete?: boolean
+  policy?: PolicyResult[]
   // What was and was not read (MAS-84); absent on older responses.
   coverage?: Coverage | null
 }

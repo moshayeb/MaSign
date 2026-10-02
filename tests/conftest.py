@@ -109,6 +109,10 @@ class FakeChatModel:
         # Drafting an RFI (MAS-189) is a sixth, independent call; by default
         # it drafts a fixed, valid question.
         self.rfi_reply: str | Callable[[str], str] = '{"question": "Can you clarify this clause?"}'
+        # The policy-content pass (MAS-192) is a seventh, independent call,
+        # only made when a batch has a clause finding with a configured rule;
+        # by default it finds nothing.
+        self.policy_reply: str | Callable[[str], str] = "[]"
         self.truncated = False
         # Set to an exception to make only the risk call fail (MAS-76).
         self.risk_error: Exception | None = None
@@ -123,6 +127,9 @@ class FakeChatModel:
         self.invoice_fields_error: Exception | None = None
         # Set to an exception to make only the RFI call fail.
         self.rfi_error: Exception | None = None
+        # Set to an exception to make only the policy-check call fail, same
+        # independent-failure-domain reasoning (MAS-192).
+        self.policy_error: Exception | None = None
 
     def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None):
         from app.answering.llm import Completion
@@ -140,6 +147,9 @@ class FakeChatModel:
         # list (a profile can disable entries), so it is identified by its
         # fixed opening line rather than an exact match like the others.
         is_clause = system.startswith("You are MaSign's contract clause checker.")
+        # Same reasoning as is_clause: the policy checker's system prompt
+        # varies with the configured rule set, so match its fixed opening line.
+        is_policy = system.startswith("You are MaSign's contract policy checker.")
         if is_risk and self.risk_error is not None:
             raise self.risk_error
         if is_terms and self.key_terms_error is not None:
@@ -150,12 +160,15 @@ class FakeChatModel:
             raise self.invoice_fields_error
         if is_rfi and self.rfi_error is not None:
             raise self.rfi_error
+        if is_policy and self.policy_error is not None:
+            raise self.policy_error
         reply = (
             self.risk_reply if is_risk
             else self.key_terms_reply if is_terms
             else self.clause_reply if is_clause
             else self.invoice_fields_reply if is_invoice
             else self.rfi_reply if is_rfi
+            else self.policy_reply if is_policy
             else self.reply
         )
         return Completion(reply(user) if callable(reply) else reply, truncated=self.truncated)
@@ -265,6 +278,12 @@ def db(database: str) -> Iterator[psycopg.Connection]:
         for row in connection.execute("SELECT id FROM standard_profiles WHERE is_default = true").fetchall():
             for term_id in STANDARD_TERM_IDS:
                 repository.delete_standard(connection, row["id"], term_id)
+        # Same per-test reset for the clause checklist (MAS-188) and its
+        # policy content rules (MAS-192) -- the default profile persists for
+        # the whole session, so without this, a clause disabled or a rule
+        # configured by one test leaks into the next test's "fresh profile".
+        connection.execute("DELETE FROM disabled_profile_clauses")
+        connection.execute("DELETE FROM profile_policy_rules")
 
 
 # --- auth (MAS-143) -----------------------------------------------------------
