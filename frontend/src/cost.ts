@@ -11,6 +11,9 @@
 export const REVIEW_BATCH_SIZE = 8
 export const CALLS_PER_BATCH = 2
 export const CALLS_PER_QUESTION = 2
+// Drafting a clarifying question (RFI, MAS-189) for one finding is always
+// exactly one call -- never batched, never automatic.
+export const CALLS_PER_RFI = 1
 // Compare mode (MAS-62): comparing embedding models asks the same question
 // twice, once per profile -- each a full /api/query round trip with its own
 // answer + risk call, so the paid-model cost genuinely doubles even though

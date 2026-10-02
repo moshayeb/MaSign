@@ -208,6 +208,33 @@ export interface ReviewCategory {
   findings: number
 }
 
+// --- drafted clarifying questions for a finding (MAS-189) -------------------
+//
+// The first MaSign output the model GENERATES rather than extracts. Always
+// render this as clearly unverified -- never inside a `.card`, never styled
+// like a ReviewFinding's verified quote.
+
+export interface RfiSuggestion {
+  id: string
+  chunk_id: string
+  category: string
+  quote: string
+  question: string
+  model: string | null
+  created_at: string
+}
+
+export function listRfiSuggestions(contractId: string): Promise<RfiSuggestion[]> {
+  return request<RfiSuggestion[]>(`/api/contracts/${contractId}/rfi-suggestions`)
+}
+
+export function requestRfi(contractId: string, chunkId: string, category: string): Promise<RfiSuggestion> {
+  return request<RfiSuggestion>(`/api/contracts/${contractId}/rfi-suggestions`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chunk_id: chunkId, category }),
+  })
+}
+
 // --- financial key terms (MAS-82) -----------------------------------------
 
 export type KeyTermStatus = 'found' | 'not_stated' | 'conflicting' | 'unchecked'

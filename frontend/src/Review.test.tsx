@@ -428,6 +428,60 @@ describe('whole-contract risk review (MAS-81)', () => {
     expect(screen.queryByText('Expected clauses')).not.toBeInTheDocument()
   })
 
+  it('shows the cost-confirm flow and renders a drafted question distinct from a finding (MAS-189)', async () => {
+    const drafted = {
+      id: 'rfi-1', chunk_id: 'c8', category: 'liability', quote: 'liability shall be unlimited',
+      question: 'Does the liability cap apply per incident or in aggregate?', model: 'claude-sonnet-5', created_at: '2026-09-17T09:05:00Z',
+    }
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/contracts/nw/rfi-suggestions' && init?.method === 'POST') return json(201, drafted)
+      if (url === '/api/contracts/nw/rfi-suggestions') return json(200, [])
+      return json(200, done)
+    })
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const findings = within(await screen.findByRole('list', { name: 'Findings' })).getAllByRole('listitem')
+    const liabilityFinding = findings[0]
+    const requestButton = within(liabilityFinding).getByRole('button', {
+      name: 'Ask MaSign to draft a clarifying question about this Liability cap finding',
+    })
+    expect(requestButton).toHaveTextContent('≈ 1 model call')
+    await userEvent.click(requestButton)
+    expect(within(liabilityFinding).getByText(/Draft a clarifying question to send the counterparty/)).toBeInTheDocument()
+    await userEvent.click(within(liabilityFinding).getByRole('button', { name: 'Yes, draft it' }))
+
+    const questionText = await within(liabilityFinding).findByText(drafted.question)
+    const container = questionText.closest('.rfi-suggestion')!
+    expect(container).not.toHaveClass('card') // never styled like verified content
+    expect(within(container as HTMLElement).getByText('AI-drafted · Unverified · Not legal advice — read and edit before sending')).toBeInTheDocument()
+    expect(shown).toContainEqual(['success', 'Drafted a clarifying question.'])
+  })
+
+  it('reports a failed draft with the API detail and renders nothing on failure (MAS-189)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/contracts/nw/rfi-suggestions' && init?.method === 'POST') {
+        return json(503, { detail: 'MaSign could not draft a usable question for this finding right now. Try again.' })
+      }
+      if (url === '/api/contracts/nw/rfi-suggestions') return json(200, [])
+      return json(200, done)
+    })
+
+    render(<RiskReviewPanel contract={northwind} />)
+
+    const findings = within(await screen.findByRole('list', { name: 'Findings' })).getAllByRole('listitem')
+    const liabilityFinding = findings[0]
+    await userEvent.click(
+      within(liabilityFinding).getByRole('button', { name: 'Ask MaSign to draft a clarifying question about this Liability cap finding' }),
+    )
+    await userEvent.click(within(liabilityFinding).getByRole('button', { name: 'Yes, draft it' }))
+
+    await waitFor(() => expect(shown).toContainEqual(['error', 'MaSign could not draft a usable question for this finding right now. Try again.']))
+    expect(within(liabilityFinding).queryByText(/AI-drafted/)).not.toBeInTheDocument()
+  })
+
   it('shows the standard verdict on a key term and counts deviations in the pill (MAS-96)', async () => {
     const terms = TERMS.map((t) =>
       t[0] === 'late_payment'

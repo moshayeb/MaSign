@@ -106,6 +106,9 @@ class FakeChatModel:
         # Invoice field extraction (MAS-92) is a fifth, independent call;
         # by default it states nothing.
         self.invoice_fields_reply: str | Callable[[str], str] = "[]"
+        # Drafting an RFI (MAS-189) is a sixth, independent call; by default
+        # it drafts a fixed, valid question.
+        self.rfi_reply: str | Callable[[str], str] = '{"question": "Can you clarify this clause?"}'
         self.truncated = False
         # Set to an exception to make only the risk call fail (MAS-76).
         self.risk_error: Exception | None = None
@@ -118,17 +121,21 @@ class FakeChatModel:
         self.clause_error: Exception | None = None
         # Set to an exception to make only the invoice-fields call fail.
         self.invoice_fields_error: Exception | None = None
+        # Set to an exception to make only the RFI call fail.
+        self.rfi_error: Exception | None = None
 
     def complete(self, system: str, user: str, *, max_tokens: int, metadata: dict | None = None):
         from app.answering.llm import Completion
         from app.invoices.extractor import SYSTEM_PROMPT as INVOICE_PROMPT
         from app.key_terms.extractor import SYSTEM_PROMPT as TERMS_PROMPT
         from app.risk_analysis.analyzer import SYSTEM_PROMPT as RISK_PROMPT
+        from app.risk_analysis.rfi import SYSTEM_PROMPT as RFI_PROMPT
 
         self.calls.append((system, user))
         is_risk = system == RISK_PROMPT
         is_terms = system == TERMS_PROMPT
         is_invoice = system == INVOICE_PROMPT
+        is_rfi = system == RFI_PROMPT
         # The clause checker's system prompt varies with the enabled clause
         # list (a profile can disable entries), so it is identified by its
         # fixed opening line rather than an exact match like the others.
@@ -141,11 +148,14 @@ class FakeChatModel:
             raise self.clause_error
         if is_invoice and self.invoice_fields_error is not None:
             raise self.invoice_fields_error
+        if is_rfi and self.rfi_error is not None:
+            raise self.rfi_error
         reply = (
             self.risk_reply if is_risk
             else self.key_terms_reply if is_terms
             else self.clause_reply if is_clause
             else self.invoice_fields_reply if is_invoice
+            else self.rfi_reply if is_rfi
             else self.reply
         )
         return Completion(reply(user) if callable(reply) else reply, truncated=self.truncated)

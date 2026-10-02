@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { toast } from 'sonner'
-import { ApiError, getContractRisks, listContractLinks, reviewContract, type Contract, type ContractLink, type RiskReview } from '../api'
+import { ApiError, getContractRisks, listContractLinks, listRfiSuggestions, reviewContract, type Contract, type ContractLink, type RfiSuggestion, type RiskReview } from '../api'
 import { ContractLinks } from './ContractLinks'
 import { BriefCard } from './BriefCard'
 import { ClauseChecklistCard } from './ClauseChecklistCard'
 import { KeyTermsCard } from './KeyTermsCard'
 import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
+import { RfiSuggestions } from './RfiSuggestions'
 import { SummaryStrip, type SummaryTarget } from './SummaryStrip'
 import { rubricMayNotApply } from '../reviewStatus'
 import { reviewCostLabel } from '../cost'
@@ -74,6 +75,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   // list, the clean-categories line and KeyTermsCard.
   const detailRef = useRef<HTMLDetailsElement>(null)
   const [links, setLinks] = useState<ContractLink[]>([])
+  const [rfiSuggestions, setRfiSuggestions] = useState<RfiSuggestion[]>([])
 
   const load = useCallback(async () => {
     try {
@@ -131,6 +133,18 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
     if (contracts.length < 2) return
     loadLinks()
   }, [loadLinks, contracts.length])
+
+  // Drafted RFIs (MAS-189) are stored, so they must be read back once the
+  // review is there to attach them to -- never re-generated just to display.
+  // Keyed on the status value alone (not `review` itself) so this does not
+  // re-fetch on every poll tick while status stays "done".
+  const reviewStatus = review?.status
+  useEffect(() => {
+    if (reviewStatus !== 'done') return
+    listRfiSuggestions(contract.contract_id)
+      .then((loaded) => setRfiSuggestions(Array.isArray(loaded) ? loaded : []))
+      .catch(() => setRfiSuggestions([]))
+  }, [contract.contract_id, reviewStatus])
 
   const running = review !== null && (review.status === 'pending' || review.status === 'running')
 
@@ -373,6 +387,14 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
                             Open source passage
                           </button>
                         )}
+                        <RfiSuggestions
+                          contractId={contract.contract_id}
+                          chunkId={finding.chunk_id}
+                          category={finding.category}
+                          categoryName={finding.category_name}
+                          suggestions={rfiSuggestions.filter((s) => s.chunk_id === finding.chunk_id && s.category === finding.category)}
+                          onGenerated={(suggestion) => setRfiSuggestions((prev) => [suggestion, ...prev])}
+                        />
                       </div>
                     </details>
                   </li>

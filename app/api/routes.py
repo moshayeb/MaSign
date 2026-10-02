@@ -16,7 +16,7 @@ from app.answering.grounding import Answer, answer_question
 from app.answering.llm import ChatModel, ChatModelError
 from app.api.dependencies import get_chat_model, get_current_user, get_current_workspace, get_db, get_embedder, get_vector_store
 from app.database import repository
-from app.database.models import Chunk, ClauseFindingRow, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
+from app.database.models import Chunk, ClauseFindingRow, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, KeyTermRow, Question, RfiSuggestion, RiskFindingRow, RiskReview, RiskSummary, User, Workspace
 from app.guardrails.prompt_injection import redact_passage, refuse_injected_question
 from app.ingestion.document_type import classify_document
 from app.ingestion.parsing import DocumentTextError, ExtractedDocument, extract_document
@@ -41,6 +41,7 @@ from app.retrieval.retriever import DEFAULT_LIMIT, retrieve_contract_context
 from app.retrieval.vector_store import ChunkHit, VectorStore, VectorStoreError
 from app.risk_analysis.analyzer import RiskReport, analyze_risks
 from app.risk_analysis.review import run_review_in_background
+from app.risk_analysis.rfi import generate_rfi
 from app.risk_analysis.rubric import CATEGORY_BY_ID, RISK_CATEGORIES, SEVERITIES
 
 
@@ -1437,6 +1438,102 @@ def _coverage_for_review(db: psycopg.Connection, review: RiskReview, contract: C
     contracts = {contract_id: item for contract_id in bundle_ids if (item := repository.get_contract(db, contract_id, workspace_id)) is not None}
     chunks = [chunk for contract_id in bundle_ids for chunk in repository.list_chunks(db, contract_id)]
     return Coverage.build(review, contract, chunks, repository.list_links(db, review.contract_id), contracts)
+
+
+class RfiSuggestionOut(BaseModel):
+    """A drafted clarifying question for a flagged finding (MAS-189) --
+    always AI-drafted and unverified; the frontend must never style this
+    like a finding or any other verified result."""
+
+    id: UUID
+    chunk_id: UUID
+    category: str
+    quote: str
+    question: str
+    model: str | None
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, suggestion: RfiSuggestion) -> "RfiSuggestionOut":
+        return cls(
+            id=suggestion.id,
+            chunk_id=suggestion.chunk_id,
+            category=suggestion.category,
+            quote=suggestion.quote,
+            question=suggestion.question,
+            model=suggestion.model,
+            created_at=suggestion.created_at,
+        )
+
+
+class RfiRequest(BaseModel):
+    chunk_id: UUID
+    category: str
+
+
+@router.post("/contracts/{contract_id}/rfi-suggestions", response_model=RfiSuggestionOut, status_code=status.HTTP_201_CREATED)
+def request_rfi(
+    contract_id: UUID,
+    body: RfiRequest,
+    db: psycopg.Connection = Depends(get_db),
+    chat_model: ChatModel = Depends(get_chat_model),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+) -> RfiSuggestionOut:
+    """Draft one clarifying question for a currently-flagged finding (MAS-189).
+
+    One model call per request, never batched or automatic -- the cost-first
+    UI (MAS-122) confirms before this is ever called. Identifies the finding
+    by `(chunk_id, category)`, its stable identity, not a `risk_findings.id`
+    that churns on every re-review (see the ticket's design-correction
+    comment). A malformed/unreadable reply is reported as a request failure
+    and nothing is stored -- never a blank or empty suggestion.
+    """
+    if repository.get_contract(db, contract_id, workspace.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    finding = repository.get_risk_finding(db, contract_id, body.chunk_id, body.category)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="That finding is not currently flagged on this contract.")
+
+    result = generate_rfi(finding.category, finding.reason, finding.quote, chat_model)
+    if not result.checked or result.question is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MaSign could not draft a usable question for this finding right now. Try again.",
+        )
+
+    suggestion = repository.create_rfi_suggestion(
+        db,
+        workspace_id=workspace.id,
+        contract_id=contract_id,
+        chunk_id=finding.chunk_id,
+        category=finding.category,
+        reason=finding.reason,
+        quote=finding.quote,
+        question=result.question,
+        model=chat_model.model_name,
+    )
+    repository.create_audit_event(
+        db,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        event_type="rfi.drafted",
+        target_type="contract",
+        target_id=contract_id,
+        metadata={"chunk_id": str(finding.chunk_id), "category": finding.category},
+    )
+    db.commit()
+    return RfiSuggestionOut.from_model(suggestion)
+
+
+@router.get("/contracts/{contract_id}/rfi-suggestions", response_model=list[RfiSuggestionOut])
+def list_rfi_suggestions(
+    contract_id: UUID, db: psycopg.Connection = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)
+) -> list[RfiSuggestionOut]:
+    """Every drafted RFI stored for this contract, newest first (MAS-189)."""
+    if repository.get_contract(db, contract_id, workspace.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
+    return [RfiSuggestionOut.from_model(s) for s in repository.list_rfi_suggestions(db, contract_id, workspace.id)]
 
 
 def _parse_and_chunk(upload: ValidatedUpload, embedder: Embedder) -> tuple[ExtractedDocument, list[str]]:

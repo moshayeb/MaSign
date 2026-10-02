@@ -6,7 +6,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.database.models import AuditEvent, ClauseFindingRow, CoveragePassage, Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, InvoiceChunk, KeyTermRow, Question, RiskFindingRow, RiskReview, RiskSummary, StandardProfile, User, VectorIndex, Workspace
+from app.database.models import AuditEvent, ClauseFindingRow, CoveragePassage, Chunk, Contract, ContractLink, Invoice, InvoiceCheck, InvoiceCheckItem, InvoiceChunk, KeyTermRow, Question, RfiSuggestion, RiskFindingRow, RiskReview, RiskSummary, StandardProfile, User, VectorIndex, Workspace
 from app.ingestion.document_type import DocumentKind, classify_document
 
 # The single legacy workspace every contract that existed before MAS-143
@@ -520,6 +520,23 @@ def list_risk_findings(connection: psycopg.Connection, contract_id: UUID) -> lis
         return [RiskFindingRow(**row) for row in cursor.fetchall()]
 
 
+def get_risk_finding(connection: psycopg.Connection, contract_id: UUID, chunk_id: UUID, category: str) -> RiskFindingRow | None:
+    """One currently-stored finding by its stable identity (MAS-193's same
+    reasoning applies here: `risk_findings.id` churns on re-review, but
+    `(contract_id, chunk_id, category)` -- the table's own unique constraint,
+    migration 011 -- does not)."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT f.*, c.contract_id AS source_contract_id FROM risk_findings f JOIN chunks c ON c.id = f.chunk_id
+            WHERE f.contract_id = %s AND f.chunk_id = %s AND f.category = %s
+            """,
+            (contract_id, chunk_id, category),
+        )
+        row = cursor.fetchone()
+        return RiskFindingRow(**row) if row else None
+
+
 def replace_key_terms(
     connection: psycopg.Connection,
     contract_id: UUID,
@@ -710,6 +727,43 @@ def delete_question(connection: psycopg.Connection, question_id: UUID, workspace
     with connection.cursor() as cursor:
         cursor.execute("DELETE FROM questions WHERE id = %s AND workspace_id = %s", (question_id, workspace_id))
         return cursor.rowcount > 0
+
+
+def create_rfi_suggestion(
+    connection: psycopg.Connection,
+    *,
+    workspace_id: UUID,
+    contract_id: UUID,
+    chunk_id: UUID,
+    category: str,
+    reason: str,
+    quote: str,
+    question: str,
+    model: str | None,
+) -> RfiSuggestion:
+    """Store a successfully drafted RFI (MAS-189) -- never called for an
+    unreadable model reply. `category`/`reason`/`quote` are stored as given
+    (a snapshot), not re-read from `risk_findings` later."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO rfi_suggestions (workspace_id, contract_id, chunk_id, category, reason, quote, question, model)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (workspace_id, contract_id, chunk_id, category, reason, quote, question, model),
+        )
+        return RfiSuggestion(**cursor.fetchone())
+
+
+def list_rfi_suggestions(connection: psycopg.Connection, contract_id: UUID, workspace_id: UUID) -> list[RfiSuggestion]:
+    """Every drafted RFI stored for `contract_id`, newest first."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM rfi_suggestions WHERE contract_id = %s AND workspace_id = %s ORDER BY created_at DESC",
+            (contract_id, workspace_id),
+        )
+        return [RfiSuggestion(**row) for row in cursor.fetchall()]
 
 
 # --- users, workspaces, sessions, audit (MAS-143) ----------------------------
