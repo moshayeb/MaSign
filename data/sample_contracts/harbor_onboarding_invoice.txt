@@ -1,0 +1,33 @@
+INVOICE
+
+Fabrikam Software Ltd
+4 Dock Road
+Dublin 1, Ireland
+
+Invoice Number: FSL-2026-0142
+Invoice Date: 20 April 2026
+Payment Terms: Net 30 days
+Due Date: 20 May 2026
+
+Bill To:
+Harbor Logistics Oy
+Satamakatu 12
+00160 Helsinki, Finland
+
+Description                                                Amount
+One-time onboarding fee (Software Subscription Agreement,
+Effective Date 15 April 2026)                          EUR 12,000.00
+
+                                                 Subtotal: EUR 12,000.00
+                                          VAT (0%, reverse charge): EUR 0.00
+                                               Amount Due: EUR 12,000.00
+
+Payment is due within 30 days of the invoice date. A late fee of 1.5% per
+month applies to any balance unpaid after the due date.
+
+Bank: Allied Irish Banks
+Account Name: Fabrikam Software Ltd
+IBAN: IE64 AIBK 9311 5212 3456 78
+BIC: AIBKIE2D
+
+Thank you for your business.
