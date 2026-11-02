@@ -53,6 +53,22 @@ const SEVERITY_ORDER = { High: 0, Medium: 1, Low: 2 } as const
 // render, which would make `loadLinks` (and effects depending on it) churn.
 const NO_CONTRACTS: Contract[] = []
 
+// The fold's one-line summary (MAS-207). A count is a claim about what the
+// review found, so it is only stated as a total once the review is done;
+// while it runs -- or after it stopped -- the line says how far it got
+// instead of reading "0 findings" as if nothing were there (honest outcomes).
+function foldSummary(review: RiskReview, found: number): string {
+  const plural = (n: number) => `${n} finding${n === 1 ? '' : 's'}`
+  const read = `${review.chunks_checked} of ${review.chunks_total} passages read`
+  if (review.status === 'pending' || review.status === 'running') {
+    return `Review in progress · ${found ? `${plural(found)} so far` : 'none found yet'} · ${read}`
+  }
+  if (review.status === 'failed') {
+    return `Review stopped · ${found ? `${plural(found)} before it stopped` : 'no findings before it stopped'} · ${read}`
+  }
+  return `${plural(found)} across ${review.categories.length} categories · every extracted key term`
+}
+
 // The Overview tab (MAS-104): the stored whole-contract review (MAS-81) as a
 // summary strip, one coverage notice, the key terms and the risk findings.
 // A clean category reads as "reviewed, nothing found" only when every
@@ -361,7 +377,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           <summary className="overview-detail-summary">
             <span>View complete analysis</span>
             <span className="muted small">
-              {findings.length} finding{findings.length === 1 ? '' : 's'} across {review.categories.length} categories · every extracted key term
+              {foldSummary(review, findings.length)}
             </span>
           </summary>
 
