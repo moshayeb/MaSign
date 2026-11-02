@@ -1,0 +1,172 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 3480,
+      "title": "Home",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "WhatMaSignChecks.dc.html": {
+      "expand": "fill",
+      "h": 2470,
+      "title": "What MaSign checks",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "HowItWorks.dc.html": {
+      "expand": "fill",
+      "h": 2440,
+      "title": "How it works",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "About.dc.html": {
+      "expand": "fill",
+      "h": 2020,
+      "title": "About",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "Workspace.dc.html": {
+      "expand": "fill",
+      "h": 1610,
+      "title": "Workspace \u00b7 Overview",
+      "w": 1440,
+      "x": 0,
+      "y": 3900
+    },
+    "Workspace-Ask.dc.html": {
+      "expand": "fill",
+      "h": 1450,
+      "title": "Workspace \u00b7 Ask MaSign",
+      "w": 1440,
+      "x": 1520,
+      "y": 3900
+    },
+    "Workspace-Text.dc.html": {
+      "expand": "fill",
+      "h": 1370,
+      "title": "Workspace \u00b7 Sources",
+      "w": 1440,
+      "x": 3040,
+      "y": 3900
+    },
+    "Workspace-Reviewing.dc.html": {
+      "expand": "fill",
+      "h": 1080,
+      "title": "Workspace \u00b7 Reviewing",
+      "w": 1440,
+      "x": 4560,
+      "y": 3900
+    },
+    "Workspace-Invoices.dc.html": {
+      "expand": "fill",
+      "h": 1440,
+      "title": "Workspace \u00b7 Invoices",
+      "w": 1440,
+      "x": 6080,
+      "y": 3900
+    },
+    "Workspace-Compare.dc.html": {
+      "expand": "fill",
+      "h": 1380,
+      "title": "Workspace \u00b7 Compare contracts",
+      "w": 1440,
+      "x": 0,
+      "y": 5930
+    },
+    "Workspace-Empty.dc.html": {
+      "expand": "fill",
+      "h": 1260,
+      "title": "Workspace \u00b7 First visit",
+      "w": 1440,
+      "x": 1520,
+      "y": 5930
+    },
+    "Standards.dc.html": {
+      "expand": "fill",
+      "h": 2000,
+      "title": "Comparison rules \u00b7 /standards",
+      "w": 1440,
+      "x": 3040,
+      "y": 5930
+    },
+    "Workspace-Phone.dc.html": {
+      "h": 1780,
+      "title": "Workspace \u00b7 Phone",
+      "w": 390,
+      "x": 0,
+      "y": 8350
+    },
+    "Workspace-Phone-Drawer.dc.html": {
+      "h": 844,
+      "title": "Workspace \u00b7 Phone, contracts open",
+      "w": 390,
+      "x": 470,
+      "y": 8350
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-02T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "row-website": {
+      "x": 0,
+      "y": -300,
+      "text": "Website",
+      "kind": "title1",
+      "maxW": 5960
+    },
+    "row-workspace": {
+      "x": 0,
+      "y": 3600,
+      "text": "Workspace \u00b7 contract tabs",
+      "kind": "title1",
+      "maxW": 7480
+    },
+    "row-more": {
+      "x": 0,
+      "y": 5630,
+      "text": "Workspace \u00b7 other screens",
+      "kind": "title1",
+      "maxW": 4400
+    },
+    "row-phone": {
+      "x": 0,
+      "y": 8050,
+      "text": "Workspace \u00b7 phone",
+      "kind": "title1",
+      "maxW": 1800
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "WhatMaSignChecks.dc.html",
+    "HowItWorks.dc.html",
+    "About.dc.html",
+    "Workspace.dc.html",
+    "Workspace-Ask.dc.html",
+    "Workspace-Text.dc.html",
+    "Workspace-Reviewing.dc.html",
+    "Workspace-Invoices.dc.html",
+    "Workspace-Compare.dc.html",
+    "Workspace-Empty.dc.html",
+    "Standards.dc.html",
+    "Workspace-Phone.dc.html",
+    "Workspace-Phone-Drawer.dc.html"
+  ],
+  "pages": [],
+  "title": "MaSign \u2014 Website and workspace redesign"
+}

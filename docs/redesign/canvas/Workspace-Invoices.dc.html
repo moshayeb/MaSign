@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MaSign — Workspace · Invoices</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./masign-type.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#087eac}a:hover{color:#0A0A0A}
+*{box-sizing:border-box}
+.navlink{transition:background .15s,color .15s}
+.navlink:hover{background:#e6f6fd;color:#06648a}
+.nav-mobile{display:none}
+.nav-mobile summary,.faq summary{list-style:none;cursor:pointer}
+.nav-mobile summary::-webkit-details-marker,.faq summary::-webkit-details-marker{display:none}
+@media (max-width:820px){.nav-desktop{display:none}.nav-mobile{display:block}}
+.btn-solid,.btn-light,.btn-sec{transition:background .18s,color .18s,border-color .18s}
+.btn-solid{box-shadow:none!important}
+.btn-solid:hover{background:#0a9fd8!important;color:#fff!important}
+.btn-light{box-shadow:none!important}
+.btn-light:hover{background:#f0f9fd!important}
+.btn-glass{transition:background .18s}
+.btn-glass:hover{background:rgba(255,255,255,.28)!important;color:#fff!important}
+.btn-sec:hover{border-color:#0caded!important;color:#0a9fd8!important}
+.btn-solid:focus-visible,.btn-light:focus-visible,.btn-sec:focus-visible{outline:2px solid #0caded;outline-offset:2px}
+
+.lift{transition:transform .2s,box-shadow .2s,border-color .2s}
+.lift:hover{transform:translateY(-3px);box-shadow:0 14px 28px -16px rgba(8,126,172,.45);border-color:#bfe6f6}
+.faq-plus{transition:transform .2s}
+.faq details[open] .faq-plus{transform:rotate(45deg)}
+.faq summary:hover{color:#087eac}
+.deco-desktop{display:none}
+@media (min-width:900px){.tilt{transform:rotate(-1deg)}}
+@media (min-width:1100px){.deco-desktop{display:flex}}
+@media (max-width:600px){.why-card{flex-direction:row!important;align-items:flex-start;padding:20px!important;gap:16px!important}.why-card h3{margin:0!important}.exp-card{padding:4px 20px!important}.sec{padding:64px 20px!important;gap:32px!important}}
+.step-arrow{display:flex}
+@media (max-width:860px){.step-arrow{display:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.fade-1{animation:fadeUp .7s ease-out both}
+.fade-2{animation:fadeUp .7s ease-out .15s both}
+@media (prefers-reduced-motion:reduce){.lift,.lift:hover,.faq-plus{transition:none;transform:none}.fade-1,.fade-2{animation:none}}
+.ws-row{transition:background .15s,border-color .15s}
+.ws-row:hover{background:#f4fbfe!important}
+@media (max-width:760px){.ws-side{max-width:none!important}}
+.inv-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:12px 20px;align-items:center}
+.cmp{width:100%;border-collapse:separate;border-spacing:0}
+@media (max-width:760px){.inv-row{grid-template-columns:minmax(0,1fr) auto}.inv-row .inv-val{grid-column:1/-1}}
+@media (max-width:600px){.ws-wrap{padding:20px 16px 48px!important}.todo a{margin-left:32px!important}}
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #333333; background: #f8f9fb; font-size: var(--fs-body); line-height: 1.6; -webkit-font-smoothing: antialiased">
+  <p style="margin: 0; padding: 10px 24px; text-align: center; font-size: var(--fs-small); color: #555555; background: #f5f5f5; border-bottom: 1px solid #e8e8e8">Not legal advice — MaSign is an AI-assisted contract review tool. <a href="/educational-disclaimer" style="color: #087eac; text-decoration: underline; text-underline-offset: 3px">Full disclaimer</a></p>
+  <header style="border-bottom: 1px solid #e8e8e8; background: #FFFFFF">
+    <div style="max-width: 1280px; margin: 0 auto; padding: 14px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+      <a href="/" aria-label="MaSign home" style="display: flex; align-items: center; text-decoration: none">
+        <svg height="26" width="153" viewBox="0 0 396.27 67.19" role="img" aria-label="MaSign">
+          <path fill="#087eac" d="M7.24,56.36c-2.3-2.29-2.58-6.03-.98-8.830,9.86-10.56,18.11-24.14,27.94-34.51,3.110-3.28,3.990-5.2,9.140-4.37,4.050.65,6.320,5.66,4.650,9.35L15.56,57.63c-2.79,1.23-6.140.91-8.320-1.27Z"></path>
+          <path fill="#111111" d="M55.57,24.78c6.41-1.48,10.81,4.33,7.88,10.29-1.25,2.53-15.52,20.08-17.66,21.57-6.42,4.45-13.64-1.450-10.61-8.21,1.14-2.55,13.74-18.19,16.2-20.63,1.23-1.22,2.39-2.6,4.19-3.02Z"></path>
+          <path fill="#111111" d="M68.38,8.77c10.94-2.53,12.27,11.63,3.63,13.28-8.37,1.6-11.59-11.45-3.63-13.28Z"></path>
+          <path fill="#111111" d="M9.93,8.77c10.7-2.47,12.3,11.62,3.63,13.28S1.98,10.61,9.93,8.77Z"></path>
+          <path fill="#111111" d="M154.75,8.43v50.4h-9V26.71l-8.86,6.77-7.34,5.69-7.34-5.69-8.86-6.77v32.12h-9V8.43l9,6.91,16.2,12.46,16.2-12.46,9-6.91Z"></path>
+          <path fill="#111111" d="M210.55,58.83h-10.08l-4.61-9-11.02-21.6-11.02,21.6-4.61,9h-10.08l4.61-9,21.1-41.4,21.1,41.4,4.61,9Z"></path>
+          <path fill="#087eac" d="M240.25 37.86C242.01 37.86 243.46 38.49 244.72 39.75C245.92 41.01 246.61 42.46 246.61 44.16C246.61 45.04 246.42 45.86 246.11 46.62C245.79 47.44 245.35 48.07 244.78 48.63C244.22 49.20 243.52 49.64 242.70 49.96C241.95 50.27 241.13 50.40 240.25 50.40V58.84C244.34 58.84 247.81 57.39 250.64 54.56C253.54 51.66 254.99 48.19 254.99 44.16C254.99 40.13 253.54 36.66 250.64 33.770C247.81 30.93 244.34 29.48 240.25 29.48H227.71C225.88 29.48 224.43 28.85 223.17 27.59C221.98 26.33 221.41 24.88 221.41 23.12C221.41 22.30 221.53 21.48 221.85 20.73C222.16 19.97 222.61 19.28 223.17 18.71C223.80 18.08 224.43 17.64 225.25 17.32C226.01 17.01 226.83 16.88 227.71 16.88V8.44C223.61 8.44 220.15 9.89 217.31 12.79C214.48 15.69 213.03 19.09 213.03 23.12C213.03 27.21 214.48 30.68 217.31 33.58C220.15 36.41 223.61 37.86 227.71 37.86Z"></path>
+          <path fill="#087eac" d="M263,58.83V8.43h9v50.4h-9Z"></path>
+          <path fill="#087eac" d="M288.2,33.63c0,8.93,7.27,16.2,16.2,16.2h16.2v-9.65h-16.2v-9h25.2v27.65h-25.2c-13.9,0-25.2-11.3-25.2-25.2s11.3-25.2,25.2-25.2h25.2v9h-25.2c-8.93,0-16.2,7.27-16.2,16.2Z"></path>
+          <path fill="#087eac" d="M387.2,8.5v50.4l-9-6.91-32.4-24.99v31.9h-9V8.64l9,6.91,32.4,24.99V8.43l9,.07Z"></path>
+        </svg>
+      </a>
+      <nav class="nav-desktop" aria-label="Main" style="font-size: var(--fs-sm); font-weight: 500">
+        <div style="display: flex; align-items: center; gap: 4px">
+          <a class="navlink" href="/how-it-works" style="padding: 8px 12px; border-radius: 6px; color: #333333; text-decoration: none">How it works</a>
+          <a class="navlink" href="/what-masign-checks" style="padding: 8px 12px; border-radius: 6px; color: #333333; text-decoration: none">What MaSign checks</a>
+          <a class="navlink" href="/documentation" style="padding: 8px 12px; border-radius: 6px; color: #333333; text-decoration: none">Documentation</a>
+          <span style="width: 1px; height: 24px; background: #e8e8e8; margin: 0 8px"></span>
+          <span style="display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 4px; border-radius: 999px; border: 1px solid #e8e8e8">
+            <span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 999px; background: linear-gradient(135deg, #0caded, #0a9fd8); color: #FFFFFF; font-size: var(--fs-small); font-weight: 800; display: flex; align-items: center; justify-content: center">M</span>
+            <span style="font-size: var(--fs-small); color: #333333">mo@example.com</span>
+            <a class="btn-sec" href="/logout" style="padding: 5px 12px; border-radius: 999px; border: 1px solid #d0d0d0; font-size: var(--fs-small); font-weight: 600; color: #111111; text-decoration: none">Log out</a>
+          </span>
+        </div>
+      </nav>
+      <details class="nav-mobile" style="position: relative">
+        <summary aria-label="Menu" style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: center; color: #111111">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+        </summary>
+        <nav aria-label="Main" style="position: absolute; right: 0; top: 52px; z-index: 10; width: 240px; padding: 8px; border: 1px solid #e8e8e8; border-radius: 12px; background: #FFFFFF; box-shadow: 0 16px 32px -16px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-body-sm); font-weight: 500">
+          <a class="navlink" href="/how-it-works" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #333333; text-decoration: none">How it works</a>
+          <a class="navlink" href="/what-masign-checks" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #333333; text-decoration: none">What MaSign checks</a>
+          <a class="navlink" href="/documentation" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #333333; text-decoration: none">Documentation</a>
+          <a class="btn-solid" href="/workspace" style="margin-top: 6px; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; background: #0caded; color: #FFFFFF; text-decoration: none; font-weight: 600">Open workspace</a>
+        </nav>
+      </details>
+    </div>
+  </header>
+  <main class="ws-wrap" style="max-width: 1280px; margin: 0 auto; padding: 32px 32px 72px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px">
+
+      <aside style="flex: 1 1 300px; max-width: 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px" class="ws-side">
+        <!-- Upload -->
+        <label style="display: flex; align-items: center; gap: 14px; padding: 18px; border-radius: 16px; border: 1.5px dashed #9fdcf5; background: #f4fbfe; cursor: pointer">
+          <span style="flex: none; width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #0caded, #0a9fd8); display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"></path></svg></span>
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+            <span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Upload a contract</span>
+            <span style="font-size: var(--fs-small); color: #555555">Drop a file or <span style="color: #087eac; font-weight: 700">browse</span> · PDF, DOCX, TXT · 10 MB</span>
+          </span>
+          <input type="file" aria-label="Upload a contract" style="position: absolute; width: 1px; height: 1px; opacity: 0">
+        </label>
+
+        <!-- Contracts -->
+        <section aria-labelledby="list-title" style="border: 1px solid #e8e8e8; border-radius: 16px; background: #FFFFFF; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+            <h2 id="list-title" style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-body-sm); font-weight: 800; color: #111111">Contracts <span style="font-size: var(--fs-caption); font-weight: 700; color: #06648a; background: #e6f6fd; padding: 1px 8px; border-radius: 999px">3</span></h2>
+            <span style="display: flex; gap: 4px">
+              <a href="#" style="font-size: var(--fs-small); font-weight: 600; color: #087eac; text-decoration: none; padding: 6px 8px; border-radius: 8px">Compare</a>
+              <button type="button" aria-label="Refresh" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e8e8e8; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#555555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg></button>
+            </span>
+          </div>
+          <div style="display: flex; gap: 8px">
+            <label style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #e8e8e8; background: #f8f9fb">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#777777" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm9 3-4.3-4.3"></path></svg>
+              <input type="search" placeholder="Search" aria-label="Search contracts" style="flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: var(--fs-sm); outline: none">
+            </label>
+            <select aria-label="Sort by" style="height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid #e8e8e8; background: #f8f9fb; font: inherit; font-size: var(--fs-small); color: #333333">
+              <option>Newest</option><option>Highest risk</option><option>Most deviations</option>
+            </select>
+          </div>
+          <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px">
+            <li>
+              <a href="#" class="ws-row" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid; background: #e6f6fd; border-color: #9fdcf5; text-decoration: none; color: #333333; min-width: 0">
+                <span style="flex: none; width: 40px; height: 40px; border-radius: 10px; background: #fbeae8; color: #a12c22; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: center">PDF</span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-size: var(--fs-sm); font-weight: 700; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Master_Services_Agreement.pdf</span>
+                  <span style="display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); color: #555555; min-width: 0"><span style="width: 7px; height: 7px; border-radius: 50%; background: #d64534; flex: none"></span><span>Reviewed · <b style="color: #a12c22; font-weight: 700">High risk</b></span></span>
+                  <span style="font-size: var(--fs-caption); color: #777777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">EUR 4,200 / month · 24 months</span>
+                </span>
+              </a>
+            </li>
+            <li>
+              <a href="#" class="ws-row" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid; background: #FFFFFF; border-color: transparent; text-decoration: none; color: #333333; min-width: 0">
+                <span style="flex: none; width: 40px; height: 40px; border-radius: 10px; background: #e8eefc; color: #1d4fbf; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: center">DOCX</span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-size: var(--fs-sm); font-weight: 700; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">NDA_Vendor.docx</span>
+                  <span style="display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); color: #555555; min-width: 0"><span style="width: 7px; height: 7px; border-radius: 50%; background: #0caded; flex: none"></span><span style="color: #087eac; font-weight: 600">Reviewing · 2 of 4 passages</span></span>
+                  
+                </span>
+              </a>
+            </li>
+            <li>
+              <a href="#" class="ws-row" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid; background: #FFFFFF; border-color: transparent; text-decoration: none; color: #333333; min-width: 0">
+                <span style="flex: none; width: 40px; height: 40px; border-radius: 10px; background: #efefef; color: #555555; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: center">TXT</span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-size: var(--fs-sm); font-weight: 700; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Invoice_2026_10.txt</span>
+                  <span style="display: flex; align-items: center; gap: 6px; font-size: var(--fs-caption); color: #555555; min-width: 0"><span style="width: 7px; height: 7px; border-radius: 50%; background: #1a7f47; flex: none"></span><span>Reviewed</span><span style="font-size: var(--fs-micro); font-weight: 700; color: #8f5509; background: #f9edd8; padding: 1px 7px; border-radius: 999px; white-space: nowrap">Not a contract?</span></span>
+                  
+                </span>
+              </a>
+            </li>
+          </ul>
+        </section>
+
+        <a href="/standards" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; border: 1px solid #e8e8e8; background: #FFFFFF; text-decoration: none; color: #111111">
+          <span style="flex: none; width: 36px; height: 36px; border-radius: 10px; background: #e6f6fd; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06648a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4"></path></svg></span>
+          <span style="flex: 1; display: flex; flex-direction: column"><span style="font-size: var(--fs-sm); font-weight: 700">Comparison rules</span><span style="font-size: var(--fs-caption); color: #555555">What a deviation is measured against</span></span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#777777" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+        </a>
+      </aside>
+
+      <section style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px" aria-label="Master_Services_Agreement.pdf">
+        <!-- Contract header -->
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px">
+          <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+            <h1 style="margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Master_Services_Agreement.pdf</h1>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+              <span style="font-size: var(--fs-small); color: #555555">PDF · 178 kB · 12 passages · uploaded Nov 2, 2026</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #a12c22; background: #fbeae8; padding: 4px 10px; border-radius: 999px; white-space: nowrap"><span style="width: 7px; height: 7px; border-radius: 50%; background: #d64534; flex: none"></span>Reviewed · High risk</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Commercial contract</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <a class="btn-solid" href="#ask" style="display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 8px 0 22px; border-radius: 999px; background: #0caded; color: #FFFFFF; text-decoration: none; font-weight: 700; font-size: var(--fs-body-sm)">Ask a question <span style="width: 30px; height: 30px; border-radius: 999px; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0caded" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12Z"></path></svg></span></a>
+            <button type="button" aria-label="More actions" style="width: 48px; height: 48px; border-radius: 999px; border: 1px solid #d0d0d0; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <nav aria-label="Contract views" style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #f0f2f4; align-self: flex-start; max-width: 100%; overflow-x: auto">
+          <a href="#" style="padding: 8px 18px; border-radius: 999px; font-size: var(--fs-sm); font-weight: 600; color: #555555; text-decoration: none; white-space: nowrap">Overview</a>
+          <a href="#" style="padding: 8px 18px; border-radius: 999px; font-size: var(--fs-sm); font-weight: 600; color: #555555; text-decoration: none; white-space: nowrap">Ask MaSign</a>
+          <a href="#" aria-current="page" style="padding: 8px 18px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: var(--fs-sm); font-weight: 700; color: #111111; text-decoration: none; white-space: nowrap">Invoices</a>
+          <a href="#" style="padding: 8px 18px; border-radius: 999px; font-size: var(--fs-sm); font-weight: 600; color: #555555; text-decoration: none; white-space: nowrap">Sources</a>
+        </nav>
+
+        <!-- Invoice verification -->
+        <section aria-labelledby="inv-h" style="border-radius: 20px; border: 1px solid #e8e8e8; background: #FFFFFF; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px">
+            <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+              <h2 id="inv-h" style="margin: 0; font-size: var(--fs-h3); font-weight: 800; color: #111111">Invoice verification</h2>
+              <p style="margin: 0; font-size: var(--fs-body-sm); color: #555555">Upload an invoice from this supplier. MaSign checks each line against what this contract says.</p>
+            </div>
+          </div>
+          <label style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 18px; border-radius: 16px; border: 1.5px dashed #9fdcf5; background: #f4fbfe; cursor: pointer">
+            <span style="flex: none; width: 44px; height: 44px; border-radius: 12px; background: #0caded; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"></path></svg></span>
+            <span style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Upload an invoice</span>
+              <span style="font-size: var(--fs-small); color: #555555">Digital PDF only (not a scan) · up to 10 MB</span>
+            </span>
+            <span class="btn-sec" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #d0d0d0; background: #FFFFFF; font-size: var(--fs-body-sm); font-weight: 600; color: #111111">Choose PDF</span>
+            <input type="file" accept="application/pdf" aria-label="Upload an invoice" style="position: absolute; width: 1px; height: 1px; opacity: 0">
+          </label>
+        </section>
+
+        <!-- Result -->
+        <section aria-labelledby="res-h" style="border-radius: 20px; border: 1px solid #e8e8e8; background: #FFFFFF; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px">
+            <span style="flex: none; width: 40px; height: 40px; border-radius: 10px; background: #fbeae8; color: #a12c22; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: center">PDF</span>
+            <div style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+              <h2 id="res-h" style="margin: 0; font-size: var(--fs-lead); font-weight: 800; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Northwind_Invoice_2026-10.pdf</h2>
+              <span style="font-size: var(--fs-small); color: #555555">Checked Nov 2, 2026, 14:20 · 4 lines read</span>
+            </div>
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #a12c22; background: #fbeae8; padding: 4px 10px; border-radius: 999px; white-space: nowrap"><span style="width: 7px; height: 7px; border-radius: 50%; background: #d64534; flex: none"></span>1 differs</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #1a7f47; background: #e1f2e8; padding: 4px 10px; border-radius: 999px; white-space: nowrap"><span style="width: 7px; height: 7px; border-radius: 50%; background: #1a7f47; flex: none"></span>2 match</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px; border-radius: 999px; white-space: nowrap">1 not in contract</span>
+            <button type="button" aria-label="Check again" class="btn-sec" style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid #d0d0d0; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg></button>
+          </div>
+          <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+            <li class="inv-row" style="padding: 16px 18px; border-radius: 14px; border: 1px solid #f3d6d2; background: #fff7f6">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Late-payment interest</span><a href="#" style="font-size: var(--fs-small); font-weight: 600; color: #087eac; text-decoration: none; white-space: nowrap">Passage 3 →</a></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Invoice</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">2% per month</span></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Contract</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">1.5% per month</span></span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); font-weight: 700; color: #a12c22; background: #fbeae8; padding: 4px 10px 4px 8px; border-radius: 999px; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a12c22" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Differs</span>
+              <span style="grid-column: 1/-1; font-size: var(--fs-sm); color: #555555">The invoice charges more interest than the contract allows. Ask Northwind to correct it before you pay.</span>
+            </li>
+            <li class="inv-row" style="padding: 16px 18px; border-radius: 14px; border: 1px solid #e8e8e8; background: #FFFFFF">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Monthly fee</span><a href="#" style="font-size: var(--fs-small); font-weight: 600; color: #087eac; text-decoration: none; white-space: nowrap">Passage 2 →</a></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Invoice</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">EUR 4,200</span></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Contract</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">EUR 4,200 / month</span></span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); font-weight: 700; color: #1a7f47; background: #e1f2e8; padding: 4px 10px 4px 8px; border-radius: 999px; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a7f47" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Matches</span>
+              
+            </li>
+            <li class="inv-row" style="padding: 16px 18px; border-radius: 14px; border: 1px solid #e8e8e8; background: #FFFFFF">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Billing period</span><a href="#" style="font-size: var(--fs-small); font-weight: 600; color: #087eac; text-decoration: none; white-space: nowrap">Passage 2 →</a></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Invoice</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">October 2026, in advance</span></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Contract</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">Monthly, in advance</span></span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); font-weight: 700; color: #1a7f47; background: #e1f2e8; padding: 4px 10px 4px 8px; border-radius: 999px; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a7f47" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Matches</span>
+              
+            </li>
+            <li class="inv-row" style="padding: 16px 18px; border-radius: 14px; border: 1px solid #e8e8e8; background: #FFFFFF">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Setup fee</span><span style="font-size: var(--fs-small); color: #777777">No passage</span></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Invoice</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">EUR 350</span></span>
+              <span class="inv-val" style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555555">Contract</span><span style="font-size: var(--fs-body-sm); font-weight: 600; color: #111111">Not stated</span></span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px 4px 8px; border-radius: 999px; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555555" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17h.01M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1.2-1.3 2.1v.2"></path></svg>Not in contract</span>
+              <span style="grid-column: 1/-1; font-size: var(--fs-sm); color: #555555">The contract does not mention a setup fee. MaSign cannot confirm or reject it.</span>
+            </li>
+          </ul>
+          <p style="margin: 0; font-size: var(--fs-small); color: #555555">Compared with this contract’s text only — review assistance, not accounting or legal advice.</p>
+        </section>
+      </section>
+  </main>
+  <!-- Footer: the site's original footer (Footer.tsx + .sitefoot styles) -->
+  <footer style="background: #101417; color: #cbd3dc">
+    <div style="max-width: 1280px; margin: 0 auto; padding: 48px 28px 24px">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 32px">
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0">
+          <svg height="24" width="142" viewBox="0 0 396.27 67.19" role="img" aria-label="MaSign" style="margin-bottom: 4px">
+            <path fill="#0caded" d="M7.24,56.36c-2.3-2.29-2.58-6.03-.98-8.83,9.86-10.56,18.11-24.14,27.94-34.51,3.11-3.28,3.99-5.2,9.14-4.37,4.05.65,6.32,5.66,4.65,9.35L15.56,57.63c-2.79,1.23-6.14.91-8.32-1.27Z"></path>
+            <path fill="#f4f6fa" d="M55.57,24.78c6.41-1.48,10.81,4.33,7.88,10.29-1.25,2.53-15.52,20.08-17.66,21.57-6.42,4.45-13.64-1.45-10.61-8.21,1.14-2.55,13.74-18.19,16.2-20.63,1.23-1.22,2.39-2.6,4.19-3.02Z"></path>
+            <path fill="#f4f6fa" d="M68.38,8.77c10.94-2.53,12.27,11.63,3.63,13.28-8.37,1.6-11.59-11.45-3.63-13.28Z"></path>
+            <path fill="#f4f6fa" d="M9.93,8.77c10.7-2.47,12.3,11.62,3.63,13.28S1.98,10.61,9.93,8.77Z"></path>
+            <path fill="#f4f6fa" d="M154.75,8.43v50.4h-9V26.71l-8.86,6.77-7.34,5.69-7.34-5.69-8.86-6.77v32.12h-9V8.43l9,6.91,16.2,12.46,16.2-12.46,9-6.91Z"></path>
+            <path fill="#f4f6fa" d="M210.55,58.83h-10.08l-4.61-9-11.02-21.6-11.02,21.6-4.61,9h-10.08l4.61-9,21.1-41.4,21.1,41.4,4.61,9Z"></path>
+            <path fill="#0caded" d="M240.25 37.86C242.01 37.86 243.46 38.49 244.72 39.75C245.92 41.01 246.61 42.46 246.61 44.16C246.61 45.04 246.42 45.86 246.11 46.62C245.79 47.44 245.35 48.07 244.78 48.63C244.22 49.20 243.52 49.64 242.70 49.96C241.95 50.27 241.13 50.40 240.25 50.40V58.84C244.34 58.84 247.81 57.39 250.64 54.56C253.54 51.66 254.99 48.19 254.99 44.16C254.99 40.13 253.54 36.66 250.64 33.77C247.81 30.93 244.34 29.48 240.25 29.48H227.71C225.88 29.48 224.43 28.85 223.17 27.59C221.98 26.33 221.41 24.88 221.41 23.12C221.41 22.30 221.53 21.48 221.85 20.73C222.16 19.97 222.61 19.28 223.17 18.71C223.80 18.08 224.43 17.64 225.25 17.32C226.01 17.01 226.83 16.88 227.71 16.88V8.44C223.61 8.44 220.15 9.89 217.31 12.79C214.48 15.69 213.03 19.09 213.03 23.12C213.03 27.21 214.48 30.68 217.31 33.58C220.15 36.41 223.61 37.86 227.71 37.86Z"></path>
+            <path fill="#0caded" d="M263,58.83V8.43h9v50.4h-9Z"></path>
+            <path fill="#0caded" d="M288.2,33.63c0,8.93,7.27,16.2,16.2,16.2h16.2v-9.65h-16.2v-9h25.2v27.65h-25.2c-13.9,0-25.2-11.3-25.2-25.2s11.3-25.2,25.2-25.2h25.2v9h-25.2c-8.93,0-16.2,7.27-16.2,16.2Z"></path>
+            <path fill="#0caded" d="M387.2,8.5v50.4l-9-6.91-32.4-24.99v31.9h-9V8.64l9,6.91,32.4,24.99V8.43l9,.07Z"></path>
+          </svg>
+          <p style="margin: 0; color: #f4f6fa; font-weight: 600; font-size: var(--fs-body-sm)">Understand contracts before you sign.</p>
+          <p style="margin: 0; color: #8b96a3; font-size: var(--fs-sm)">Ask questions, review risks, and open the exact source clause.</p>
+        </div>
+        <nav aria-label="Product" style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0">
+          <h3 style="margin: 0 0 4px; color: #f4f6fa; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em">Product</h3>
+          <a href="/how-it-works" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">How it works</a>
+          <a href="/workspace" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">Open workspace</a>
+          <a href="/what-masign-checks" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">What MaSign checks</a>
+        </nav>
+        <nav aria-label="Resources" style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0">
+          <h3 style="margin: 0 0 4px; color: #f4f6fa; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em">Resources</h3>
+          <a href="/documentation" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">Documentation</a>
+          <a href="https://github.com/moshayeb/MaSign" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">GitHub</a>
+          <a href="https://github.com/moshayeb/MaSign/issues" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">Report an issue</a>
+        </nav>
+        <nav aria-label="Project" style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0">
+          <h3 style="margin: 0 0 4px; color: #f4f6fa; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em">Project</h3>
+          <a href="/about" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">About MaSign</a>
+          <a href="/privacy" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">Privacy</a>
+          <a href="/educational-disclaimer" style="color: #b7c0cb; text-decoration: none; font-size: var(--fs-sm)">Educational disclaimer</a>
+        </nav>
+      </div>
+      <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 36px 0 20px"></div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px">
+        <p style="margin: 0; color: #8b96a3; font-size: var(--fs-small)">© 2026 MaSign</p>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1440}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
