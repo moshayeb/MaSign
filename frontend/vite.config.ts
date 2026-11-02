@@ -13,5 +13,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test-setup.ts',
+    // MAS-208: on the dev PC four files exceed the 5 s default on every full
+    // run (slow machine, not a hang); 20 s still catches a genuinely stuck test.
+    testTimeout: 20000,
   },
 })
