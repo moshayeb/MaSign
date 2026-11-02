@@ -21,7 +21,7 @@ describe.each([
   ['/privacy', PrivacyPage, 'Privacy'],
   ['/documentation', DocumentationPage, 'Find the right guide'],
   ['/how-it-works', HowItWorksPage, 'From upload to a cited answer'],
-  ['/what-masign-checks', WhatMaSignChecksPage, 'Know what MaSign checks'],
+  ['/what-masign-checks', WhatMaSignChecksPage, 'What MaSign checks'],
   ['/educational-disclaimer', EducationalDisclaimerPage, 'Educational disclaimer'],
 ] as const)('the %s page', (path, Page, heading) => {
   it('renders its heading and the shared header/footer chrome', () => {
@@ -62,8 +62,10 @@ describe('MAS-142 public content pages', () => {
   it('How it works names exactly the three named steps', () => {
     render(<HowItWorksPage />)
 
+    // MAS-210: the steps sit under the "How MaSign works" section heading.
+    expect(screen.getByRole('heading', { level: 2, name: 'How MaSign works' })).toBeInTheDocument()
     for (const step of ['Upload', 'Review', 'Check sources']) {
-      expect(screen.getByRole('heading', { level: 2, name: step })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 3, name: step })).toBeInTheDocument()
     }
     expect(within(screen.getByRole('main')).getByRole('link', { name: /open workspace/i })).toHaveAttribute('href', '/workspace')
   })

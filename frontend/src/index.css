@@ -5851,3 +5851,64 @@ body:has(.layout) { background: #f8f9fb; }
   .layout.has-selection #panel-overview > .overview-detail { padding: 20px 16px; }
   .layout.has-selection .brief-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
+
+/* ==========================================================================
+   MAS-210 — public pages as approved on the redesign canvas
+   (docs/redesign/canvas/{Main,WhatMaSignChecks,HowItWorks,About}.dc.html).
+   The page markup carries the artboards' inline styles; these `pp-` classes
+   hold what inline styles cannot: hover, focus, motion and phone layout.
+   ========================================================================== */
+:root {
+  --fs-h2-xl: clamp(30px, 4vw, 48px);
+}
+.pp-main {
+  display: block;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #333333;
+  background: #ffffff;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+/* The app's global h3 is an uppercase section label; on these pages a
+   heading is a heading. Inline styles still set size, weight and colour. */
+.pp-main h1, .pp-main h2, .pp-main h3 { text-transform: none; letter-spacing: normal; }
+.pp-main *,
+.pp-main *::before,
+.pp-main *::after { box-sizing: border-box; }
+.pp-btn-solid, .pp-btn-light, .pp-btn-sec { transition: background .18s, color .18s, border-color .18s; }
+.pp-btn-solid:hover { background: #0a9fd8 !important; color: #fff !important; }
+.pp-btn-light:hover { background: #f0f9fd !important; }
+.pp-btn-glass { transition: background .18s; }
+.pp-btn-glass:hover { background: rgba(255, 255, 255, .28) !important; color: #fff !important; }
+.pp-btn-sec:hover { border-color: #0caded !important; color: #0a9fd8 !important; }
+.pp-btn-solid:focus-visible, .pp-btn-light:focus-visible, .pp-btn-sec:focus-visible, .pp-btn-glass:focus-visible {
+  outline: 2px solid #0caded;
+  outline-offset: 2px;
+}
+.pp-btn-light:focus-visible, .pp-btn-glass:focus-visible { outline-color: #ffffff; }
+.pp-lift { transition: transform .2s, box-shadow .2s, border-color .2s; }
+.pp-lift:hover { transform: translateY(-3px); box-shadow: 0 14px 28px -16px rgba(8, 126, 172, .45); border-color: #bfe6f6 !important; }
+.pp-faq summary { list-style: none; cursor: pointer; }
+.pp-faq summary::-webkit-details-marker { display: none; }
+.pp-faq summary:hover { color: #087eac; }
+.pp-faq-plus { transition: transform .2s; }
+.pp-faq details[open] .pp-faq-plus { transform: rotate(45deg); }
+.pp-deco-desktop { display: none !important; }
+@media (min-width: 1100px) { .pp-deco-desktop { display: flex !important; } }
+@media (min-width: 900px) { .pp-tilt { transform: rotate(-1deg); } }
+.pp-step-arrow { display: flex; }
+@media (max-width: 860px) { .pp-step-arrow { display: none !important; } }
+@media (max-width: 600px) {
+  .pp-why-card { flex-direction: row !important; align-items: flex-start; padding: 20px !important; gap: 16px !important; }
+  .pp-why-card h3 { margin: 0 !important; }
+  .pp-exp-card { padding: 4px 20px !important; }
+  .pp-sec { padding: 64px 20px !important; gap: 32px !important; }
+}
+@keyframes pp-fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.pp-fade-1 { animation: pp-fade-up .7s ease-out both; }
+.pp-fade-2 { animation: pp-fade-up .7s ease-out .15s both; }
+@media (prefers-reduced-motion: reduce) {
+  .pp-lift, .pp-lift:hover, .pp-faq-plus { transition: none; transform: none; }
+  .pp-fade-1, .pp-fade-2 { animation: none; }
+}
