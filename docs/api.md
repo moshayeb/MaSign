@@ -51,4 +51,3 @@ is the exception and needs no session (register/login themselves cannot).
 | `PUT`  | `/api/contracts/{contract_id}/standard-profile` | `{"profile_id": "<uuid>" or null}` → assign which profile this contract compares against (`null` clears it back to the workspace default); returns the updated `ContractSummary`, with recomputed `deviations`. 422 if `profile_id` belongs to another workspace; 404 if the contract is unknown. |
 | `GET`  | `/health` | Liveness: the process answers. Always 200. |
 | `GET`  | `/ready` | Readiness: Postgres and Qdrant answer (200) or the failing one is named (503); also reports which chat model is configured. Use this, not `/health`, to know whether requests will succeed. |
-

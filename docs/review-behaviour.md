@@ -166,4 +166,3 @@ written instructions of the Customer", "prior written notice") does not
 trigger them; `tests/test_guardrails.py` keeps both lists honest, and its
 end-to-end test uploads a contract with an injected clause and asserts the
 clause never reaches the (fake) model.
-
