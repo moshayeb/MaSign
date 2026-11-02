@@ -802,3 +802,29 @@ describe('severity filter (MAS-194)', () => {
     expect(screen.getByText('Late interest at 1.5% per month.')).toBeVisible()
   })
 })
+
+describe('"View complete analysis" summary while a review is unfinished (MAS-207)', () => {
+  it('never claims "0 findings" while the review is still running', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'running', chunks_checked: 3, complete: false })))
+    const { unmount } = render(<RiskReviewPanel contract={northwind} pollMs={100000} />)
+    const fold = (await screen.findByText('View complete analysis')).closest('details')!
+    expect(fold).toHaveTextContent('Review in progress · none found yet · 3 of 12 passages read')
+    expect(fold).not.toHaveTextContent(/0 findings across/)
+    unmount()
+  })
+
+  it('counts what was found so far, and says the review stopped when it failed', async () => {
+    const partial = done.findings.slice(0, 1)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'failed', chunks_checked: 8, complete: false, findings: partial, error: 'model unavailable' })))
+    render(<RiskReviewPanel contract={northwind} pollMs={100000} />)
+    const fold = (await screen.findByText('View complete analysis')).closest('details')!
+    expect(fold).toHaveTextContent('Review stopped · 1 finding before it stopped · 8 of 12 passages read')
+  })
+
+  it('keeps the full count once the review is done', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, done))
+    render(<RiskReviewPanel contract={northwind} />)
+    const fold = (await screen.findByText('View complete analysis')).closest('details')!
+    expect(fold).toHaveTextContent('2 findings across 7 categories · every extracted key term')
+  })
+})
