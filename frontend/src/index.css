@@ -5418,3 +5418,436 @@ button.compare-models {
   .layout.has-selection .summary-tile { transition: none; }
   .layout.has-selection .summary-tile.jump:hover { transform: none; }
 }
+
+/* ==========================================================================
+   MAS-209 design system — redesign phase 1.
+   Shared tokens (type scale, spacing, radius, focus) and the shared
+   components restyled on top of MAS-136 colours and MAS-178's workspace
+   hierarchy. CSS only: no markup, logic or API change. Appended last so it
+   wins without editing the per-feature rules above. Phases 2 (public pages)
+   and 3 (workspace) build on these tokens; the preservation checklist is
+   docs/redesign/feature-inventory.md.
+   ========================================================================== */
+
+:root {
+  /* Type scale */
+  /* Taken from MassUX app/static/typography.css (the MassQL scale) */
+  --fs-display: clamp(32px, 4.5vw, 56px);
+  --fs-h2: clamp(24px, 3vw, 36px);
+  --fs-button: 15px;
+  --fs-nav: 13px;
+  --fs-h1: 28px;
+  --fs-h3: 20px;
+  --fs-lead: 18px;
+  --fs-body: 16px;
+  --fs-body-sm: 15px;
+  --fs-sm: 14px;
+  --fs-small: 13px;
+  --fs-caption: 12px;
+  --fs-micro: 11px;
+
+  /* Spacing (4 px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Shape, depth, focus */
+  --radius-pill: 999px;
+}
+
+/* --- focus: one visible ring everywhere ---------------------------------- */
+:where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+/* --- header -------------------------------------------------------------- */
+.topnav { gap: 6px; font-size: var(--fs-nav); }
+
+.topnav-link {
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.topnav-link:hover { color: #06648a; background: var(--accent-light); }
+
+.topnav-cta {
+  margin-left: 8px;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-button);
+  box-shadow: none;
+  transition: background .18s;
+}
+
+.topnav-cta:hover { background: var(--accent-hover); transform: none; box-shadow: none; }
+
+.topnav-account {
+  margin-left: 8px;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+}
+
+.topnav-account-email { font-size: var(--fs-small); }
+
+.topnav-account button {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+/* --- buttons: MassUX pills ----------------------------------------------- */
+button.primary,
+.layout.has-selection .ask-cta {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--radius-pill);
+  border-color: var(--accent-bright);
+  background: var(--accent-bright);
+  color: #fff;
+  font-size: var(--fs-button);
+  font-weight: 600;
+  box-shadow: none;
+  transition: background .18s, border-color .18s;
+}
+
+/* MassUX pill-buttons.css: hover darkens, nothing moves or glows */
+button.primary:hover:not(:disabled),
+.layout.has-selection .ask-cta:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+/* A disabled primary reads as "not yet", not as a dead slab */
+button.primary:disabled {
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px dashed var(--line-2);
+  box-shadow: none;
+  transform: none;
+}
+
+button.ghost { border-radius: 8px; font-weight: 600; }
+button.ghost:hover:not(:disabled) { background: var(--accent-light); border-color: transparent; }
+
+button.chip {
+  min-height: 40px;
+  padding: 0 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+button.chip:hover:not(:disabled) { background: #f4fbfe; border-color: #9fdcf5; color: var(--accent); }
+
+
+/* --- inputs -------------------------------------------------------------- */
+input[type='text'],
+input[type='search'],
+input[type='email'],
+input[type='password'],
+input[type='number'],
+select,
+textarea {
+  border-radius: 10px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible { border-color: var(--accent-bright); outline-offset: 0; }
+
+/* --- status pills: sentence case, easier to read ------------------------- */
+.status {
+  font-size: var(--fs-caption);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* --- workspace tabs: rounded segments in the MAS-178 header -------------- */
+.layout.has-selection .workspace-head .tab { border-radius: var(--radius-pill); font-size: var(--fs-sm); }
+
+/* --- sidebar ------------------------------------------------------------- */
+.contracts .card-header { flex-wrap: nowrap; gap: 8px; }
+
+.contracts .card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.contracts .card-title .count { margin-left: 0; }
+.card-header-actions { gap: 2px; }
+
+.contract-list-controls .contract-search,
+.contract-sort select {
+  height: 40px;
+  font-size: var(--fs-sm);
+}
+
+.contract-list-controls .contract-search { padding: 0 12px; }
+
+button.contract .filetype {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.sidebar-standards-link {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  text-align: left;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.sidebar-standards-link:hover { border-color: #9fdcf5; background: #f4fbfe; text-decoration: none; }
+
+.dropzone { border-color: #9fdcf5; background: #f4fbfe; }
+
+/* --- overview ------------------------------------------------------------ */
+/* "View complete analysis" reads left to right: arrow, title, then the summary */
+.layout.has-selection .overview-detail-summary { justify-content: flex-start; }
+.layout.has-selection .overview-detail-summary .muted.small { margin-left: auto; text-align: right; }
+
+/* Values like "1 High · 2 Medium" fit their tile at desktop widths */
+.layout.has-selection .summary-value { font-size: clamp(1.2rem, 1.8vw, 1.5rem); }
+
+/* Search gets the full row so its placeholder is readable; sort sits below */
+.contract-list-controls { flex-wrap: wrap; }
+.contract-list-controls .contract-search { flex: 1 1 100%; }
+.contract-sort select { padding: 0 8px; }
+
+/* Phone: all four workspace tabs stay visible instead of scrolling off-screen */
+@media (max-width: 600px) {
+  .layout.has-selection .workspace-head .tabs { flex-wrap: wrap; overflow-x: visible; }
+}
+
+/* ==========================================================================
+   MAS-209 — the workspace as approved on the redesign canvas (owner,
+   2026-11-02): soft grey page, no outer frame, contract header on the page,
+   one segmented tab control, even stat tiles with the colour in the number,
+   and "Before you sign" as one card (In brief rows, then Needs attention).
+   Same MAS-136 colours and Inter as everywhere else. Every control and
+   panel of the MAS-178 layout is still rendered; only presentation changes.
+   ========================================================================== */
+
+body:has(.layout) { background: #f8f9fb; }
+
+/* No frame around the whole workspace: the page itself is the ground */
+.layout,
+.layout.has-selection {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 32px 72px;
+  gap: 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.layout .sidebar > .card,
+.layout.has-selection .sidebar > .card {
+  border-color: #e8e8e8;
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+/* Contract header sits on the page, not in a card */
+.layout.has-selection .workspace-head {
+  padding: 0;
+  gap: 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.layout.has-selection .contract-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 0;
+}
+
+.layout.has-selection .workspace-file-mark,
+.layout.has-selection .workspace-eyebrow { display: none; }
+
+.layout.has-selection .contract-head .workspace-title {
+  font-size: var(--fs-h1);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.layout.has-selection .ask-cta { min-height: 48px; padding: 0 24px; font-size: var(--fs-body-sm); }
+
+.layout.has-selection .actions-menu > summary {
+  width: 48px;
+  height: 48px;
+  border-color: #d0d0d0;
+  color: var(--ink);
+}
+
+/* One segmented control: grey track, white active segment */
+.layout.has-selection .workspace-head .tabs {
+  align-self: flex-start;
+  max-width: 100%;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: #eef1f4;
+}
+
+.layout.has-selection .workspace-head .tab {
+  padding: 8px 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: #555;
+}
+
+.layout.has-selection .workspace-head .tab:hover:not(:disabled) {
+  border: 0;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink);
+}
+
+.layout.has-selection .workspace-head .tab.active {
+  border: 0;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* The page heading above the tiles repeats what the tab already says */
+.layout.has-selection .overview-intro { display: none; }
+
+/* Stat tiles: same frame, value in --fs-h1, colour carries the meaning */
+.layout.has-selection .summary-strip { gap: 12px; }
+
+.layout.has-selection .summary-tile {
+  min-height: 0;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.layout.has-selection .summary-tile.jump button { padding: 18px 20px; border-radius: 16px; }
+.layout.has-selection .summary-tile:not(.jump) { padding: 18px 20px; }
+.layout.has-selection .summary-label { font-size: var(--fs-caption); color: #555; letter-spacing: 0.08em; }
+
+.layout.has-selection .summary-value {
+  margin-top: 6px;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.layout.has-selection .summary-tile.warn .summary-value { color: #8f5509; }
+.layout.has-selection .summary-tile.high .summary-value { color: #a12c22; }
+.layout.has-selection .summary-note { margin-top: 4px; font-size: var(--fs-small); color: #555; }
+
+.layout.has-selection .summary-tile.jump:hover {
+  transform: translateY(-3px);
+  border-color: #bfe6f6;
+  box-shadow: none;
+}
+
+/* Before you sign: one card, In brief rows then Needs attention, full width */
+.layout.has-selection #panel-overview > .brief,
+.layout.has-selection #panel-overview > .overview-detail {
+  padding: 24px;
+  border: 1px solid #e8e8e8;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.brief-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+
+.brief-column,
+.brief-attention-column {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.layout.has-selection .brief-fact {
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.layout.has-selection .brief-fact dt {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.layout.has-selection .brief-fact .brief-text { font-size: var(--fs-body-sm); }
+
+.layout.has-selection .check {
+  padding: 14px 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.layout.has-selection .check:hover { border-color: #bfe6f6; background: #f4fbfe; }
+
+/* Passage links: plain readable links, not boxed chips */
+.layout.has-selection .brief-fact dd .link,
+.layout.has-selection .check > .link {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.layout.has-selection .brief-fact dd .link:hover,
+.layout.has-selection .check > .link:hover { background: transparent; text-decoration: underline; }
+
+@media (max-width: 960px) {
+  .layout.has-selection { padding: 20px 16px 48px; }
+}
+
+@media (max-width: 720px) {
+  .layout.has-selection .contract-head { grid-template-columns: minmax(0, 1fr); }
+  .layout.has-selection .contract-head-actions { grid-column: auto; justify-content: flex-start; }
+  .layout.has-selection #panel-overview > .brief,
+  .layout.has-selection #panel-overview > .overview-detail { padding: 20px 16px; }
+  .layout.has-selection .brief-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
