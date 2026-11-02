@@ -98,7 +98,7 @@ describe('the shell', () => {
 
     for (const title of ['Cited answers', 'Risk review', 'Key terms', 'Honest unknowns']) {
       const card = screen.getByRole('link', { name: new RegExp(title) })
-      expect(card).toHaveClass('home-proof-card')
+      expect(card).toHaveClass('pp-why-card') // MAS-210 canvas card
     }
     expect(screen.queryByRole('heading', { name: 'Source-linked answers' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Ready to review a contract?' })).toBeInTheDocument()
