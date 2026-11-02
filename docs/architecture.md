@@ -1,5 +1,7 @@
 # Architecture Notes
 
+For routes, authentication and response behaviour, see the [API reference](api.md).
+
 The service is organized around a contract review workflow:
 
 1. `app/ingestion` loads contracts, extracts text, chunks clauses, and prepares metadata.
