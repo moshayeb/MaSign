@@ -124,8 +124,11 @@ describe('the summary tiles lead to their section (MAS-124)', () => {
     await waitFor(() => expect(document.querySelector('.card.key-terms')).toHaveFocus())
 
     await userEvent.click(tiles[2]) // Risks → opens "View complete analysis" (MAS-126)
-    await waitFor(() => expect(document.querySelector('.overview-detail')).toHaveFocus())
-    expect(document.querySelector('.overview-detail')).toHaveAttribute('open')
+    // MAS-206: "Related documents" is also an .overview-detail disclosure, so
+    // name the complete-analysis one explicitly.
+    const analysis = document.querySelector('.overview-detail:not(.related-documents)')
+    await waitFor(() => expect(analysis).toHaveFocus())
+    expect(analysis).toHaveAttribute('open')
 
     await userEvent.click(tiles[3]) // Coverage → opens the details
     expect(document.querySelector('.coverage-notice')).toHaveAttribute('open')

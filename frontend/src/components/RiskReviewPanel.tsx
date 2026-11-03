@@ -269,7 +269,6 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
         </p>
       )}
       {review?.coverage && <CoverageNotice coverage={review.coverage} onShowSource={onShowSource} ref={coverageRef} />}
-      {review?.coverage && <ContractLinks primary={contract} links={links} references={review.coverage.external_references} contracts={contracts} onChanged={() => { loadLinks(); void load() }} onUploaded={onSettled ?? (() => undefined)} />}
       {/* The contract in five facts and the checklist (MAS-105/106/111), before the details. */}
       {review && (
         <BriefCard
@@ -367,6 +366,8 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           </p>
         )}
       </div>
+
+      {review?.coverage && <ContractLinks primary={contract} links={links} references={review.coverage.external_references} contracts={contracts} onChanged={() => { loadLinks(); void load() }} onUploaded={onSettled ?? (() => undefined)} />}
 
       {/* Behind the fold (MAS-126): every High/Medium finding is already on
           the "Before you sign" checklist above, so nothing here is the only

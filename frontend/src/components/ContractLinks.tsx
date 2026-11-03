@@ -69,7 +69,17 @@ export function ContractLinks({ primary, links, references, contracts, onChanged
 
   if (references.length === 0 && links.length === 0) return null
   return (
-    <section className="contract-links" aria-label="Related documents">
+    <details className="card overview-detail related-documents">
+      <summary className="overview-detail-summary">
+        <span>Related documents</span>
+        <span className="muted small">
+          {references.length > 0
+            ? `${references.length} missing ${references.length === 1 ? 'document' : 'documents'} · link to complete the bundle`
+            : 'Manage linked documents'}
+          {links.length > 0 && ` · ${links.length} linked`}
+        </span>
+      </summary>
+      <section className="contract-links" aria-label="Document links">
       {references.map((reference) => (
         <div key={reference.name} className="link-action link-action-unresolved">
           <div className="link-action-copy">
@@ -129,6 +139,7 @@ export function ContractLinks({ primary, links, references, contracts, onChanged
           <button type="button" className="link" onClick={() => setConfirming(null)}>Cancel</button>
         </div>
       )}
-    </section>
+      </section>
+    </details>
   )
 }
