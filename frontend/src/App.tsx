@@ -417,6 +417,15 @@ export default function App() {
           ))}
         </div>
       )}
+      {!asked && !compared && (
+        // MAS-214: the Ask tab was blank below the question box until a first
+        // answer; say plainly what an answer will and will not contain.
+        <ul className="ask-expectations" aria-label="How answers work">
+          <li><strong>Cited</strong> Each answer links to the passages it was built from.</li>
+          <li><strong>Flagged</strong> An answer without a usable source is marked, not passed off as fact.</li>
+          <li><strong>Honest</strong> If the contract does not cover it, MaSign says so instead of guessing.</li>
+        </ul>
+      )}
       {compared ? (
         <ModelCompareView compared={compared} contracts={contracts ?? []} onShowSource={showSource} onClose={closeCompared} />
       ) : (
@@ -429,7 +438,12 @@ export default function App() {
     <PageChrome
       authControl={
         <span className="topnav-account">
-          {user && <span className="topnav-account-email">{user.email}</span>}
+          {user && (
+            <>
+              {user.email && <span className="topnav-avatar" aria-hidden="true">{user.email.charAt(0).toUpperCase()}</span>}
+              <span className="topnav-account-email">{user.email}</span>
+            </>
+          )}
           <button type="button" className="link" onClick={() => void logout()}>
             Log out
           </button>

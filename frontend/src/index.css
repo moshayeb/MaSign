@@ -5047,3 +5047,119 @@ body:has(.layout) { background: #f8f9fb; }
   .layout.has-selection .workspace-head .tab { justify-content: center; text-align: center; }
   .layout.has-selection .contract-head .workspace-title { font-size: 24px; line-height: 1.25; overflow-wrap: anywhere; }
 }
+
+/* ==========================================================================
+   MAS-214 — design polish after the redesign review (2026-11-03)
+   ========================================================================== */
+
+/* Header account: initial avatar, quieter email, Log out as a link. */
+.topnav-account { gap: 10px; padding: 4px 12px 4px 4px; }
+.topnav-avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #0caded;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.topnav-account-email { color: #555555; }
+.topnav-account button.link { font-weight: 600; }
+
+/* Sidebar upload: one compact row; the Upload button appears only once a
+   file is chosen (it was a disabled full-width button before). */
+.layout .card.upload { padding: 16px; gap: 10px; }
+.layout .card.upload .dropzone {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-areas: "icon text" "icon hint";
+  align-items: center;
+  justify-items: start;
+  gap: 2px 12px;
+  padding: 14px;
+  text-align: left;
+}
+.layout .card.upload .dropzone-icon { grid-area: icon; width: 40px; height: 40px; border-radius: 12px; background: #0caded; color: #ffffff; display: flex; align-items: center; justify-content: center; margin: 0; }
+.layout .card.upload .dropzone-text { grid-area: text; font-size: 14px; }
+.layout .card.upload .dropzone .muted { grid-area: hint; }
+.layout .card.upload:not(.has-file) > button.primary { display: none; }
+
+/* Overview: one severity pill style everywhere (soft tint, dark text). */
+.layout .severity,
+.layout .severity.severity-high,
+.layout .severity.severity-medium,
+.layout .severity.severity-low,
+.layout .risk .severity {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  box-shadow: none;
+}
+.layout .severity.severity-high, .layout .risk.severity-high .severity { background: #fbeae8; color: #a12c22; }
+.layout .severity.severity-medium, .layout .risk.severity-medium .severity { background: #f9edd8; color: #8f5509; }
+.layout .severity.severity-low, .layout .risk.severity-low .severity { background: #e1f2e8; color: #1a7f47; }
+
+/* Compact risk counts; MAS-215: let longer totals wrap within the tile. */
+.layout.has-selection .summary-tile.high .summary-value { font-size: clamp(1.05rem, 1.5vw, 1.3rem); white-space: normal; overflow-wrap: anywhere; }
+
+/* Risk review status sits in a card, joined to the analysis below it. */
+.layout.has-selection .review-status {
+  margin: 0;
+  padding: 18px 24px;
+  border: 1px solid #e8e8e8;
+  border-radius: 20px;
+  background: #ffffff;
+}
+
+/* Ask: suggestions as a labelled row, and what an answer will contain. */
+.layout.has-selection .examples { gap: 8px; }
+.ask-expectations {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.ask-expectations li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  background: #ffffff;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #555555;
+}
+.ask-expectations strong { font-size: 15px; color: #111111; }
+.ask-expectations li::before {
+  content: "";
+  width: 28px;
+  height: 4px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: #0caded;
+}
+.layout.has-selection .question .scope .pill {
+  /* MAS-216: ellipsize inline text, rather than an anonymous flex item. */
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layout.has-selection .question .scope .pill input { margin-right: 6px; }
+.layout .card.upload .dropzone .muted { font-size: 12px; line-height: 1.4; }

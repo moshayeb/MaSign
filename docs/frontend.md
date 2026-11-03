@@ -1059,3 +1059,13 @@ these results in a collapsed **Related documents** disclosure with missing
 and linked counts. Expand it to choose/upload a document or unlink one.
 Missing-document warnings remain visible when the forms are closed; explicit
 confirmation, review invalidation and paid-review prompts are unchanged.
+
+### MAS-214: design polish
+
+The upload dropzone remains visible; its submit button appears after file
+selection. The account header includes an initial avatar. Ask shows Cited,
+Flagged and Honest guidance before an answer or comparison is displayed.
+Overview uses soft severity pills and a bordered review-status card. Longer
+risk totals wrap within their tile (MAS-215); long scope filenames show an
+ellipsis while retaining their full accessible name (MAS-216). The home
+page uses trust pills, larger step illustrations and tighter section spacing.

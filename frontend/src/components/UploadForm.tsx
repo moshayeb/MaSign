@@ -44,7 +44,7 @@ export function UploadForm({ onUploaded }: Props) {
 
   return (
     <form
-      className={dragging ? 'card upload dragging' : 'card upload'}
+      className={`card upload${dragging ? ' dragging' : ''}${file || busy ? ' has-file' : ''}`}
       onSubmit={(event) => {
         event.preventDefault()
         if (file) void submit(file)
