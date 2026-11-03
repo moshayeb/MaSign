@@ -736,6 +736,17 @@ describe('progressive disclosure never hides a reason to doubt the review (MAS-1
     expect(screen.getByText(/4 passage.*not graded/)).toBeVisible()
     expect(screen.getByText('Confirm Liability cap')).toBeVisible()
 
+    // MAS-206: the useful summary and doubt signals precede collapsed setup.
+    const related = screen.getByText('Related documents').closest('details')!
+    const brief = screen.getByRole('heading', { name: /Before you sign/ }).closest('section')!
+    expect(brief.compareDocumentPosition(related) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(related).not.toHaveAttribute('open')
+    expect(screen.getByText(/1 missing document/)).toBeVisible()
+    expect(screen.getByRole('combobox')).not.toBeVisible()
+    await userEvent.click(screen.getByText('Related documents'))
+    expect(screen.getByRole('combobox')).toBeVisible()
+    expect(screen.getByText(/Order Form.*referenced but not uploaded/)).toBeVisible()
+
     // The Low finding and the full findings list exist (nothing was thrown
     // away) but are not visible while the fold is closed -- the whole point.
     const lowFinding = screen.getByText('No survival period stated.')

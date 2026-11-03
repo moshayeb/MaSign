@@ -1050,3 +1050,12 @@ Every removed class had no remaining reference in any TS, TSX or HTML file.
 A parsed comparison of `index.css` before and after shows every remaining
 selector and declaration is unchanged. The earlier sections above that name
 those classes describe the pages as they were at the time.
+
+### Summary before document setup (MAS-206)
+
+The overview leads with its summary tiles, visible coverage/rubric warnings,
+then **Before you sign** and review status. Related-document linking follows
+these results in a collapsed **Related documents** disclosure with missing
+and linked counts. Expand it to choose/upload a document or unlink one.
+Missing-document warnings remain visible when the forms are closed; explicit
+confirmation, review invalidation and paid-review prompts are unchanged.
