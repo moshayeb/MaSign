@@ -132,6 +132,25 @@ a{color:#087eac}a:hover{color:#0A0A0A}
           <div class="std-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px">
             <section class="std-card" style="border-radius: 20px; border: 1px solid #e8e8e8; background: #FFFFFF; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px">
+              <h3 style="margin: 0; font-size: var(--fs-lead); font-weight: 800; color: #111111">Payment deadline</h3>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Default</span>
+            </div>
+            <p style="margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: #555555">The shortest time you accept to pay an invoice.</p>
+            <label style="display: flex; flex-direction: column; gap: 6px">
+              <span style="font-size: var(--fs-sm); font-weight: 700; color: #111111">At least</span>
+              <span style="display: flex; align-items: center; gap: 10px">
+                <input type="number" value="30" style="height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #d0d0d0; background: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); color: #111111; width: 120px">
+                <span style="font-size: var(--fs-body-sm); color: #555555">days</span>
+              </span>
+            </label>
+            <p style="margin: 0; font-size: var(--fs-small); color: #777777">MaSign default: net 30 days or longer · compared with the Payment deadline key term</p>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+              <button type="button" class="btn-solid" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #0caded; color: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); font-weight: 700; cursor: pointer; white-space: nowrap">Save</button>
+              <button type="button" style="min-height: 44px; padding: 0 10px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: #087eac; cursor: pointer; white-space: nowrap">Reset to default</button>
+            </div>
+          </section>
+            <section class="std-card" style="border-radius: 20px; border: 1px solid #e8e8e8; background: #FFFFFF; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px">
               <h3 style="margin: 0; font-size: var(--fs-lead); font-weight: 800; color: #111111">Notice period</h3>
               <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Default</span>
             </div>
@@ -143,7 +162,7 @@ a{color:#087eac}a:hover{color:#0A0A0A}
                 <span style="font-size: var(--fs-body-sm); color: #555555">days</span>
               </span>
             </label>
-            <p style="margin: 0; font-size: var(--fs-small); color: #777777">Default: 60 days · used for Termination and Renewal</p>
+            <p style="margin: 0; font-size: var(--fs-small); color: #777777">MaSign default: at most 60 days · compared with the Notice period key term</p>
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
               <button type="button" class="btn-solid" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #0caded; color: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); font-weight: 700; cursor: pointer; white-space: nowrap">Save</button>
               <button type="button" style="min-height: 44px; padding: 0 10px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: #087eac; cursor: pointer; white-space: nowrap">Reset to default</button>
@@ -152,7 +171,7 @@ a{color:#087eac}a:hover{color:#0A0A0A}
             <section class="std-card" style="border-radius: 20px; border: 1px solid #e8e8e8; background: #FFFFFF; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px">
               <h3 style="margin: 0; font-size: var(--fs-lead); font-weight: 800; color: #111111">Late-payment interest</h3>
-              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #06648a; background: #e6f6fd; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Changed from default</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Default</span>
             </div>
             <p style="margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: #555555">The highest interest a supplier may charge on a late invoice.</p>
             <label style="display: flex; flex-direction: column; gap: 6px">
@@ -162,7 +181,7 @@ a{color:#087eac}a:hover{color:#0A0A0A}
                 <span style="font-size: var(--fs-body-sm); color: #555555">% per month</span>
               </span>
             </label>
-            <p style="margin: 0; font-size: var(--fs-small); color: #777777">Default: 1% per month · used for Payment terms</p>
+            <p style="margin: 0; font-size: var(--fs-small); color: #777777">MaSign default: at most 1% per month (12% per year) · compared with the Late-payment interest key term</p>
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
               <button type="button" class="btn-solid" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #0caded; color: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); font-weight: 700; cursor: pointer; white-space: nowrap">Save</button>
               <button type="button" style="min-height: 44px; padding: 0 10px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: #087eac; cursor: pointer; white-space: nowrap">Reset to default</button>
@@ -170,27 +189,8 @@ a{color:#087eac}a:hover{color:#0A0A0A}
           </section>
             <section class="std-card" style="border-radius: 20px; border: 1px solid #e8e8e8; background: #FFFFFF; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px">
-              <h3 style="margin: 0; font-size: var(--fs-lead); font-weight: 800; color: #111111">Price increase</h3>
-              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Default</span>
-            </div>
-            <p style="margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: #555555">The largest yearly price rise you accept without renegotiating.</p>
-            <label style="display: flex; flex-direction: column; gap: 6px">
-              <span style="font-size: var(--fs-sm); font-weight: 700; color: #111111">At most</span>
-              <span style="display: flex; align-items: center; gap: 10px">
-                <input type="number" value="5" style="height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #d0d0d0; background: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); color: #111111; width: 120px">
-                <span style="font-size: var(--fs-body-sm); color: #555555">% per year</span>
-              </span>
-            </label>
-            <p style="margin: 0; font-size: var(--fs-small); color: #777777">Default: 5% per year · used for Cost</p>
-            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
-              <button type="button" class="btn-solid" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #0caded; color: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); font-weight: 700; cursor: pointer; white-space: nowrap">Save</button>
-              <button type="button" style="min-height: 44px; padding: 0 10px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: #087eac; cursor: pointer; white-space: nowrap">Reset to default</button>
-            </div>
-          </section>
-            <section class="std-card" style="border-radius: 20px; border: 1px solid #e8e8e8; background: #FFFFFF; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0">
-            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px">
-              <h3 style="margin: 0; font-size: var(--fs-lead); font-weight: 800; color: #111111">Leaving early</h3>
-              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #555555; background: #f0f0f0; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Default</span>
+              <h3 style="margin: 0; font-size: var(--fs-lead); font-weight: 800; color: #111111">Termination cost</h3>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-caption); font-weight: 700; color: #06648a; background: #e6f6fd; padding: 4px 10px; border-radius: 999px; white-space: nowrap">Changed from default</span>
             </div>
             <p style="margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: #555555">What you accept paying if you end the contract before its term.</p>
             <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px">
@@ -205,7 +205,7 @@ a{color:#087eac}a:hover{color:#0A0A0A}
                 <span style="font-size: var(--fs-body-sm); color: #555555">% of the remaining fees, at most</span>
               </span>
             </fieldset>
-            <p style="margin: 0; font-size: var(--fs-small); color: #777777">Default: Percent cap, 25% · used for Termination cost</p>
+            <p style="margin: 0; font-size: var(--fs-small); color: #777777">MaSign default: no early-termination fee · compared with the Termination cost key term. An amount cap also asks for a currency (USD, EUR or SEK)</p>
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
               <button type="button" class="btn-solid" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #0caded; color: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); font-weight: 700; cursor: pointer; white-space: nowrap">Save</button>
               <button type="button" style="min-height: 44px; padding: 0 10px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: #087eac; cursor: pointer; white-space: nowrap">Reset to default</button>
@@ -233,29 +233,22 @@ a{color:#087eac}a:hover{color:#0A0A0A}
               </div>
             </li>
             <li style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid #f0f0f0">
-              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Data processing agreement</span><span style="font-size: var(--fs-small); color: #555555">Missing → shown in “Needs attention”</span></span>
-              <button type="button" role="switch" aria-checked="true" aria-label="Expect Data processing agreement" style="position: relative; width: 48px; height: 28px; border-radius: 999px; border: 0; background: #0caded; cursor: pointer"><span style="position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button>
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Data protection</span><span style="font-size: var(--fs-small); color: #555555">Missing → shown in “Needs attention”</span></span>
+              <button type="button" role="switch" aria-checked="true" aria-label="Expect Data protection" style="position: relative; width: 48px; height: 28px; border-radius: 999px; border: 0; background: #0caded; cursor: pointer"><span style="position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button>
               
             </li>
             <li style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid #f0f0f0">
-              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Governing law</span><span style="font-size: var(--fs-small); color: #555555">Missing → shown in “Needs attention”</span></span>
-              <button type="button" role="switch" aria-checked="true" aria-label="Expect Governing law" style="position: relative; width: 48px; height: 28px; border-radius: 999px; border: 0; background: #0caded; cursor: pointer"><span style="position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button>
-              <div style="grid-column: 1/-1; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 12px; background: #f8f9fb">
-                <label style="display: flex; flex-direction: column; gap: 6px">
-                  <span style="font-size: var(--fs-small); font-weight: 700; color: #333333">What this clause must say</span>
-                  <textarea rows="2" style="padding: 10px 14px; border-radius: 10px; border: 1px solid #d0d0d0; background: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); color: #111111; resize: vertical">Swedish law applies.</textarea>
-                </label>
-                <span style="display: flex; flex-wrap: wrap; gap: 6px"><button type="button" class="btn-sec" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #d0d0d0; background: #FFFFFF; font: inherit; font-size: var(--fs-body-sm); font-weight: 600; color: #111111; cursor: pointer; white-space: nowrap">Save governing law rule</button><button type="button" style="min-height: 44px; padding: 0 10px; border: 0; background: none; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: #087eac; cursor: pointer; white-space: nowrap">Clear rule</button></span>
-              </div>
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Insurance</span><span style="font-size: var(--fs-small); color: #555555">Missing → shown in “Needs attention”</span></span>
+              <button type="button" role="switch" aria-checked="true" aria-label="Expect Insurance" style="position: relative; width: 48px; height: 28px; border-radius: 999px; border: 0; background: #0caded; cursor: pointer"><span style="position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button>
             </li>
             <li style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid #f0f0f0">
-              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Service levels</span><span style="font-size: var(--fs-small); color: #555555">Not expected</span></span>
-              <button type="button" role="switch" aria-checked="false" aria-label="Expect Service levels" style="position: relative; width: 48px; height: 28px; border-radius: 999px; border: 0; background: #d0d0d0; cursor: pointer"><span style="position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button>
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: var(--fs-body-sm); font-weight: 700; color: #111111">Indemnification</span><span style="font-size: var(--fs-small); color: #555555">Not expected</span></span>
+              <button type="button" role="switch" aria-checked="false" aria-label="Expect Indemnification" style="position: relative; width: 48px; height: 28px; border-radius: 999px; border: 0; background: #d0d0d0; cursor: pointer"><span style="position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button>
               
             </li>
           </ul>
         </section>
-        <p style="margin: 0; font-size: var(--fs-small); color: #555555">Rules are saved to your account and apply to the next review. Review assistance, not legal advice.</p>
+        <p style="margin: 0; font-size: var(--fs-small); color: #555555">Changes update existing Overview verdicts, checklists and exports immediately. Contracts are not reread, and no AI call is made. Review assistance, not legal advice.</p>
       </section>
   </main>
   <!-- Footer: the site's original footer (Footer.tsx + .sitefoot styles) -->
