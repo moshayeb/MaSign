@@ -295,15 +295,22 @@ Explicitly out of scope this cycle:
 
 ## Security and secrets
 
-Checked on 2026-09-17, repeated 2026-09-28 (two real findings fixed,
-below) and to be repeated again before the v1.0.0 tag:
+A limited pattern scan was repeated on **2026-11-02** against base
+`0502e46`: 353 commits reachable through local refs and 269 tracked files.
+It found **0 matching history lines and 0 matching tracked files** for the
+provider-token and private-key patterns listed in the [scan record](docs/security-scan-2026-11-02.md).
+This is not proof that no secret exists: unknown token formats, generic
+passwords, unreachable Git objects and untracked local files were outside
+this scan. Repeat the check against the final release commit.
 
-- **No secrets in the repository or its history.** `git log --all -p` grepped
-  for Anthropic / OpenAI / Atlassian / AWS / GitHub / Slack key shapes and
-  private-key headers: 0 hits, 68 commits on 2026-09-17, 272 on 2026-09-28.
-  `.env` has never been committed; it is git-ignored together with
-  `.claude/`, and `.env.example` contains placeholders only
-  (`ANTHROPIC_API_KEY=`, `OPENAI_API_KEY=`).
+- `.env` is ignored and has no commits in the inspected history.
+- `.claude/` intentionally contains 14 tracked shared skill, command and hook
+  files. Local settings, logs and the confirmation code are ignored; no local
+  settings or confirmation-code file is tracked. The shared hook documentation
+  contains the repository path as a cross-platform example.
+- The two security fixes below are present in the inspected base. They are
+  specific fixes, not a claim that the application is fully hardened.
+
 - **`DELETE /api/contracts/{id}` had no auth check and no workspace scope at
   all (2026-09-28), fixed.** Every other contract route requires a signed-in
   session and filters by the caller's own workspace — this one required
