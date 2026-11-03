@@ -69,24 +69,24 @@ export function HomePage() {
 
         {/* Trust strip */}
         <section aria-label="At a glance" style={{ background: "#FFFFFF", borderBottom: "1px solid #e8e8e8" }}>
-          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "22px 32px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "12px 40px", fontSize: "var(--fs-sm)", fontWeight: 600, color: "#333333" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6" /></svg>PDF · DOCX · TXT</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 7H5v6h4l-2 4M19 7h-4v6h4l-2 4" /></svg>Cited to the passage</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>Customer-side review</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M5 7l-3 6a3 3 0 0 0 6 0L5 7Zm14 0-3 6a3 3 0 0 0 6 0l-3-6ZM5 7h14" /></svg>A first read, not a lawyer</span>
+          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "20px 32px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "10px 12px", fontSize: "var(--fs-sm)", fontWeight: 600, color: "#333333" }}>
+            <span className="pp-trust-pill" style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "999px", background: "#f4fbfe", border: "1px solid #d7eff9" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6" /></svg>PDF · DOCX · TXT</span>
+            <span className="pp-trust-pill" style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "999px", background: "#f4fbfe", border: "1px solid #d7eff9" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 7H5v6h4l-2 4M19 7h-4v6h4l-2 4" /></svg>Cited to the passage</span>
+            <span className="pp-trust-pill" style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "999px", background: "#f4fbfe", border: "1px solid #d7eff9" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>Customer-side review</span>
+            <span className="pp-trust-pill" style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "999px", background: "#f4fbfe", border: "1px solid #d7eff9" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0caded" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M5 7l-3 6a3 3 0 0 0 6 0L5 7Zm14 0-3 6a3 3 0 0 0 6 0l-3-6ZM5 7h14" /></svg>A first read, not a lawyer</span>
           </div>
         </section>
 
         {/* How it works */}
         <section aria-labelledby="how-title" style={{ background: "#f5f5f5" }}>
-          <div className="pp-sec" style={{ maxWidth: "1200px", margin: "0 auto", padding: "96px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: "56px" }}>
+          <div className="pp-sec" style={{ maxWidth: "1200px", margin: "0 auto", padding: "80px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: "56px" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", textAlign: "center", maxWidth: "680px" }}>
               <h2 id="how-title" style={{ margin: "0", fontSize: "var(--fs-h2)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.1, color: "#111111", textWrap: "balance" }}>How MaSign works</h2>
               <p style={{ margin: "0", fontSize: "var(--fs-lead)", color: "#555555", textWrap: "balance" }}>A clear first read of your contract, in three steps.</p>
             </div>
             <ol style={{ margin: "0", padding: "0", listStyle: "none", width: "100%", display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "32px 24px" }}>
               <li style={{ flex: "1 1 240px", minWidth: "0", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div className="pp-lift" style={{ padding: "14px", borderRadius: "18px", border: "1px solid #e8e8e8", background: "#FFFFFF" }}><svg viewBox="0 0 240 160" width="100%" height="84" role="img" aria-label="A contract file being uploaded">
+                <div className="pp-lift" style={{ padding: "18px", borderRadius: "18px", border: "1px solid #e8e8e8", background: "linear-gradient(180deg, #f4fbfe 0%, #FFFFFF 100%)" }}><svg viewBox="0 0 240 160" width="100%" height="120" role="img" aria-label="A contract file being uploaded">
       <circle cx="120" cy="84" r="62" fill="#e6f6fd" />
       <circle cx="54" cy="40" r="4" fill="#0caded" /><circle cx="194" cy="52" r="3" fill="#0caded" opacity="0.6" /><circle cx="186" cy="132" r="5" fill="#e6f6fd" />
       <rect x="82" y="26" width="72" height="96" rx="9" fill="#FFFFFF" stroke="#111111" strokeWidth="2.2" />
@@ -101,7 +101,7 @@ export function HomePage() {
               </li>
               <span className="pp-step-arrow" aria-hidden="true" style={{ flex: "none", alignItems: "center", justifyContent: "center", width: "40px", height: "40px", marginTop: "37px", borderRadius: "999px", border: "1px solid #e8e8e8", background: "#FFFFFF", color: "#0caded" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></span>
               <li style={{ flex: "1 1 240px", minWidth: "0", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div className="pp-lift" style={{ padding: "14px", borderRadius: "18px", border: "1px solid #e8e8e8", background: "#FFFFFF" }}><svg viewBox="0 0 240 160" width="100%" height="84" role="img" aria-label="A magnifying glass finding a risky clause">
+                <div className="pp-lift" style={{ padding: "18px", borderRadius: "18px", border: "1px solid #e8e8e8", background: "linear-gradient(180deg, #f4fbfe 0%, #FFFFFF 100%)" }}><svg viewBox="0 0 240 160" width="100%" height="120" role="img" aria-label="A magnifying glass finding a risky clause">
       <circle cx="120" cy="84" r="62" fill="#e6f6fd" />
       <circle cx="46" cy="118" r="4" fill="#0caded" /><circle cx="196" cy="132" r="3" fill="#0caded" opacity="0.6" />
       <rect x="66" y="24" width="80" height="104" rx="9" fill="#FFFFFF" stroke="#111111" strokeWidth="2.2" />
@@ -120,7 +120,7 @@ export function HomePage() {
               </li>
               <span className="pp-step-arrow" aria-hidden="true" style={{ flex: "none", alignItems: "center", justifyContent: "center", width: "40px", height: "40px", marginTop: "37px", borderRadius: "999px", border: "1px solid #e8e8e8", background: "#FFFFFF", color: "#0caded" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></span>
               <li style={{ flex: "1 1 240px", minWidth: "0", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div className="pp-lift" style={{ padding: "14px", borderRadius: "18px", border: "1px solid #e8e8e8", background: "#FFFFFF" }}><svg viewBox="0 0 240 160" width="100%" height="84" role="img" aria-label="An answer linked to its passage in the contract">
+                <div className="pp-lift" style={{ padding: "18px", borderRadius: "18px", border: "1px solid #e8e8e8", background: "linear-gradient(180deg, #f4fbfe 0%, #FFFFFF 100%)" }}><svg viewBox="0 0 240 160" width="100%" height="120" role="img" aria-label="An answer linked to its passage in the contract">
       <circle cx="120" cy="84" r="62" fill="#e6f6fd" />
       <circle cx="200" cy="28" r="4" fill="#0caded" /><circle cx="34" cy="126" r="3" fill="#0caded" opacity="0.6" />
       <rect x="130" y="46" width="76" height="94" rx="9" fill="#FFFFFF" stroke="#111111" strokeWidth="2.2" />
@@ -143,7 +143,7 @@ export function HomePage() {
 
         {/* Why MaSign */}
         <section aria-labelledby="why-title" style={{ background: "#FFFFFF" }}>
-          <div className="pp-sec" style={{ maxWidth: "1200px", margin: "0 auto", padding: "96px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: "48px" }}>
+          <div className="pp-sec" style={{ maxWidth: "1200px", margin: "0 auto", padding: "80px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: "48px" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", textAlign: "center", maxWidth: "680px" }}>
               <h2 id="why-title" style={{ margin: "0", fontSize: "var(--fs-h2)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.1, color: "#111111", textWrap: "balance" }}>Why MaSign</h2>
               <p style={{ margin: "0", fontSize: "var(--fs-lead)", color: "#555555", textWrap: "balance" }}>A clear first read of your contract, with sources you can open.</p>
@@ -176,7 +176,7 @@ export function HomePage() {
 
         {/* Clear expectations */}
         <section aria-labelledby="exp-title" style={{ background: "#f5f5f5" }}>
-          <div className="pp-sec" style={{ maxWidth: "1200px", margin: "0 auto", padding: "96px 32px", display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "48px 64px" }}>
+          <div className="pp-sec" style={{ maxWidth: "1200px", margin: "0 auto", padding: "80px 32px", display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "48px 64px" }}>
             <div style={{ flex: "1 1 320px", minWidth: "0", display: "flex", flexDirection: "column", gap: "16px" }}>
               <p style={{ margin: "0", fontSize: "var(--fs-caption)", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#0caded" }}>Before you rely on it</p>
               <h2 id="exp-title" style={{ margin: "0", fontSize: "var(--fs-h2)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.1, color: "#111111", textWrap: "balance" }}>Clear expectations</h2>
