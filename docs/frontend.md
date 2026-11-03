@@ -1028,3 +1028,25 @@ styles or the shared header/footer. Numbered rows and the outcome cards stack
 on mobile. All navigation links have visible keyboard focus. Copy distinguishes
 missing information from incomplete analysis and makes no accuracy promises.
 The other public information pages retain their existing layouts pending review.
+
+### Redesign phases and CSS cleanup (MAS-209–MAS-212)
+
+The redesign was built in three phases, each from the approved canvas in
+`docs/redesign/canvas/`, with `docs/redesign/feature-inventory.md` as the
+checklist that no feature is lost:
+
+- MAS-209 added the design-system layer and the Overview tab.
+- MAS-210 rebuilt the four public pages (Home, What MaSign checks, How it
+  works, About) with the `pp-` classes.
+- MAS-211 restyled Sources, Invoices, Ask, `/standards` and the phone
+  layout, CSS only.
+
+MAS-212 removed the CSS that the phase-2 pages replaced. That covers the
+whole `home-*`, `how-*` and `mockup-*` families and the unused
+`pubpage-legend*` and `pubpage-term*` rules, plus the `home-rise-in`
+keyframes. That is 212 selectors and 7 `@media` blocks left empty.
+
+Every removed class had no remaining reference in any TS, TSX or HTML file.
+A parsed comparison of `index.css` before and after shows every remaining
+selector and declaration is unchanged. The earlier sections above that name
+those classes describe the pages as they were at the time.
