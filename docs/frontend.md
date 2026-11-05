@@ -1069,3 +1069,19 @@ Overview uses soft severity pills and a bordered review-status card. Longer
 risk totals wrap within their tile (MAS-215); long scope filenames show an
 ellipsis while retaining their full accessible name (MAS-216). The home
 page uses trust pills, larger step illustrations and tighter section spacing.
+
+### MAS-221: Comparison rules inside the workspace frame
+
+`AppFrame` supplies the shared sidebar and mobile drawer. `AppPageFrame`
+loads account and contract data for Comparison rules; selecting or uploading
+a contract opens `/workspace#<contract_id>`. Pending, forbidden and failed
+identity checks never request contracts or offer upload. Identity and list
+failures have separate free retry paths; list errors do not claim emptiness.
+
+Profiles use underline tabs and an actions disclosure; numeric rules,
+expected clauses and content rules share one sheet. Save-on-blur, Save,
+Reset, confirmation and toast semantics remain unchanged. Profile controls
+retain 44px touch targets on coarse pointers. Public site headers are unchanged.
+
+Mock-data screenshots: [desktop](redesign/mas221/standards-desktop.png) and
+[phone](redesign/mas221/standards-phone.png). These contain fictional data.

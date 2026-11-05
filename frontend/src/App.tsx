@@ -9,8 +9,7 @@ import { ContractList } from './components/ContractList'
 import { InvoiceCheckPanel } from './components/InvoiceCheckPanel'
 import { ModelCompareView } from './components/ModelCompareView'
 import { PageChrome } from './components/PageChrome'
-import { Wordmark } from './components/Wordmark'
-import { APP_NAV_LINKS } from './components/navLinks'
+import { AppFrame } from './components/AppFrame'
 import { PreviousQuestions } from './components/PreviousQuestions'
 import { QuestionPanel, type Asked, type Compared } from './components/QuestionPanel'
 import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
@@ -467,73 +466,35 @@ export default function App() {
 
   return (
     <PageChrome variant="app">
-      <div className={`layout${selected ? ' has-selection' : ''}${drawerOpen ? ' drawer-open' : ''}`}>
-        {/* Mobile drawer (MAS-126): CSS-inert (display: none) except under
-            960px with a contract selected, where it becomes the way back to
-            the sidebar without leaving the workspace. */}
-        {selected && (
-          <div className="mobile-bar">
-          <button type="button" className="drawer-toggle" aria-label="Show contracts" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-            Contracts
-          </button>
-          <a className="mobile-brand" href="/" aria-label="MaSign home"><Wordmark height={19} /></a>
-          </div>
-        )}
-        <div className="drawer-backdrop" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
-        <aside className="sidebar">
-          <a className="sidebar-brand" href="/" aria-label="MaSign home">
-            <Wordmark height={22} />
-          </a>
-          {selected && (
-            <button type="button" className="drawer-close" aria-label="Close" onClick={() => setDrawerOpen(false)}>
-              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M6 6l12 12M18 6 6 18" />
-              </svg>
-            </button>
-          )}
-          <UploadForm
-            onUploaded={(contract) => {
-              select(contract)
-              void reload()
-            }}
-          />
-          <ContractList
-            contracts={contracts}
-            selectedId={selected?.contract_id ?? null}
-            onSelect={select}
-            onReload={refresh}
-            comparing={comparePicking}
-            compareIds={compareIds}
-            onToggleCompare={toggleCompare}
-            onStartCompare={() => setComparePicking(true)}
-            onCancelCompare={closeCompare}
-            onDeleted={deleted}
-          />
-          {/* MAS-218: the workspace has no site header, so the site links and
-              the account live at the foot of the sidebar (in the drawer on a phone). */}
-          <nav className="sidebar-links" aria-label="Main">
-            {APP_NAV_LINKS.map((link) => (
-              <a key={link.href} className="sidebar-link" href={link.href}>
-                {link.label}
-              </a>
-            ))}
-          </nav>
-          <div className="sidebar-account">
-            {user?.email && (
-              <>
-                <span className="sidebar-avatar" aria-hidden="true">{user.email.charAt(0).toUpperCase()}</span>
-                <span className="sidebar-email">{user.email}</span>
-              </>
-            )}
-            <button type="button" className="link sidebar-logout" onClick={() => void logout()}>
-              Log out
-            </button>
-          </div>
-        </aside>
-
+      <AppFrame
+        drawer={Boolean(selected)}
+        drawerOpen={drawerOpen}
+        onDrawerOpen={setDrawerOpen}
+        user={user}
+        onLogout={() => void logout()}
+        sidebar={
+          <>
+            <UploadForm
+              onUploaded={(contract) => {
+                select(contract)
+                void reload()
+              }}
+            />
+            <ContractList
+              contracts={contracts}
+              selectedId={selected?.contract_id ?? null}
+              onSelect={select}
+              onReload={refresh}
+              comparing={comparePicking}
+              compareIds={compareIds}
+              onToggleCompare={toggleCompare}
+              onStartCompare={() => setComparePicking(true)}
+              onCancelCompare={closeCompare}
+              onDeleted={deleted}
+            />
+          </>
+        }
+      >
         <main className="content">
           {compareContracts ? (
             <CompareView contracts={compareContracts} onShowSource={showSourceInCompared} onClose={closeCompare} />
@@ -726,7 +687,7 @@ export default function App() {
           <SourcePanel contract={current} contracts={contracts ?? []} source={panelSource} onClose={closeSourcePanel} />
         )}
         {isWide && askDrawerOpen && selected && <AskDrawer onClose={closeAskDrawer}>{askContent}</AskDrawer>}
-      </div>
+      </AppFrame>
     </PageChrome>
   )
 }

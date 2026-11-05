@@ -45,12 +45,14 @@ it('the pages map has exactly the six pages the footer links to, plus /standards
 })
 
 // MAS-120: reached from the workspace, not the footer, so it is not part of
-// the describe.each above -- but it still needs the shared chrome.
-it('the standards page renders its heading and the shared header/footer chrome', () => {
+// the describe.each above. Since MAS-221 it sits in the workspace frame (the
+// sidebar, no site header) and keeps the shared footer.
+it('the standards page renders its heading in the workspace frame, with the shared footer', () => {
   render(<StandardsPage />)
 
   expect(screen.getByRole('heading', { level: 1, name: 'Contract comparison rules' })).toBeInTheDocument()
-  expect(screen.getByRole('banner')).toBeInTheDocument()
+  expect(screen.getByRole('complementary')).toBeInTheDocument() // the sidebar
+  expect(screen.queryByRole('banner')).not.toBeInTheDocument()
   expect(screen.getByRole('contentinfo')).toBeInTheDocument()
   expect(PAGES['/standards']).toBe(StandardsPage)
 })

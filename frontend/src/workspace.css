@@ -724,3 +724,90 @@
   #root .layout .export-pdf { flex: 0 0 auto; }
   #root .layout .content { padding-bottom: 112px; }
 }
+
+/* ==========================================================================
+   Comparison rules in the workspace frame (MAS-221)
+   Same calm language as the Overview: a quiet intro, underline profile tabs
+   with the profile's actions in one ⋯ menu, and one sheet whose sections
+   are divided by hairlines instead of separate cards.
+   ========================================================================== */
+#root .layout .sidebar-link.current { background: var(--ws-tint); color: var(--ws-ink); font-weight: 500; }
+#root .layout .sidebar-signed-out { margin: 4px 4px 0; font-size: 12px; color: var(--ws-sub); }
+#root .layout .sidebar-contracts-error { margin: 4px 4px 0; font-size: 12px; color: var(--ws-amber); }
+#root .layout .sidebar-signin { font-size: 14px; color: var(--ws-link); }
+
+#root .layout .content.standards-page,
+#root .layout.has-selection .content.standards-page { display: flex; flex-direction: column; gap: 24px; }
+#root .layout .standards-intro { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; }
+#root .layout .standards-intro > * { margin: 0; }
+#root .layout .standards-back { align-self: flex-start; font-size: 14px; font-weight: 400; color: var(--ws-link); }
+#root .layout .standards-eyebrow { margin-top: 8px; font-size: 12px; font-weight: 500; color: var(--ws-muted); }
+#root .layout .standards-intro h1 { font-size: 28px; line-height: 1.2; letter-spacing: -0.02em; color: var(--ws-ink); }
+#root .layout .standards-intro p:last-child { max-width: 65ch; font-size: 14px; line-height: 1.55; color: var(--ws-text); }
+#root .layout .standards-effect { margin: 0; padding: 2px 0 2px 14px; border: 0; border-left: 2px solid var(--ws-accent); border-radius: 0; background: none; font-size: 12px; line-height: 1.5; color: var(--ws-sub); max-width: 90ch; }
+
+/* profile tabs: underline, like the workspace tabs */
+#root .layout .standard-profiles-bar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 24px; margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--ws-line); background: none; }
+#root .layout .standard-profile-tab { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 -1px; padding: 0 0 12px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; box-shadow: none; color: var(--ws-sub); font-size: 14px; font-weight: 500; min-height: 0; }
+#root .layout .standard-profile-tab:hover { color: var(--ws-ink); background: none; }
+#root .layout .standard-profile-tab.active { color: var(--ws-ink); border-bottom-color: var(--ws-ink); background: none; }
+#root .layout .standard-profile-tab .status { padding: 0 6px; font-size: 12px; font-weight: 400; color: var(--ws-muted); background: #f1f3f5; border: 0; border-radius: 6px; }
+#root .layout .standard-profile-add { margin: 0 0 12px auto; padding: 0; font-size: 14px; color: var(--ws-link); }
+#root .layout .standard-profile-menu { position: relative; margin: 0 0 8px; }
+#root .layout .standard-profile-menu > summary { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--ws-line); border-radius: 999px; background: var(--ws-panel); color: var(--ws-text); cursor: pointer; list-style: none; }
+#root .layout .standard-profile-menu > summary::-webkit-details-marker { display: none; }
+#root .layout .standard-profile-menu .actions-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; display: flex; flex-direction: column; min-width: 240px; padding: 6px; background: var(--ws-panel); border: 1px solid var(--ws-line); border-radius: 12px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12); }
+#root .layout .standard-profile-menu .export-action { justify-content: flex-start; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--ws-ink); font-size: 14px; font-weight: 400; text-align: left; }
+#root .layout .standard-profile-menu .export-action:hover { background: #f5f6f8; }
+#root .layout .standard-profile-menu .standard-profile-delete { color: var(--ws-red); }
+#root .layout .standard-profile-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+#root .layout .standard-profile-confirm-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; padding: 12px 16px; border: 1px solid var(--ws-red-line); border-radius: 12px; background: var(--ws-red-bg); font-size: 14px; color: var(--ws-ink); }
+
+/* one sheet */
+#root .layout .standards-sheet { display: flex; flex-direction: column; background: var(--ws-panel); border: 1px solid var(--ws-line); border-radius: 16px; overflow: hidden; }
+#root .layout .standards-sheet:empty { display: none; }
+#root .layout .standards-sheet > .standards-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 0; }
+#root .layout .standards-sheet .standard-card,
+#root .layout .standards-sheet > .card { margin: 0; padding: 24px; background: none; border: 0; border-radius: 0; box-shadow: none; }
+#root .layout .standards-sheet .standard-card { border-bottom: 1px solid var(--ws-line); }
+#root .layout .standards-sheet .standard-card:nth-child(odd) { border-right: 1px solid var(--ws-line); }
+#root .layout .standards-sheet > .card + .card,
+#root .layout .standards-sheet > .standards-grid + .card { border-top: 0; }
+#root .layout .standards-sheet > .card + .card { border-top: 1px solid var(--ws-line); }
+#root .layout .standards-sheet > .standards-grid:last-child .standard-card:nth-last-child(-n + 2) { border-bottom: 0; }
+#root .layout .standards-sheet .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+#root .layout .standards-sheet .card-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--ws-ink); }
+#root .layout .standards-sheet .card-header .status { font-size: 12px; font-weight: 400; padding: 2px 8px; border-radius: 6px; border: 0; background: #f1f3f5; color: var(--ws-sub); }
+#root .layout .standards-sheet .card-header .status.ok { background: var(--ws-green-bg); color: var(--ws-green); }
+#root .layout .standards-sheet .standard-current { display: flex; flex-direction: column; gap: 2px; margin: 0 0 16px; }
+#root .layout .standards-sheet .standard-current > span { font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ws-muted); }
+#root .layout .standards-sheet .standard-current > strong { font-size: 16px; font-weight: 500; color: var(--ws-ink); }
+#root .layout .standards-sheet .standard-label { font-size: 12px; font-weight: 500; color: var(--ws-sub); }
+#root .layout .standards-sheet .standard-example { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; background: #f8f9fb; font-size: 12px; }
+#root .layout .standards-sheet .standard-reset { margin-top: 8px; padding: 0; font-size: 12px; color: var(--ws-link); }
+#root .layout .standards-sheet .standard-reset:disabled { color: var(--ws-muted); }
+#root .layout .standards-sheet > .card > .muted.small { max-width: 90ch; margin: 0 0 12px; font-size: 12px; line-height: 1.5; color: var(--ws-sub); }
+
+@media (max-width: 960px) {
+  #root .layout .standards-sheet > .standards-grid { grid-template-columns: minmax(0, 1fr); }
+  #root .layout .standards-sheet .standard-card:nth-child(odd) { border-right: 0; }
+  #root .layout .standards-sheet > .standards-grid:last-child .standard-card:nth-last-child(2) { border-bottom: 1px solid var(--ws-line); }
+}
+@media (max-width: 600px) {
+  #root .layout .standards-sheet .standard-card,
+  #root .layout .standards-sheet > .card { padding: 16px; }
+  #root .layout .standard-profiles-bar { gap: 16px; }
+  #root .layout .standards-intro h1 { font-size: 24px; }
+}
+#root .layout .content.standards-page { align-items: stretch; }
+#root .layout .standards-page > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+#root .layout .standards-sheet { width: 100%; }
+#root .layout .standards-sheet .standard-card { min-width: 0; }
+#root .layout .standard-profile-menu .export-action { min-height: 36px; }
+
+/* MAS-223: these later profile rules must keep coarse-pointer targets usable. */
+@media (pointer: coarse) {
+  #root .layout .standard-profile-tab,
+  #root .layout .standard-profile-menu > summary,
+  #root .layout .standard-profile-menu .export-action { min-width: 44px; min-height: 44px; }
+}

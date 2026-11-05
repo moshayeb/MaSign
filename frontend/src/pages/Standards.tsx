@@ -1,5 +1,5 @@
 import '../workspace.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   listStandardProfiles, createStandardProfile, renameStandardProfile, setDefaultStandardProfile, deleteStandardProfile,
@@ -8,8 +8,8 @@ import {
   listProfilePolicyRules, setProfilePolicyRule, deleteProfilePolicyRule,
   type ClauseConfig, type PolicyRule, type Standard, type StandardProfile,
 } from '../api'
+import { AppPageFrame } from '../components/AppPageFrame'
 import { PageChrome } from '../components/PageChrome'
-import { APP_NAV_LINKS } from '../components/navLinks'
 
 const CURRENCIES = ['USD', 'EUR', 'SEK'] as const
 
@@ -38,6 +38,10 @@ export function StandardsPage() {
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const profileMenuRef = useRef<HTMLDetailsElement>(null)
+  function closeProfileMenu() {
+    profileMenuRef.current?.removeAttribute('open')
+  }
 
   function fetchProfiles(selectId?: string) {
     listStandardProfiles()
@@ -239,7 +243,9 @@ export function StandardsPage() {
   const selectedProfile = profiles?.find((p) => p.id === selected) ?? null
 
   return (
-    <PageChrome links={APP_NAV_LINKS}>
+    <PageChrome variant="app">
+      {/* MAS-221: the same frame as the workspace -- sidebar, drawer on a phone. */}
+      <AppPageFrame current="/standards">
       <main className="content standards-page">
         <div className="standards-intro">
           <a className="link standards-back" href="/workspace">← Back to workspace</a>
@@ -318,30 +324,57 @@ export function StandardsPage() {
                 + New profile
               </button>
             )}
-          </div>
-        )}
-        {selectedProfile && !renaming && !confirmingDelete && (
-          <div className="standard-profile-actions">
-            <button
-              type="button"
-              className="link"
-              onClick={() => {
-                setRenameValue(selectedProfile.name)
-                setRenaming(true)
-              }}
-              disabled={profileBusy}
-            >
-              Rename
-            </button>
-            {!selectedProfile.is_default && (
-              <>
-                <button type="button" className="link" onClick={() => makeDefault(selectedProfile.id)} disabled={profileBusy}>
-                  Make this the workspace default
-                </button>
-                <button type="button" className="link standard-profile-delete" onClick={() => setConfirmingDelete(true)} disabled={profileBusy}>
-                  Delete profile
-                </button>
-              </>
+            {/* MAS-221: the selected profile's actions, one ⋯ menu instead of a row of links. */}
+            {selectedProfile && !renaming && !confirmingDelete && (
+              <details className="actions-menu standard-profile-menu" ref={profileMenuRef}>
+                <summary aria-label={`Actions for ${selectedProfile.name}`} title="Profile actions">
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                    <circle cx="5" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="19" cy="12" r="2" />
+                  </svg>
+                </summary>
+                <div className="actions-list standard-profile-actions">
+                  <button
+                    type="button"
+                    className="export-action"
+                    onClick={() => {
+                      closeProfileMenu()
+                      setRenameValue(selectedProfile.name)
+                      setRenaming(true)
+                    }}
+                    disabled={profileBusy}
+                  >
+                    Rename
+                  </button>
+                  {!selectedProfile.is_default && (
+                    <>
+                      <button
+                        type="button"
+                        className="export-action"
+                        onClick={() => {
+                          closeProfileMenu()
+                          void makeDefault(selectedProfile.id)
+                        }}
+                        disabled={profileBusy}
+                      >
+                        Make this the workspace default
+                      </button>
+                      <button
+                        type="button"
+                        className="export-action standard-profile-delete"
+                        onClick={() => {
+                          closeProfileMenu()
+                          setConfirmingDelete(true)
+                        }}
+                        disabled={profileBusy}
+                      >
+                        Delete profile
+                      </button>
+                    </>
+                  )}
+                </div>
+              </details>
             )}
           </div>
         )}
@@ -380,6 +413,8 @@ export function StandardsPage() {
             </button>
           </div>
         )}
+        {/* MAS-221: one sheet -- the four numeric rules, then clauses and content rules, divided by hairlines. */}
+        <div className="standards-sheet">
         {standards && (
           <div className="standards-grid">
             {standards.map((standard) => (
@@ -395,7 +430,7 @@ export function StandardsPage() {
               <h2 className="card-title">Expected clauses</h2>
             </div>
             <p className="muted small">
-              Which clauses MaSign checks for on every reviewed contract using this profile (MAS-188). A clause counts as present only with a
+              Which clauses MaSign checks for on every reviewed contract using this profile. A clause counts as present only with a
               verbatim quote from the text; disabling one here removes it from the checklist entirely, it is never reported as absent.
             </p>
             <ul className="clauses-list">
@@ -422,7 +457,7 @@ export function StandardsPage() {
               <h2 className="card-title">Clause content rules</h2>
             </div>
             <p className="muted small">
-              What a present clause must actually say, beyond just being there (MAS-192) — for example "the liability cap must not exceed 12
+              What a present clause must actually say, beyond just being there — for example "the liability cap must not exceed 12
               months of fees". A rule only ever judges a clause the checklist above found present; it has nothing to say about a clause that
               is absent or not checked.
             </p>
@@ -439,7 +474,9 @@ export function StandardsPage() {
             </ul>
           </section>
         )}
+        </div>
       </main>
+      </AppPageFrame>
     </PageChrome>
   )
 }
