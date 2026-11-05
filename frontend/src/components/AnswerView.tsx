@@ -10,12 +10,15 @@ interface Props {
   // Opens the contract text at a citation or risk flag's exact passage (MAS-109);
   // the answer's own [n] markers still jump within this tab to the citation card.
   onShowSource?: (source: SourceRef) => void
+  // MAS-218: questions to ask next, shown under the answer; picking one fills the composer.
+  followUps?: string[]
+  onFollowUp?: (text: string) => void
 }
 
 const NOT_FOUND = 'Not found in contract.'
 const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]/g
 
-export function AnswerView({ asked, contracts, onShowSource }: Props) {
+export function AnswerView({ asked, contracts, onShowSource, followUps = [], onFollowUp }: Props) {
   const { question, contract, response } = asked
   const [highlighted, setHighlighted] = useState<number | null>(null)
   // A withheld answer's whole point is the passage the user must read: open it.
@@ -42,6 +45,16 @@ export function AnswerView({ asked, contracts, onShowSource }: Props) {
     requestAnimationFrame(() =>
       document.getElementById(`citation-${label}`)?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }),
     )
+  }
+
+  async function copyAnswer() {
+    const sources = response.citations.map((c) => `[${c.label}] ${filename(c.contract_id)}, passage ${c.chunk_index + 1}`).join('\n')
+    try {
+      await navigator.clipboard.writeText(`${response.answer}${sources ? `\n\n${sources}` : ''}`)
+      toast.success('Answer copied with its sources')
+    } catch {
+      toast.error('Could not copy: the browser refused clipboard access.')
+    }
   }
 
   async function copy(citation: CitedChunk) {
@@ -102,6 +115,25 @@ export function AnswerView({ asked, contracts, onShowSource }: Props) {
         </p>
       ) : (
         <p className="answer-text">{renderWithMarkers(response.answer, jumpTo)}</p>
+      )}
+
+      {(!(notFound || withheld) || (onFollowUp && followUps.length > 0)) && (
+        <div className="answer-next">
+          {!(notFound || withheld) && (
+            <button type="button" className="ghost answer-copy" onClick={() => void copyAnswer()}>
+              Copy answer
+            </button>
+          )}
+          {onFollowUp &&
+            followUps
+              .filter((text) => text.trim().toLowerCase() !== question.trim().toLowerCase())
+              .slice(0, 3)
+              .map((text) => (
+                <button key={text} type="button" className="chip" onClick={() => onFollowUp(text)}>
+                  {text}
+                </button>
+              ))}
+        </div>
       )}
 
       {redacted.length > 0 && (

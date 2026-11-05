@@ -17,3 +17,15 @@ beforeEach(() => {
     removeEventListener: vi.fn(),
   }))
 })
+
+// MAS-218: the checklist ticks live in one shared store per contract; start
+// every test from an empty browser so ticks never leak between tests.
+beforeEach(async () => {
+  try {
+    window.localStorage.clear()
+  } catch {
+    // no storage in this environment
+  }
+  const { resetChecklistTicks } = await import('./checklistTicks')
+  resetChecklistTicks()
+})

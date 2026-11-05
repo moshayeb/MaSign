@@ -149,6 +149,27 @@ describe('asking a question', () => {
     expect(screen.getByText(/Other passages considered \(1\)/)).toBeInTheDocument()
   })
 
+  it('copies the answer with its sources and offers follow-up questions that fill the composer (MAS-218)', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true, writable: true })
+    await renderWithContractAndAsk('What is the monthly fee?', json(200, answered))
+    await screen.findByText(/The monthly fee is EUR 18,500 per month/)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy answer' }))
+    expect(writeText).toHaveBeenCalledTimes(1)
+    const copied = String((writeText.mock.calls[0] as unknown[])[0])
+    expect(copied).toMatch(/^The monthly fee is EUR 18,500 per month/)
+    expect(copied).toContain('[2] northwind.txt, passage 3')
+
+    const next = within(screen.getByText(/The monthly fee is EUR 18,500 per month/).closest('section') as HTMLElement)
+      .getAllByRole('button')
+      .filter((b) => b.classList.contains('chip'))
+    expect(next.length).toBeGreaterThan(0)
+    expect(next.map((b) => b.textContent)).not.toContain('What is the monthly fee?')
+    await userEvent.click(next[0])
+    expect(screen.getByLabelText('Ask about the contract')).toHaveValue(next[0].textContent)
+  })
+
   it('renders each risk flag with severity, reason and the quoted clause, linked to its passage (MAS-16)', async () => {
     await renderWithContractAndAsk('fee?', json(200, answered))
     await screen.findByText(/The monthly fee is EUR 18,500/)
@@ -361,7 +382,7 @@ describe('asking a question', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Show citation 1 in contract' }))
 
-      expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
       expect(document.getElementById('passage-1')).toHaveClass('highlighted')
       expect(screen.getByTestId('quote')).toHaveTextContent('The Subscription Fee is EUR 18,500 per month.')
 
@@ -387,7 +408,7 @@ describe('asking a question', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
 
-      expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
       expect(document.getElementById('passage-9')).toHaveClass('highlighted')
     })
   })

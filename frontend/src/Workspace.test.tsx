@@ -75,7 +75,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Invoices', 'Sources'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Overview', 'Ask MaSign', 'Invoices', 'Contract text'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByText('Risk review')).toBeVisible()
     expect(screen.getByLabelText('Ask about the contract')).not.toBeVisible() // mounted, hidden
@@ -91,7 +91,7 @@ describe('contract workspace tabs (MAS-95)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
 
-    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
     const panel = screen.getByRole('tabpanel')
     expect(within(panel).getByText('Contract text')).toBeVisible()
     expect(document.getElementById('passage-1')).toHaveClass('highlighted')
@@ -156,7 +156,7 @@ describe('contract workspace tabs (MAS-95)', () => {
     window.location.hash = '#nw/text'
     render(<App />)
 
-    expect(await screen.findByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getAllByRole('button', { name: /northwind\.txt/ })[0]).toHaveAttribute('aria-pressed', 'true')
 
     await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
@@ -238,10 +238,12 @@ describe('contract workspace tabs (MAS-95)', () => {
     expect(within(head).getByRole('heading', { level: 1 })).toHaveTextContent('northwind.txt')
     expect(head).toHaveTextContent('TXT')
     expect(head).toHaveTextContent('1 B · 2 passages · uploaded')
-    expect(within(head).getByText('Reviewed · High risk')).toHaveClass('status', 'warn')
+    // MAS-218 calm pass: on the Overview a finished review is the verdict card; the pill returns on the other tabs.
+    expect(within(head).queryByText('Reviewed · High risk')).not.toBeInTheDocument()
 
     await userEvent.click(within(head).getByRole('button', { name: 'Ask a question about this contract' }))
     expect(screen.getByRole('tab', { name: 'Ask MaSign' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(head).getByText('Reviewed · High risk')).toHaveClass('status', 'warn')
     await waitFor(() => expect(screen.getByLabelText('Ask about the contract')).toHaveFocus())
   })
 

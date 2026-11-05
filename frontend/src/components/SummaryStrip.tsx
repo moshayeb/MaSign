@@ -51,9 +51,9 @@ export function SummaryStrip({ review, state, offRubric = false, onJump }: Props
     {
       id: 'deviations',
       target: 'key-terms',
-      label: 'Deviations',
+      label: 'Outside your rules',
       value: done ? String(deviations) : pending,
-      note: done ? 'from your standard' : absent,
+      note: done ? 'compared with your rules' : absent,
       tone: done && deviations > 0 ? 'warn' : undefined,
     },
     {
@@ -75,7 +75,7 @@ export function SummaryStrip({ review, state, offRubric = false, onJump }: Props
     {
       id: 'coverage',
       target: review?.coverage ? 'coverage' : 'review',
-      label: 'Coverage',
+      label: 'Read',
       value: review && (done || running) ? `${review.chunks_checked} of ${review.chunks_total}` : pending,
       note:
         review && (done || running)

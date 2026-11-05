@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
+import { buildChecklist } from '../brief'
+import { useChecklistTicks } from '../checklistTicks'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react'
 import { toast } from 'sonner'
 import { ApiError, getContractRisks, listContractLinks, listRfiSuggestions, reviewContract, type Contract, type ContractLink, type RfiSuggestion, type RiskReview } from '../api'
 import { ContractLinks } from './ContractLinks'
@@ -9,7 +11,7 @@ import type { SourceRef } from './PassageReader'
 import { CoverageNotice } from './CoverageNotice'
 import { RfiSuggestions } from './RfiSuggestions'
 import { SummaryStrip, type SummaryTarget } from './SummaryStrip'
-import { rubricMayNotApply } from '../reviewStatus'
+import { profileBadge, rubricMayNotApply } from '../reviewStatus'
 import { reviewCostLabel } from '../cost'
 
 // The paid re-review trigger lives in the workspace header's Actions menu
@@ -57,6 +59,96 @@ const NO_CONTRACTS: Contract[] = []
 // review found, so it is only stated as a total once the review is done;
 // while it runs -- or after it stopped -- the line says how far it got
 // instead of reading "0 findings" as if nothing were there (honest outcomes).
+// MAS-218: one plain sentence before the numbers, so a reader knows where
+// they stand. Worded by rule from the stored review -- never "safe to sign":
+// no findings only means none were flagged in the passages that were read.
+function Verdict({ review, offRubric, children }: { review: RiskReview; offRubric: boolean; children?: ReactNode }) {
+  // MAS-218: the summary card. A ring (checklist progress once the review is
+  // done, passages read while it runs), the worst severity, one headline and
+  // one supporting line -- all by rule from the stored review, no model call.
+  const { ticked } = useChecklistTicks(review.contract_id)
+  const running = review.status === 'pending' || review.status === 'running'
+  const items = review.status === 'done' ? buildChecklist(review) : []
+  const checked = items.filter((i) => ticked.has(i.id)).length
+  const highs = review.findings.filter((f) => f.severity === 'High')
+  const mediums = review.findings.filter((f) => f.severity === 'Medium').length
+  const worst = highs.length ? 'High' : mediums ? 'Medium' : review.findings.length ? 'Low' : null
+  const read = `${review.chunks_checked} of ${review.chunks_total} passages read`
+  // MAS-219: an empty checklist is not proof that every pass succeeded.
+  const checksComplete = review.status === 'done' && review.complete && review.key_terms_complete
+    && review.clauses_complete !== false && review.policy_complete !== false && !offRubric
+
+  let tone = 'none'
+  let badge: string | null = null
+  let title: string
+  let detail: string
+  if (running) {
+    tone = 'running'
+    badge = 'Reviewing'
+    title = 'Review in progress'
+    detail = `${read}. Nothing is called clean until the review finishes.`
+  } else if (review.status === 'failed') {
+    tone = 'warn'
+    title = 'The review stopped before it finished'
+    detail = `${review.chunks_checked} of ${review.chunks_total} passages read before it stopped — see the details below.`
+  } else {
+    if (offRubric) {
+      tone = 'warn'
+      badge = 'May not be a contract'
+    } else if (worst) {
+      tone = worst === 'High' ? 'high' : worst === 'Medium' ? 'warn' : 'none'
+      badge = `${worst} risk`
+    } else {
+      tone = checksComplete ? 'ok' : 'warn'
+      badge = review.complete ? 'No risks flagged' : 'No risks flagged so far'
+    }
+    title = items.length > 0 ? `${items.length} ${items.length === 1 ? 'thing' : 'things'} to check before you sign`
+      : offRubric ? 'Check whether this file is a contract'
+      : checksComplete ? 'No checklist items from this review' : 'Some checks could not be completed'
+    // One line, no repeats of the checklist below (MAS-218 calm pass): the
+    // counts, any rule the contract breaks, and coverage only when it is short.
+    const parts: string[] = []
+    if (highs.length) parts.push(`${highs.length} high`)
+    if (mediums) parts.push(`${mediums} medium`)
+    const deviations = review.key_terms.filter((t) => t.standard?.status === 'deviates').length
+    if (deviations) parts.push(`${deviations} outside your rules`)
+    if (!review.key_terms_complete) parts.push('key terms not fully checked')
+    if (review.clauses_complete === false) parts.push('expected clauses not fully checked')
+    if (review.policy_complete === false) parts.push('policy content not fully checked')
+    const partial = review.coverage?.redacted_passages?.length ?? 0
+    if (review.complete === false) parts.push(`review incomplete (${read})`)
+    else if (partial > 0) parts.push(`${partial} passage${partial === 1 ? '' : 's'} read in part`)
+    else parts.push(`all ${review.chunks_total} passages read`)
+    detail = offRubric ? `This may not be a contract, so the contract checks may not apply · ${parts.join(' · ')}` : parts.join(' · ')
+  }
+
+  const ringTotal = running ? review.chunks_total : items.length
+  const ringDone = running ? review.chunks_checked : checked
+  const fraction = ringTotal > 0 ? Math.min(1, ringDone / ringTotal) : checksComplete ? 1 : 0
+  const circumference = 2 * Math.PI * 40
+
+  return (
+    <section className={`review-verdict ${tone}`} aria-label="Review verdict">
+      <div className="verdict-ring" aria-hidden="true">
+        <svg viewBox="0 0 96 96" width="88" height="88">
+          <circle cx="48" cy="48" r="40" className="ring-track" />
+          <circle cx="48" cy="48" r="40" className="ring-fill" opacity={fraction > 0 ? 1 : 0} strokeDasharray={`${fraction * circumference} ${circumference}`} transform="rotate(-90 48 48)" />
+        </svg>
+        <span className="ring-label">
+          <strong>{ringTotal > 0 ? `${ringDone}/${ringTotal}` : checksComplete ? '0' : '—'}</strong>
+          <span>{running ? 'read' : review.status === 'failed' ? 'stopped' : ringTotal > 0 ? 'checked' : checksComplete ? 'items' : 'not checked'}</span>
+        </span>
+      </div>
+      <div className="verdict-text">
+        {badge && <span className={`verdict-badge ${tone}`}>{badge}</span>}
+        <strong>{title}</strong>
+        <span>{detail}</span>
+        {children}
+      </div>
+    </section>
+  )
+}
+
 function foldSummary(review: RiskReview, found: number): string {
   const plural = (n: number) => `${n} finding${n === 1 ? '' : 's'}`
   const read = `${review.chunks_checked} of ${review.chunks_total} passages read`
@@ -228,6 +320,13 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
   // What pressing the paid button would spend (MAS-122).
   const cost = reviewCostLabel(review?.chunks_total || contract.chunk_count)
 
+  // Quiet when fine, clear when not (MAS-218 calm pass): a finished, complete
+  // review with nothing in flight says everything in the verdict card, so the
+  // counts strip and the status block move inside the analysis fold. Any
+  // doubt -- loading, never reviewed, unavailable, retrying, running, failed,
+  // partial, or a re-review awaiting confirmation -- keeps them in view.
+  const calm = state === 'ready' && !confirming && review?.status === 'done' && review.complete === true
+
   // Tells the Actions menu (MAS-126) what to show, exactly matching the
   // pre-MAS-126 inline button's own visibility rule: hidden while loading,
   // unavailable, running, or already mid-confirm (the confirm banner is the
@@ -251,14 +350,17 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
 
   return (
     <>
-      <div className="overview-intro">
-        <div>
-          <span className="workspace-eyebrow">Your review</span>
-          <h2>Review overview</h2>
-          <p>See what was checked, what needs attention, and the text behind each result.</p>
+      <div className={`review-summary-card${review ? ' has-verdict' : ''}`}>
+      {review && <Verdict review={review} offRubric={offRubric} />}
+      {state === 'loading' && !review && (
+        <div className="skeleton-block" aria-hidden="true">
+          <span />
+          <span />
+          <span />
         </div>
+      )}
+      {!calm && <SummaryStrip review={review} state={state} offRubric={offRubric} onJump={jumpTo} />}
       </div>
-      <SummaryStrip review={review} state={state} offRubric={offRubric} onJump={jumpTo} />
       {offRubric && (
         <p className="badge unverified document-kind-note" role="status" title="Keyword-based and English only: a hint, not a verdict.">
           {contract.document_kind === 'not_contract'
@@ -275,6 +377,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           review={review}
           offRubric={offRubric}
           onShowSource={onShowSource}
+          onShowAnalysis={() => jumpTo('review')}
           onShowCoverage={() => {
             coverageRef.current?.setAttribute('open', '')
             coverageRef.current?.scrollIntoView({ block: 'nearest' })
@@ -287,7 +390,15 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
           alone (fewer cards). The confirm-before-re-spend banner (MAS-122)
           still lives here since it is an active interaction, even though its
           trigger button now lives in the workspace header's Actions menu. */}
-      <div className="review-status" aria-live="polite">
+      {/* Calm state: the status stays announced for screen readers, only not drawn. */}
+      {calm && review && (
+        <div className="review-status sr-only" aria-live="polite">
+          <h2 className="review-status-heading">
+            Risk review <span className="status ok">Reviewed · {review.chunks_total} passages</span>
+          </h2>
+        </div>
+      )}
+      {!calm && <div className="review-status" aria-live="polite">
         <h2 className="review-status-heading">
           Risk review
           {state === 'loading' && <span className="status none">Loading…</span>}
@@ -365,7 +476,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
                 : 'Nothing was graded.'}
           </p>
         )}
-      </div>
+      </div>}
 
       {review?.coverage && <ContractLinks primary={contract} links={links} references={review.coverage.external_references} contracts={contracts} onChanged={() => { loadLinks(); void load() }} onUploaded={onSettled ?? (() => undefined)} />}
 
@@ -381,6 +492,17 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
               {foldSummary(review, findings.length)}
             </span>
           </summary>
+
+          {calm && (
+            <div className="fold-overview">
+              <SummaryStrip review={review} state={state} offRubric={offRubric} onJump={jumpTo} />
+              <p className="muted small review-meta">
+                Reviewed {formatWhen(review.updated_at)}
+                {review.model ? ` by ${review.model}` : ''} · all {review.chunks_total} passages graded
+                {profileBadge(contract) ? ` · ${profileBadge(contract)!.label}` : ''}
+              </p>
+            </div>
+          )}
 
           {findings.length > 0 && (
             <div className="finding-section">
@@ -480,6 +602,7 @@ export function RiskReviewPanel({ contract, pollMs = 2000, onSettled, onShowSour
 }
 
 function aOrAn(noun: string): string {
+  if (/^(a|an)\s/i.test(noun)) return noun // already carries its article
   return `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`
 }
 

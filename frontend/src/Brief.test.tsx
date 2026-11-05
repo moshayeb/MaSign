@@ -69,10 +69,11 @@ describe('buildBrief (MAS-105)', () => {
     expect(facts.map((f) => [f.label, f.text, f.source?.chunk_index])).toEqual([
       ['Term', '36 months from 1 March 2026, ending 28 Feb 2029', 3],
       ['Cost', 'EUR 18,500 per month', 1],
-      ['Renewal', 'Renews automatically for 12-month periods — notice by 30 Nov 2028 (90 days)', 3],
-      ['Leaving', '50% of the remaining fees', 9],
+      ['Renewal', 'Renews automatically for 12-month periods', 3],
+      ['Ending early', '50% of the remaining fees', 9],
       ['Risks', '1 High · 1 Medium · 1 Low: Liability cap, Payment terms, Confidentiality', undefined],
     ])
+    expect(facts[2].note).toBe('Notice by 30 Nov 2028 (90 days)')
     expect(facts[3].tone).toBe('warn') // the termination cost deviates
     expect(facts[4].tone).toBe('high')
   })
@@ -80,18 +81,18 @@ describe('buildBrief (MAS-105)', () => {
   it('says "not stated" only after a complete key-terms pass, "not checked" otherwise, and never guesses', () => {
     const bare = TERMS.map((t) => (t.id === 'initial_term' ? absent(t.id, t.name) : t))
     const complete = buildBrief(review({ key_terms: bare, deadlines: [] }))
-    expect(complete[0].text).toBe('effective 1 March 2026; initial term not stated in the reviewed text')
-    expect(complete[2].text).toBe('Renews automatically for 12-month periods — 90 days notice') // no computed deadline without the term end
+    expect(complete[0]).toMatchObject({ text: 'From 1 March 2026', note: 'Initial term not stated in the reviewed text' })
+    expect(complete[2]).toMatchObject({ text: 'Renews automatically for 12-month periods', note: '90 days notice' }) // no computed deadline without the term end
 
     const partial = buildBrief(review({ key_terms: bare.map((t) => (t.id === 'initial_term' ? absent(t.id, t.name, 'unchecked') : t)), key_terms_complete: false, deadlines: [] }))
-    expect(partial[0].text).toBe('effective 1 March 2026; initial term not checked')
+    expect(partial[0].note).toBe('Initial term not checked')
 
     const nothing = buildBrief(review({ key_terms: TERMS.map((t) => absent(t.id, t.name)), deadlines: [] }))
     expect(nothing.map((f) => f.text)).toEqual([
-      'initial term not stated in the reviewed text',
-      'recurring fee not stated in the reviewed text',
-      'not stated in the reviewed text',
-      'termination cost not stated in the reviewed text',
+      'Not stated in the reviewed text',
+      'Not stated in the reviewed text',
+      'Not stated in the reviewed text',
+      'Not stated in the reviewed text',
       'nothing flagged in 7 categories',
     ])
   })
@@ -108,15 +109,15 @@ describe('buildChecklist (MAS-106/111)', () => {
   it('lists High/Medium findings first, then deviations, missing important terms, the notice deadline — each traceable', () => {
     const items = buildChecklist(review({ findings: FINDINGS, key_terms: TERMS.map((t) => (t.id === 'effective_date' ? absent(t.id, t.name) : t)) }), TODAY)
     expect(items.map((i) => [i.kind, i.text, i.source?.chunk_index])).toEqual([
-      ['finding', 'Confirm Liability cap', 8],
-      ['finding', 'Confirm Payment terms', 1],
-      ['deviation', 'Check late-payment interest / penalty', 1],
-      ['deviation', 'Check termination cost', 9],
+      ['finding', 'Liability cap', 8],
+      ['finding', 'Payment terms', 1],
+      ['deviation', 'Late-payment interest / penalty', 1],
+      ['deviation', 'Termination cost', 9],
       ['missing', 'Effective date not stated', undefined],
       ['deadline', 'Diary the notice deadline', undefined],
     ])
     expect(items[0].severity).toBe('High')
-    expect(items[2].detail).toBe('1.5% per month — your standard: at most 1% per month')
+    expect(items[2].detail).toBe('1.5% per month — your rule: at most 1% per month')
     expect(items[4].detail).toBe('ask where it is agreed')
     expect(items[5].detail).toBe('30 Nov 2028 (28 Feb 2029 − 90 days)')
     expect(items.some((i) => i.text.includes('Confidentiality'))).toBe(false) // Low stays in the Risk review
@@ -186,21 +187,21 @@ describe('BriefCard', () => {
     render(<BriefCard review={review({ findings: FINDINGS })} onShowSource={onShowSource} />)
 
     const card = screen.getByText('Before you sign').closest('section')!
-    expect(within(card).getByText('5 to check')).toBeInTheDocument()
+    expect(within(card).getByText('0 of 5 checked')).toBeInTheDocument()
     expect(within(card).getByText('36 months from 1 March 2026, ending 28 Feb 2029')).toBeInTheDocument()
-    await userEvent.click(within(card).getByRole('button', { name: 'Show leaving in contract' }))
+    await userEvent.click(within(card).getByRole('button', { name: 'Show ending early in contract' }))
     expect(onShowSource).toHaveBeenCalledWith({ chunk_index: 9, quote: 'fifty percent (50%) of the Fees' })
 
     const list = within(card).getByRole('list', { name: 'Before you sign checklist' })
     const items = within(list).getAllByRole('listitem')
     expect(items).toHaveLength(5) // 2 findings, 2 deviations, the notice deadline (2028 is in the future)
-    expect(items[0]).toHaveTextContent('HighConfirm Liability cap — Uncapped liability for the Customer.passage 9')
-    await userEvent.click(within(items[0]).getByRole('button', { name: 'Show "Confirm Liability cap" in contract' }))
+    expect(items[0]).toHaveTextContent('HighLiability cap — Uncapped liability for the Customer.passage 9')
+    await userEvent.click(within(items[0]).getByRole('button', { name: 'Show "Liability cap" in contract' }))
     expect(onShowSource).toHaveBeenLastCalledWith({ chunk_index: 8, quote: 'liability shall be unlimited' })
 
-    await userEvent.click(within(items[0]).getByRole('checkbox', { name: 'Done: Confirm Liability cap' }))
+    await userEvent.click(within(items[0]).getByRole('checkbox', { name: 'Done: Liability cap' }))
     expect(items[0]).toHaveClass('done')
-    expect(within(card).getByText('4 to check')).toBeInTheDocument() // 5 items, one ticked
+    expect(within(card).getByText('1 of 5 checked')).toBeInTheDocument() // 5 items, one ticked
     expect(within(card).getByText(/not legal advice/)).toBeInTheDocument()
   })
 
@@ -217,4 +218,33 @@ describe('BriefCard', () => {
     expect(screen.getByText('The summary appears when the review finishes.')).toBeInTheDocument()
     expect(screen.queryByText('In brief')).not.toBeInTheDocument()
   })
+})
+
+describe('BriefCard ticks (MAS-218)', () => {
+  it('shows progress and keeps ticks for the same contract after a remount, in this browser only', async () => {
+    window.localStorage.clear()
+    const first = render(<BriefCard review={review({ findings: FINDINGS })} />)
+    const total = buildChecklist(review({ findings: FINDINGS })).length
+    expect(screen.getByText(`0 of ${total} checked`)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Done: Liability cap' }))
+    expect(screen.getByText(`1 of ${total} checked`)).toBeInTheDocument()
+    first.unmount()
+
+    render(<BriefCard review={review({ findings: FINDINGS })} />)
+    expect(screen.getByRole('checkbox', { name: 'Done: Liability cap' })).toBeChecked()
+    expect(screen.getByText(`1 of ${total} checked`)).toBeInTheDocument()
+    window.localStorage.clear()
+  })
+})
+
+
+it('keeps conflicting Main terms as extracted values with a source (MAS-220)', async () => {
+  const source = vi.fn()
+  const conflict = { ...found('payment_deadline', 'Payment deadline', '30 days', 1, 'thirty (30) days'), status: 'conflicting' as const }
+  render(<BriefCard review={review({ key_terms: [conflict], deadlines: [] })} onShowSource={source} />)
+  const value = screen.getByText('30 days (stated differently elsewhere)')
+  expect(value.closest('.fact-tile')).not.toHaveClass('missing')
+  expect(value.closest('.fact-tile')).not.toHaveTextContent('Not checked')
+  await userEvent.click(within(value.closest('.fact-tile') as HTMLElement).getByRole('button', { name: 'Show payment deadline in contract' }))
+  expect(source).toHaveBeenCalledWith({ chunk_index: 1, quote: 'thirty (30) days' })
 })

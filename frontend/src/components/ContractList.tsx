@@ -279,7 +279,13 @@ export function ContractList({
         </div>
       )}
       {contracts === null ? (
-        <p className="muted">Loading…</p>
+        // MAS-218: rows-shaped placeholder instead of a lone word.
+        <div className="skeleton-list" role="status">
+          <span className="visually-hidden">Loading…</span>
+          <span className="skeleton-row" aria-hidden="true" />
+          <span className="skeleton-row" aria-hidden="true" />
+          <span className="skeleton-row" aria-hidden="true" />
+        </div>
       ) : contracts.length === 0 ? (
         <p className="muted">No contracts yet — upload one above.</p>
       ) : shown!.length === 0 ? (
@@ -297,6 +303,7 @@ export function ContractList({
                   type="button"
                   className={comparing ? `contract${checked ? ' compare-checked' : ''}` : contract.contract_id === selectedId ? 'contract selected' : 'contract'}
                   aria-pressed={comparing ? checked : contract.contract_id === selectedId}
+                  title={`${contract.filename} · ${badge.label}${warning ? ` · ${warning.label}` : ''}`}
                   disabled={disabled}
                   onClick={() => (comparing ? onToggleCompare?.(contract) : onSelect(contract))}
                 >

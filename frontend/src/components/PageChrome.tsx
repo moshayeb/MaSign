@@ -2,12 +2,7 @@ import type { ReactNode } from 'react'
 import { Toaster } from 'sonner'
 import { Footer } from './Footer'
 import { Wordmark } from './Wordmark'
-
-const NAV_LINKS = [
-  { href: '/how-it-works', label: 'How it works' },
-  { href: '/what-masign-checks', label: 'What MaSign checks' },
-  { href: '/documentation', label: 'Documentation' },
-]
+import { NAV_LINKS } from './navLinks'
 
 // The header + toaster + footer every screen shares — the home page, the
 // workspace and the public static pages alike, so the site reads as one
@@ -16,7 +11,19 @@ const NAV_LINKS = [
 // primary CTA; a phone collapses them into a <details> disclosure, the same
 // keyboard-accessible pattern the workspace's own Actions menu already uses,
 // so this needed no new interaction code.
-export function PageChrome({ children, authControl }: { children: ReactNode; authControl?: ReactNode }) {
+export function PageChrome({
+  children,
+  authControl,
+  links = NAV_LINKS,
+  variant = 'site',
+}: {
+  children: ReactNode
+  authControl?: ReactNode
+  links?: { href: string; label: string }[]
+  // 'app' (MAS-218): the workspace carries its own navigation in the sidebar,
+  // so the site header is left out; banner, toaster and footer stay.
+  variant?: 'site' | 'app'
+}) {
   const path = typeof window !== 'undefined' ? window.location.pathname : ''
 
   return (
@@ -28,13 +35,14 @@ export function PageChrome({ children, authControl }: { children: ReactNode; aut
       <p className="legal-banner">
         Not legal advice — MaSign is an AI-assisted contract review tool. <a href="/educational-disclaimer">Full disclaimer</a>
       </p>
+      {variant === 'site' && (
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/" aria-label="MaSign home">
             <Wordmark height={26} />
           </a>
           <nav className="topnav" aria-label="Main">
-            {NAV_LINKS.map((link) => (
+            {links.map((link) => (
               <a
                 key={link.href}
                 className={`topnav-link${path === link.href ? ' active' : ''}`}
@@ -57,7 +65,7 @@ export function PageChrome({ children, authControl }: { children: ReactNode; aut
               </svg>
             </summary>
             <nav className="topnav-mobile-list" aria-label="Main">
-              {NAV_LINKS.map((link) => (
+              {links.map((link) => (
                 <a
                   key={link.href}
                   className={`link${path === link.href ? ' active' : ''}`}
@@ -76,6 +84,7 @@ export function PageChrome({ children, authControl }: { children: ReactNode; aut
           </details>
         </div>
       </header>
+      )}
       {children}
       <Footer />
     </>

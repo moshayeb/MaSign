@@ -1,3 +1,4 @@
+import '../workspace.css'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
@@ -8,6 +9,7 @@ import {
   type ClauseConfig, type PolicyRule, type Standard, type StandardProfile,
 } from '../api'
 import { PageChrome } from '../components/PageChrome'
+import { APP_NAV_LINKS } from '../components/navLinks'
 
 const CURRENCIES = ['USD', 'EUR', 'SEK'] as const
 
@@ -237,7 +239,7 @@ export function StandardsPage() {
   const selectedProfile = profiles?.find((p) => p.id === selected) ?? null
 
   return (
-    <PageChrome>
+    <PageChrome links={APP_NAV_LINKS}>
       <main className="content standards-page">
         <div className="standards-intro">
           <a className="link standards-back" href="/workspace">← Back to workspace</a>
@@ -547,7 +549,10 @@ function DaysField({ standard, busy, onSave, paramKey, label }: { standard: Stan
         {label}
       </label>
       <div className="standard-form-row">
-        <input id={inputId} className="standard-input" type="number" min={0} max={3650} step={1} value={value} onChange={(event) => setValue(event.target.value)} disabled={busy} required />
+        <input id={inputId} className="standard-input" type="number" min={0} max={3650} step={1} value={value} onChange={(event) => setValue(event.target.value)} onBlur={(event) => {
+            // MAS-218: a changed, valid number is saved when you leave the field; the button stays for keyboard users.
+            if (dirty && value !== '' && event.currentTarget.checkValidity()) event.currentTarget.form?.requestSubmit()
+          }} disabled={busy} required />
         <button type="submit" className="primary" disabled={busy || !dirty || value === ''}>
           Save rule
         </button>
@@ -575,7 +580,10 @@ function PercentField({ standard, busy, onSave }: { standard: Standard; busy: bo
         Maximum late-payment interest (% per month)
       </label>
       <div className="standard-form-row">
-        <input id={inputId} className="standard-input" type="number" min={0} max={100} step={0.1} value={value} onChange={(event) => setValue(event.target.value)} disabled={busy} required />
+        <input id={inputId} className="standard-input" type="number" min={0} max={100} step={0.1} value={value} onChange={(event) => setValue(event.target.value)} onBlur={(event) => {
+            // MAS-218: a changed, valid number is saved when you leave the field; the button stays for keyboard users.
+            if (dirty && value !== '' && event.currentTarget.checkValidity()) event.currentTarget.form?.requestSubmit()
+          }} disabled={busy} required />
         <button type="submit" className="primary" disabled={busy || !dirty || value === ''}>
           Save rule
         </button>

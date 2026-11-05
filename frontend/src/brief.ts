@@ -12,6 +12,10 @@ export interface BriefFact {
   label: string
   text: string
   source?: SourceRef
+  // A quieter second line: what is missing or how the value was reached (MAS-218 calm pass).
+  note?: string
+  // True when the fact is a gap ("Not checked" / "Not stated"), never a value.
+  missing?: boolean
   // 'warn' when the fact is a deviation or a Medium risk, 'high' for a High risk.
   tone?: 'warn' | 'high' | 'ok'
 }
@@ -42,6 +46,11 @@ function stated(t: KeyTermValue | undefined): t is KeyTermValue & { source: NonN
 function absent(review: RiskReview, t: KeyTermValue | undefined): string {
   if (!t || t.status === 'unchecked' || !review.key_terms_complete) return 'not checked'
   return 'not stated in the reviewed text'
+}
+
+// "not checked" -> "Not checked": a gap shown as the tile's main line.
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 function value(t: KeyTermValue): string {
@@ -91,11 +100,11 @@ export function buildBrief(review: RiskReview): BriefFact[] {
       source: source(initial),
     })
   } else if (stated(initial)) {
-    facts.push({ id: 'term', label: 'Term', text: `${value(initial)}; effective date ${absent(review, effective)}`, source: source(initial) })
+    facts.push({ id: 'term', label: 'Term', text: value(initial), note: `Start date ${absent(review, effective)}`, source: source(initial) })
   } else if (stated(effective)) {
-    facts.push({ id: 'term', label: 'Term', text: `effective ${value(effective)}; initial term ${absent(review, initial)}`, source: source(effective) })
+    facts.push({ id: 'term', label: 'Term', text: `From ${value(effective)}`, note: `Initial term ${absent(review, initial)}`, source: source(effective) })
   } else {
-    facts.push({ id: 'term', label: 'Term', text: `initial term ${absent(review, initial)}` })
+    facts.push({ id: 'term', label: 'Term', text: sentence(absent(review, initial)), note: 'Initial term', missing: true })
   }
 
   // Cost
@@ -107,39 +116,41 @@ export function buildBrief(review: RiskReview): BriefFact[] {
       source: source(recurring),
     })
   } else if (stated(oneOff)) {
-    facts.push({ id: 'cost', label: 'Cost', text: `one-off ${value(oneOff)}; recurring fee ${absent(review, recurring)}`, source: source(oneOff) })
+    facts.push({ id: 'cost', label: 'Cost', text: `One-off ${value(oneOff)}`, note: `Recurring fee ${absent(review, recurring)}`, source: source(oneOff) })
   } else {
-    facts.push({ id: 'cost', label: 'Cost', text: `recurring fee ${absent(review, recurring)}` })
+    facts.push({ id: 'cost', label: 'Cost', text: sentence(absent(review, recurring)), note: 'Recurring fee', missing: true })
   }
 
   // Renewal
   if (stated(renewal)) {
-    const tail = noticeBy?.date
-      ? ` — notice by ${formatDate(noticeBy.date)}${stated(notice) ? ` (${value(notice)})` : ''}`
+    const note = noticeBy?.date
+      ? `Notice by ${formatDate(noticeBy.date)}${stated(notice) ? ` (${value(notice)})` : ''}`
       : stated(notice)
-        ? ` — ${value(notice)} notice`
-        : ''
-    facts.push({ id: 'renewal', label: 'Renewal', text: `${value(renewal)}${tail}`, source: source(renewal) })
+        ? `${value(notice)} notice`
+        : undefined
+    facts.push({ id: 'renewal', label: 'Renewal', text: value(renewal), note, source: source(renewal) })
   } else {
     facts.push({
       id: 'renewal',
       label: 'Renewal',
-      text: `${absent(review, renewal)}${stated(notice) ? `; notice period ${value(notice)}` : ''}`,
+      text: sentence(absent(review, renewal)),
+      note: stated(notice) ? `Notice period ${value(notice)}` : undefined,
+      missing: true,
       source: stated(notice) ? source(notice) : undefined,
     })
   }
 
-  // Leaving
+  // Ending early
   if (stated(leaving)) {
     facts.push({
       id: 'leaving',
-      label: 'Leaving',
+      label: 'Ending early',
       text: value(leaving),
       source: source(leaving),
       tone: leaving.standard?.status === 'deviates' ? 'warn' : undefined,
     })
   } else {
-    facts.push({ id: 'leaving', label: 'Leaving', text: `termination cost ${absent(review, leaving)}` })
+    facts.push({ id: 'leaving', label: 'Ending early', text: sentence(absent(review, leaving)), note: 'Termination cost', missing: true })
   }
 
   // Risks
@@ -170,7 +181,7 @@ export function buildChecklist(review: RiskReview, today = new Date()): CheckIte
       id: `finding-${f.category}-${f.chunk_id}`,
       kind: 'finding',
       severity: f.severity,
-      text: `Confirm ${f.category_name}`,
+      text: f.category_name,
       detail: f.reason,
       source: { chunk_index: f.chunk_index, quote: f.quote },
     })
@@ -181,8 +192,8 @@ export function buildChecklist(review: RiskReview, today = new Date()): CheckIte
       items.push({
         id: `deviation-${t.id}`,
         kind: 'deviation',
-        text: `Check ${t.name.toLowerCase()}`,
-        detail: `${t.value} — your standard: ${t.standard.standard ?? ''}`,
+        text: t.name,
+        detail: `${t.value} — your rule: ${t.standard.standard ?? ''}`,
         source: source(t),
       })
     }

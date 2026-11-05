@@ -57,7 +57,7 @@ export function UploadForm({ onUploaded }: Props) {
       onDrop={onDrop}
     >
       <h2 className="card-title">Upload a contract</h2>
-      <label htmlFor="contract-file" className="dropzone">
+      <label htmlFor="contract-file" className="dropzone" title="TXT, PDF or DOCX · up to 10 MB · or drop a file here">
         <input
           id="contract-file"
           ref={input}
@@ -78,7 +78,8 @@ export function UploadForm({ onUploaded }: Props) {
             <strong>{file.name}</strong>
           ) : (
             <>
-              <strong>Choose a file</strong> or drop it here
+              <strong>Upload contract</strong>
+              <span className="dropzone-drop-hint"> or drop a file here</span>
             </>
           )}
         </span>
