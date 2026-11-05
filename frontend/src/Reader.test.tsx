@@ -148,7 +148,7 @@ describe('click-to-source (MAS-83)', () => {
   it('a key term\'s passage link marks the quote even when the stored text has different spacing', async () => {
     mockApi()
     render(<Harness />)
-    await screen.findByText('1.5% per month')
+    await screen.findAllByText('1.5% per month') // in "Other key terms" and the full key terms
 
     await userEvent.click(screen.getByRole('button', { name: 'Show Late-payment interest / penalty in contract' }))
 

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import './workspace.css'
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { ApiError, getCurrentUser, listContracts, logout as apiLogout, type Contract, type CurrentUser, type RiskReview } from './api'
 import { AnswerView } from './components/AnswerView'
@@ -8,6 +9,8 @@ import { ContractList } from './components/ContractList'
 import { InvoiceCheckPanel } from './components/InvoiceCheckPanel'
 import { ModelCompareView } from './components/ModelCompareView'
 import { PageChrome } from './components/PageChrome'
+import { Wordmark } from './components/Wordmark'
+import { APP_NAV_LINKS } from './components/navLinks'
 import { PreviousQuestions } from './components/PreviousQuestions'
 import { QuestionPanel, type Asked, type Compared } from './components/QuestionPanel'
 import { RiskReviewPanel, type ReviewAction, type RiskReviewPanelHandle } from './components/RiskReviewPanel'
@@ -49,6 +52,23 @@ function ExportIcon({ name }: { name: ExportIconName }) {
 function formatUploaded(iso: string): string {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// MAS-218: "Northwind_MSA_v2.pdf" reads as "Northwind MSA v2" in the title.
+function displayName(filename: string): string {
+  const base = filename.replace(/\.[A-Za-z0-9]{1,5}$/, '')
+  const pretty = base.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim()
+  return pretty || filename
+}
+
+// MAS-218: long file names wrap after "_", "-" or "." instead of mid-word.
+function breakable(name: string): ReactNode {
+  return name.split(/(?<=[_.-])/).map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ))
 }
 
 export default function App() {
@@ -429,41 +449,44 @@ export default function App() {
       {compared ? (
         <ModelCompareView compared={compared} contracts={contracts ?? []} onShowSource={showSource} onClose={closeCompared} />
       ) : (
-        asked && <AnswerView asked={asked} contracts={contracts ?? []} onShowSource={showSource} />
+        asked && (
+          <AnswerView
+            asked={asked}
+            contracts={contracts ?? []}
+            onShowSource={showSource}
+            followUps={suggestQuestions(review).map((s) => s.text)}
+            onFollowUp={(text) => {
+              setDraft(text)
+              document.getElementById('question-text')?.focus()
+            }}
+          />
+        )
       )}
     </>
   )
 
   return (
-    <PageChrome
-      authControl={
-        <span className="topnav-account">
-          {user && (
-            <>
-              {user.email && <span className="topnav-avatar" aria-hidden="true">{user.email.charAt(0).toUpperCase()}</span>}
-              <span className="topnav-account-email">{user.email}</span>
-            </>
-          )}
-          <button type="button" className="link" onClick={() => void logout()}>
-            Log out
-          </button>
-        </span>
-      }
-    >
+    <PageChrome variant="app">
       <div className={`layout${selected ? ' has-selection' : ''}${drawerOpen ? ' drawer-open' : ''}`}>
         {/* Mobile drawer (MAS-126): CSS-inert (display: none) except under
             960px with a contract selected, where it becomes the way back to
             the sidebar without leaving the workspace. */}
         {selected && (
+          <div className="mobile-bar">
           <button type="button" className="drawer-toggle" aria-label="Show contracts" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M4 7h16M4 12h16M4 17h16" />
             </svg>
             Contracts
           </button>
+          <a className="mobile-brand" href="/" aria-label="MaSign home"><Wordmark height={19} /></a>
+          </div>
         )}
         <div className="drawer-backdrop" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
         <aside className="sidebar">
+          <a className="sidebar-brand" href="/" aria-label="MaSign home">
+            <Wordmark height={22} />
+          </a>
           {selected && (
             <button type="button" className="drawer-close" aria-label="Close" onClick={() => setDrawerOpen(false)}>
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -489,9 +512,26 @@ export default function App() {
             onCancelCompare={closeCompare}
             onDeleted={deleted}
           />
-          <a className="link sidebar-standards-link" href="/standards">
-            Comparison rules
-          </a>
+          {/* MAS-218: the workspace has no site header, so the site links and
+              the account live at the foot of the sidebar (in the drawer on a phone). */}
+          <nav className="sidebar-links" aria-label="Main">
+            {APP_NAV_LINKS.map((link) => (
+              <a key={link.href} className="sidebar-link" href={link.href}>
+                {link.label}
+              </a>
+            ))}
+          </nav>
+          <div className="sidebar-account">
+            {user?.email && (
+              <>
+                <span className="sidebar-avatar" aria-hidden="true">{user.email.charAt(0).toUpperCase()}</span>
+                <span className="sidebar-email">{user.email}</span>
+              </>
+            )}
+            <button type="button" className="link sidebar-logout" onClick={() => void logout()}>
+              Log out
+            </button>
+          </div>
         </aside>
 
         <main className="content">
@@ -505,8 +545,26 @@ export default function App() {
                 // here, "ask across all contracts" is a smaller secondary
                 // option below it, not the default view.
                 <section className="card empty-state">
+                  <span className="empty-state-mark" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5" />
+                    </svg>
+                  </span>
                   <h1>Select a contract to get started</h1>
                   <p className="muted">Choose one from the list on the left, or upload a new contract, to ask questions and see its risk review.</p>
+                  {/* MAS-217: what opening a contract gives you, so the first
+                      screen is not a lone sentence over an empty page. */}
+                  <ol className="empty-state-steps">
+                    <li><strong>Before you sign</strong><span>Term, cost, renewal and leaving terms, each linked to its passage.</span></li>
+                    <li><strong>Risk review</strong><span>Findings graded High, Medium or Low from your side of the deal.</span></li>
+                    <li><strong>Ask MaSign</strong><span>Questions answered from the contract text, with citations.</span></li>
+                  </ol>
+                  <div className="empty-state-actions">
+                    <button type="button" className="primary" onClick={() => document.getElementById('contract-file')?.click()}>
+                      Upload a contract
+                    </button>
+                    <span className="muted small">PDF, Word or text · the review starts on upload</span>
+                  </div>
                   <button type="button" className="link" onClick={() => setAskAllContracts(true)}>
                     Or ask a question across all contracts
                   </button>
@@ -536,10 +594,12 @@ export default function App() {
                 <div className="contract-head">
                   <span className="workspace-file-mark" aria-hidden="true"><ExportIcon name="document" /></span>
                   <div className="contract-head-main">
-                    <span className="workspace-eyebrow">Contract workspace</span>
+                    <span className="workspace-eyebrow">Contracts</span>
                     {/* tabIndex -1: focusable from code after a selection, never in the tab order. */}
                     <h1 className="workspace-title" tabIndex={-1} ref={headingRef}>
-                      {current!.filename}
+                      {/* MAS-218: a readable title, with the exact file name under it. */}
+                      <span className="workspace-title-text">{displayName(current!.filename)}</span>
+                      <span className="workspace-title-file">{breakable(current!.filename)}</span>
                     </h1>
                     <p className="contract-meta-line">
                       <span className={`filetype ${current!.file_type.toLowerCase()}`}>{current!.file_type.toUpperCase()}</span>
@@ -547,18 +607,29 @@ export default function App() {
                         {formatSize(current!.size_bytes)} · {current!.chunk_count} passage{current!.chunk_count === 1 ? '' : 's'} · uploaded{' '}
                         {formatUploaded(current!.created_at)}
                       </span>
-                      <span className={`status ${reviewBadge(current!).tone}`}>{reviewBadge(current!).label}</span>
-                      {kindBadge(current!) && (
+                      {/* Quiet when fine, clear when not (MAS-218 calm pass): on the
+                          Overview a finished, complete review is already the verdict
+                          card, so the pill only speaks when something is off -- and
+                          always on the other tabs, where there is no verdict card. */}
+                      {(tab !== 'overview' || current!.risk_status !== 'done' || current!.risk_complete === false) && (
+                        <span className={`status ${reviewBadge(current!).tone}`}>{reviewBadge(current!).label}</span>
+                      )}
+                      {kindBadge(current!) && kindBadge(current!)!.tone === 'warn' && (
                         <span className={`status ${kindBadge(current!)!.tone}`} title={current!.document_kind_reasons?.join(' · ') || undefined}>
                           {kindBadge(current!)!.label}
                         </span>
                       )}
-                      {profileBadge(current!) && <span className={`status ${profileBadge(current!)!.tone}`}>{profileBadge(current!)!.label}</span>}
+                      {tab === 'ask' && profileBadge(current!) && <span className={`status ${profileBadge(current!)!.tone}`}>{profileBadge(current!)!.label}</span>}
                     </p>
                   </div>
                   <div className="contract-head-actions">
+                    {/* MAS-218: the export most people want, one click, outside the menu. */}
+                    <a className="ghost-button export-pdf" href={`/api/contracts/${selected.contract_id}/export.pdf`} download title="Download the review as PDF">
+                      <ExportIcon name="pdf" />
+                      <span>Export PDF</span>
+                    </a>
                     <button type="button" className="primary ask-cta" onClick={askAbout} aria-label="Ask a question about this contract" title="Ask MaSign about this contract">
-                      Ask a question
+                      Ask MaSign
                     </button>
                     {/* One primary button per screen. The trigger stays compact;
                         the open menu gives every action a clear icon and label. */}
@@ -620,7 +691,7 @@ export default function App() {
                     { id: 'overview', label: 'Overview' },
                     { id: 'ask', label: 'Ask MaSign', hint: asked || compared ? '· answered' : undefined },
                     { id: 'invoices', label: 'Invoices' },
-                    { id: 'text', label: 'Sources' },
+                    { id: 'text', label: 'Contract text' },
                   ]}
                 />
               </div>

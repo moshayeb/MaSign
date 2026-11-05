@@ -51,9 +51,11 @@ describe('the shell', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
     render(<App />)
 
-    const header = screen.getByRole('banner')
-    expect(within(header).getByLabelText('MaSign home')).toBeInTheDocument()
-    expect(within(header).queryByText(/with the clause to prove it/)).not.toBeInTheDocument()
+    // MAS-218: the workspace carries no site header; the brand sits at the
+    // top of the sidebar and the pitch is nowhere on the working screen.
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument()
+    expect(screen.getAllByLabelText('MaSign home')[0]).toBeInTheDocument()
+    expect(screen.queryByText(/with the clause to prove it/)).not.toBeInTheDocument()
     // The workspace's empty state is a functional prompt now, not the pitch.
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Select a contract to get started')
   })

@@ -97,7 +97,8 @@ describe('document kind (MAS-107)', () => {
     render(<App />)
     await userEvent.click((await screen.findAllByRole('button', { name: /northwind\.txt/ }))[0])
     const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
-    expect(within(head).getByText('Commercial contract')).toHaveClass('status', 'none')
+    // MAS-218 calm pass: a plain contract needs no pill; only doubt is shown.
+    expect(within(head).queryByText('Commercial contract')).not.toBeInTheDocument()
     expect(await screen.findByText('Nothing needs attention')).toHaveClass('status', 'ok')
     expect(screen.queryByText(/rubric may not apply/i)).not.toBeInTheDocument()
 

@@ -236,7 +236,7 @@ describe('comparing two contracts (MAS-113)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in northwind.txt' }))
 
     expect(screen.queryByText('Comparing two contracts')).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
     expect(document.getElementById('passage-1')).toHaveClass('highlighted')
   })
 })

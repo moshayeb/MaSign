@@ -138,8 +138,8 @@ describe('source side panel on wide screens (MAS-177)', () => {
     await openTerminationFinding()
     await userEvent.click(screen.getByRole('button', { name: 'Show Termination finding in contract' }))
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Sources' }))
-    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true')
+    await userEvent.click(screen.getByRole('tab', { name: 'Contract text' }))
+    expect(screen.getByRole('tab', { name: 'Contract text' })).toHaveAttribute('aria-selected', 'true')
     expect(window.location.hash).toBe('#nw/text')
     expect(within(screen.getByRole('tabpanel')).getByText('Contract text')).toBeVisible()
   })

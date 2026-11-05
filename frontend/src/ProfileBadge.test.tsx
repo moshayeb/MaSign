@@ -67,6 +67,8 @@ describe('embedding profile badge (MAS-195)', () => {
   it('reads "Portable indexed" in a quiet tone for a portable-only contract', async () => {
     render(<App />)
     await userEvent.click((await screen.findAllByRole('button', { name: /portable\.txt/ }))[0])
+    // MAS-218 calm pass: the profile is shown where it matters, on the Ask tab.
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
     expect(within(head).getByText('Portable indexed')).toHaveClass('status', 'none')
   })
@@ -74,6 +76,8 @@ describe('embedding profile badge (MAS-195)', () => {
   it('reads "Quality indexed" in the accent tone for a quality-only contract', async () => {
     render(<App />)
     await userEvent.click((await screen.findAllByRole('button', { name: /quality\.txt/ }))[0])
+    // MAS-218 calm pass: the profile is shown where it matters, on the Ask tab.
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
     expect(within(head).getByText('Quality indexed')).toHaveClass('status', 'accent')
   })
@@ -81,6 +85,8 @@ describe('embedding profile badge (MAS-195)', () => {
   it('reads "Portable + Quality indexed" when both profiles cover it', async () => {
     render(<App />)
     await userEvent.click((await screen.findAllByRole('button', { name: /both\.txt/ }))[0])
+    // MAS-218 calm pass: the profile is shown where it matters, on the Ask tab.
+    await userEvent.click(screen.getByRole('tab', { name: 'Ask MaSign' }))
     const head = screen.getByRole('heading', { level: 1 }).closest<HTMLElement>('.contract-head')!
     expect(within(head).getByText('Portable + Quality indexed')).toHaveClass('status', 'accent')
   })

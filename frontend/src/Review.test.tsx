@@ -192,9 +192,9 @@ describe('whole-contract risk review (MAS-81)', () => {
     const strip = within(screen.getByRole('list', { name: 'Review summary' })).getAllByRole('listitem')
     expect(strip.map((t) => t.textContent)).toEqual([
       'Key terms0 of 9stated · partly checked', // the fixture's key-terms pass is incomplete
-      'Deviations0from your standard',
+      'Outside your rules0compared with your rules',
       'Risks1 High · 1 Mediumgraded from your side',
-      'Coverage12 of 12passages read',
+      'Read12 of 12passages read',
     ])
   })
 
@@ -544,7 +544,7 @@ describe('whole-contract risk review (MAS-81)', () => {
 
     const card = (await screen.findByText('Key terms', { selector: 'h2' })).closest('section')!
     expect(within(card).getByText('3 of 9 stated · 1 deviates')).toBeInTheDocument()
-    expect(within(screen.getByRole('list', { name: 'Review summary' })).getAllByRole('listitem')[1]).toHaveTextContent('Deviations1from your standard')
+    expect(within(screen.getByRole('list', { name: 'Review summary' })).getAllByRole('listitem')[1]).toHaveTextContent('Outside your rules1compared with your rules')
     expect(within(card).getByText('Deviates')).toBeInTheDocument()
     expect(within(card).getByText(/1\.5% per month is 1\.5× the standard — your standard: at most 1% per month/)).toBeInTheDocument()
     expect(within(card).getByText('Meets standard')).toBeInTheDocument()
@@ -734,7 +734,7 @@ describe('progressive disclosure never hides a reason to doubt the review (MAS-1
     // Incomplete coverage (MAS-84/87/94) and the High finding, both on the
     // always-visible "Before you sign" checklist.
     expect(screen.getByText(/4 passage.*not graded/)).toBeVisible()
-    expect(screen.getByText('Confirm Liability cap')).toBeVisible()
+    expect(screen.getByText('Liability cap', { selector: '.check-text strong' })).toBeVisible()
 
     // MAS-206: the useful summary and doubt signals precede collapsed setup.
     const related = screen.getByText('Related documents').closest('details')!
@@ -837,5 +837,35 @@ describe('"View complete analysis" summary while a review is unfinished (MAS-207
     render(<RiskReviewPanel contract={northwind} />)
     const fold = (await screen.findByText('View complete analysis')).closest('details')!
     expect(fold).toHaveTextContent('2 findings across 7 categories · every extracted key term')
+  })
+})
+
+
+describe('verdict uncertainty (MAS-219)', () => {
+  it('does not call a failed review clear', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ status: 'failed', complete: false, chunks_checked: 3, error: 'model unavailable' })))
+    render(<RiskReviewPanel contract={northwind} />)
+    const verdict = await screen.findByRole('region', { name: 'Review verdict' })
+    expect(verdict).toHaveTextContent('The review stopped before it finished')
+    expect(verdict.querySelector('.ring-label')).toHaveTextContent('stopped')
+    expect(verdict.querySelector('.ring-label')).not.toHaveTextContent('clear')
+  })
+
+  it.each(['key_terms_complete', 'clauses_complete', 'policy_complete'] as const)('keeps an unfinished %s pass visible when the checklist is empty', async (pass) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ key_terms: [], key_terms_complete: true, [pass]: false })))
+    render(<RiskReviewPanel contract={northwind} />)
+    const verdict = await screen.findByRole('region', { name: 'Review verdict' })
+    expect(verdict).toHaveTextContent('Some checks could not be completed')
+    expect(verdict.querySelector('.ring-label')).toHaveTextContent('not checked')
+    expect(verdict).not.toHaveClass('ok')
+  })
+
+  it('does not reassure the reader when the rubric may not apply', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, review({ key_terms: [], key_terms_complete: true })))
+    render(<RiskReviewPanel contract={{ ...northwind, document_kind: 'not_contract' }} />)
+    const verdict = await screen.findByRole('region', { name: 'Review verdict' })
+    expect(verdict).toHaveTextContent('Check whether this file is a contract')
+    expect(verdict.querySelector('.ring-label')).toHaveTextContent('not checked')
+    expect(verdict).not.toHaveTextContent('Nothing to check before you sign')
   })
 })
